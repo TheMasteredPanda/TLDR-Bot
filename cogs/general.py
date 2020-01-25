@@ -56,6 +56,7 @@ class General(commands.Cog):
         else:
             if self.bot.get_command(command):
                 command = self.bot.get_command(command)
+                examples = f'\n{prefix}'.join(command.examples)
                 cmd_help = f"""
                 Description: {command.description}
                 Usage: {prefix}{command.usage}

@@ -33,10 +33,13 @@ class TLDR(commands.AutoShardedBot):
         match = re.findall(regex, message.content)
         if match:
             general_cog = self.get_cog('General')
-            print(self.cogs)
             return await ctx.invoke(general_cog.help)
 
         await self.process_commands(message)
+
+        if not message.author.bot:
+            levels_cog = self.get_cog('Levels')
+            return await levels_cog.process_message(ctx)
 
     async def process_commands(self, message):
         ctx = await self.get_context(message, cls=context.Context)
