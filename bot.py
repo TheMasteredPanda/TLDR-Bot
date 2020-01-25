@@ -10,7 +10,7 @@ db = database.Connection()
 
 
 async def get_prefix(bot, message):
-    prefix = db.get_prefix(message.guild.id)
+    prefix = db.get_server_options(message.guild.id, 'prefix')
     return commands.when_mentioned_or(prefix)(bot, message)
 
 

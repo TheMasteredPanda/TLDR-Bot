@@ -5,7 +5,7 @@ class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    def process_message(self, ctx):
+    async def process_message(self, ctx):
         pass
 
 

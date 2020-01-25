@@ -8,8 +8,17 @@ class Context(commands.Context):
         super().__init__(**kwargs)
         self.bot = kwargs['bot']
         self.message = kwargs['message']
-        self.guild_id = self.message.guild.id
+        self.author_xp = self.xp
+        self.author_level = self.level
 
     @property
     def session(self):
         return self.bot.session
+
+    @property
+    def xp(self):
+        return db.get_levels(self.message.guild.id, self.message.author.id, 'xp')
+
+    @property
+    def level(self):
+        return db.get_levels(self.message.guild.id, self.message.author.id, 'level')

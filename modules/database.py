@@ -34,16 +34,24 @@ class Connection:
             doc = {
                 'guild_id': guild_id,
                 'users': {
-                    'user_id': {
-                        'xp': 0,
-                        'level': 0
-                    }
+                    # 'user_id': {
+                    #     'xp': 0,
+                    #     'level': 0
+                    # }
                 }
             }
             self.levels.insert_one(doc)
         return doc
 
     @cache.cache()
-    def get_user_xp(self, guild_id, user_id, value):
+    def get_levels(self, guild_id, user_id, value):
         doc = self._get_levels(guild_id)
+        if str(user_id) not in doc['users']:
+            user = {
+                'xp': 0,
+                'level': 0
+            }
+            self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
+            doc['users'][str(user_id)] = user
+
         return doc['users'][str(user_id)][value]
