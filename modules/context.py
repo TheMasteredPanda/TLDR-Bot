@@ -8,8 +8,9 @@ class Context(commands.Context):
         super().__init__(**kwargs)
         self.bot = kwargs['bot']
         self.message = kwargs['message']
-        self.author_xp = self.xp
-        self.author_level = self.level
+        if not self.message.author.bot:
+            self.author_xp = self.xp
+            self.author_level = self.level
 
     @property
     def session(self):

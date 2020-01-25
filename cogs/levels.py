@@ -21,6 +21,9 @@ class Levels(commands.Cog):
         else:
             member = ctx.author
 
+        if member.user.bot:
+            return
+
         member_xp = db.get_levels(ctx.guild.id, member.id, 'xp')
         member_level = db.get_levels(ctx.guild.id, member.id, 'level')
         embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
