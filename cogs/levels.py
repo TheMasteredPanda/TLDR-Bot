@@ -13,7 +13,7 @@ class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='See what your (or someone else\'s) level is and how much xp you got',
+    @commands.command(help='Shows your (or someone else\'s) rank, level and xp',
                       usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearence='User', cls=command.Command)
     async def rank(self, ctx, member=None):
         if member and ctx.message.mentions:
@@ -35,10 +35,36 @@ class Levels(commands.Cog):
 
         return await ctx.send(embed=embed)
 
+    @commands.command(help='Shows the levels leaderboard on the server', usage='leaderboard (page)', examples=['leaderboard', 'leaderboard 2'], clearence='User', cls=command.Command)
+    async def leaderboard(self, ctx, user_page=0):
+        doc = db.levels.find_one({'guild_id': ctx.guild.id})
+        sorted_users = sorted(doc['users'].items(), key=lambda x: x[1]['xp'], reverse=True)
+        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+        page_num = 1
+        lboard = {page_num: []}
+
+        for i, u in enumerate(sorted_users):
+            if i == 10 * page_num:
+                page_num += 1
+                lboard[page_num] = []
+
+            level = u[1]['level']
+            xp = u[1]['xp']
+            page_message = f'**#{i + 1}** : <@{u[0]}> | **Level** : {level} - **XP** : {xp}'
+            lboard[page_num].append(page_message)
+
+        if user_page not in lboard:
+            user_page = 1
+
+        lboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description='\n'.join(lboard[user_page]))
+        lboard_embed.set_footer(text=f'Page {user_page}/{page_num} - {ctx.author}', icon_url=ctx.author.avatar_url)
+        lboard_embed.set_author(name=f'{ctx.guild.name} - Leaderboard', icon_url=ctx.guild.icon_url)
+
+        await ctx.send(embed=lboard_embed)
+
     def calculate_user_rank(self, guild_id, user_id):
         doc = db.levels.find_one({'guild_id': guild_id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1]['xp'], reverse=True)
-
         for i, u in enumerate(sorted_users):
             if u[0] == str(user_id):
                 return i + 1
