@@ -13,7 +13,7 @@ class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(descrition='See what your (or someone else\'s) level is and how much xp you got',
+    @commands.command(help='See what your (or someone else\'s) level is and how much xp you got',
                       usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearence='User', cls=command.Command)
     async def rank(self, ctx, member=None):
         if member and ctx.message.mentions:

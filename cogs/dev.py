@@ -30,7 +30,7 @@ class Dev(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         
-    @commands.command(hidden=True, descrition='Evaluate code', usage='eval [code]', examples=['eval ctx.author.id'], clearence='Dev', cls=command.Command)
+    @commands.command(hidden=True, help='Evaluate code', usage='eval [code]', examples=['eval ctx.author.id'], clearence='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def eval(self, ctx, *, cmd):
         fn_name = "_eval_expr"

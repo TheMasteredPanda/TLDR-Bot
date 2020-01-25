@@ -26,7 +26,7 @@ class General(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(descrition='Get help smh', usage='help (command)', examples=['help', 'help ping'], clearence='User', cls=command.Command)
+    @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'], clearence='User', cls=command.Command)
     async def help(self, ctx, command=None):
         embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
         prefix = db.get_server_options(ctx.guild.id, 'prefix')
@@ -56,11 +56,11 @@ class General(commands.Cog):
         else:
             if self.bot.get_command(command):
                 command = self.bot.get_command(command)
-                examples = f'\n{prefix}'.join(command.examples)
+                examples = f' | {prefix}'.join(command.examples)
                 cmd_help = f"""
-                Description: {command.description}
-                Usage: {prefix}{command.usage}
-                Examples: {prefix}{examples}
+                **Description:** {command.help}
+                **Usage:** {prefix}{command.usage}
+                **Examples:** {prefix}{examples}
                 """
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=cmd_help)
                 embed.set_author(name=f'Help - {command}', icon_url=ctx.guild.icon_url)
