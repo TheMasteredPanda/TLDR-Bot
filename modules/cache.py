@@ -13,10 +13,10 @@ def create_and_store_coroutine(cache, key, coro):
 
 
 def create_coroutine(value):
-    async def new():
+    async def func():
         return value
 
-    return new()
+    return func()
 
 
 def cache():

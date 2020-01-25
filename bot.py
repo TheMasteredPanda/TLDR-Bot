@@ -28,6 +28,7 @@ class TLDR(commands.AutoShardedBot):
 
     async def on_message(self, message):
         ctx = await self.get_context(message, cls=context.Context)
+
         regex = re.compile(rf'<@!?{self.user.id}>')
         match = re.findall(regex, message.content)
         if match:
@@ -50,12 +51,6 @@ class TLDR(commands.AutoShardedBot):
         await self.change_presence(activity=bot_game)
 
         print(f'{self.user} is ready')
-
-    async def on_resumed(self):
-        print('resumed...')
-
-    async def on_guild_join(self, guild):
-        print(f'Joined new guild: {guild.id} - {guild.name}')
 
     async def close(self):
         await super().close()

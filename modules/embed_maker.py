@@ -5,7 +5,7 @@ from modules import database
 db = database.Connection()
 
 
-def message(ctx, msg, title = None):
+def message(ctx, msg, title=None):
     embed_colour = db.get_embed_colour(ctx.guild.id)
     embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
     embed.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
