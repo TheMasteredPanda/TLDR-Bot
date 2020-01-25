@@ -1,7 +1,9 @@
+import discord
+from datetime import datetime
 from time import time
 from random import randint
 from discord.ext import commands
-from modules import database
+from modules import database, command
 
 db = database.Connection()
 xp_cooldown = {}
@@ -10,6 +12,38 @@ xp_cooldown = {}
 class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(descrition='See what your (or someone else\'s) level is and how much xp you got',
+                      usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearence='User', cls=command.Command)
+    async def rank(self, ctx, member=None):
+        if member and ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        else:
+            member = ctx.author
+
+        member_xp = db.get_levels(ctx.guild.id, member.id, 'xp')
+        member_level = db.get_levels(ctx.guild.id, member.id, 'level')
+        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+        rank = self.calculate_user_rank(ctx.guild.id, member.id)
+
+        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+        embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
+        embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
+        embed.add_field(name='Rank', value=f'#{rank}', inline=True)
+        embed.add_field(name='Level', value=member_level, inline=True)
+        embed.add_field(name='XP', value=member_xp, inline=True)
+
+        return await ctx.send(embed=embed)
+
+    def calculate_user_rank(self, guild_id, user_id):
+        doc = db.levels.find_one({'guild_id': guild_id})
+        sorted_users = sorted(doc['users'].items(), key=lambda x: x[1]['xp'], reverse=True)
+
+        for i, u in enumerate(sorted_users):
+            if u[0] == str(user_id):
+                return i + 1
+        else:
+            return False
 
     async def process_message(self, ctx):
         if ctx.author.id in xp_cooldown:
