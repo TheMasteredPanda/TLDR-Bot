@@ -90,7 +90,7 @@ class Levels(commands.Cog):
         return await ctx.send(embed=embed)
 
     @commands.command(help='Shows the levels leaderboard on the server', usage='leaderboard (page)', examples=['leaderboard', 'leaderboard 2'], clearance='User', cls=command.Command)
-    async def leaderboard(self, ctx, user_page=0):
+    async def xp_leaderboard(self, ctx, user_page=0):
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
         # this creates a list of tuples, where [0] is the user's id and [1] is an object where xp and level is located
         # same as in calculate_user_rank
@@ -114,7 +114,36 @@ class Levels(commands.Cog):
 
         lboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description='\n'.join(lboard[user_page]))
         lboard_embed.set_footer(text=f'Page {user_page}/{page_num} - {ctx.author}', icon_url=ctx.author.avatar_url)
-        lboard_embed.set_author(name=f'{ctx.guild.name} - Leaderboard', icon_url=ctx.guild.icon_url)
+        lboard_embed.set_author(name=f'{ctx.guild.name} - XP-Leaderboard', icon_url=ctx.guild.icon_url)
+
+        await ctx.send(embed=lboard_embed)
+
+    @commands.command(help='Shows the levels leaderboard on the server', usage='leaderboard (page)', examples=['leaderboard', 'leaderboard 2'], clearance='User', cls=command.Command)
+    async def tp_leaderboard(self, ctx, user_page=0):
+        doc = db.levels.find_one({'guild_id': ctx.guild.id})
+        # this creates a list of tuples, where [0] is the user's id and [1] is an object where xp and level is located
+        # same as in calculate_user_rank
+        sorted_users = sorted(doc['users'].items(), key=lambda x: x[1]['tp'], reverse=True)
+        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+        page_num = 1
+        lboard = {page_num: []}
+
+        for i, u in enumerate(sorted_users):
+            if i == 10 * page_num:
+                page_num += 1
+                lboard[page_num] = []
+
+            t_level = u[1]['t_level']
+            tp = u[1]['tp']
+            page_message = f'**#{i + 1}** : <@{u[0]}> | **T-Level** : {t_level} - **TP** : {tp}'
+            lboard[page_num].append(page_message)
+
+        if user_page not in lboard:
+            user_page = 1
+
+        lboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description='\n'.join(lboard[user_page]))
+        lboard_embed.set_footer(text=f'Page {user_page}/{page_num} - {ctx.author}', icon_url=ctx.author.avatar_url)
+        lboard_embed.set_author(name=f'{ctx.guild.name} - TP-Leaderboard', icon_url=ctx.guild.icon_url)
 
         await ctx.send(embed=lboard_embed)
 
