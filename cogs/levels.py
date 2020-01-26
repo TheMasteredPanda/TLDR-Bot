@@ -3,7 +3,7 @@ from datetime import datetime
 from time import time
 from random import randint
 from discord.ext import commands
-from modules import database, command
+from modules import database, command, embed_maker
 
 db = database.Connection()
 xp_cooldown = {}
@@ -12,6 +12,52 @@ xp_cooldown = {}
 class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(help='Award tp to a user (restricted to mod), for their contributions', usage='award_tp [amount] [@member]', examples=['award_tp 500 @Hattyot'], clearance='Mod', cls=command.Command)
+    async def award_tp(self, ctx, amount=None, member=None):
+        if amount is None:
+            return await embed_maker.command_error(ctx)
+        if not amount.isdigit():
+            return await embed_maker.command_error(ctx, '[amount]')
+
+        amount = round(int(amount))
+
+        if member is None:
+            return await embed_maker.command_error(ctx, '[@member]')
+        if ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        else:
+            return await embed_maker.command_error(ctx, '[@member]')
+
+        if member.bot:
+            embed = embed_maker.message(ctx, 'You can\'t give tp to bots')
+            return await ctx.send(embed=embed)
+        # if member == ctx.author:
+        #     embed = embed_maker.message(ctx, 'You can\'t give tp to yourself')
+        #     return await ctx.send(embed=embed)
+
+        user_tp = ctx.author_tp
+        new_tp = amount + user_tp
+
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.tp': new_tp}})
+        db.get_levels.invalidate(ctx.guild.id, member.id, 'tp')
+
+        embed = embed_maker.message(ctx, f'<@{member.id}> has been awarded **{amount} tp**')
+        await ctx.send(embed=embed)
+
+        # Check t_level up
+        tp_until = tpi(ctx, new_tp)
+        if tp_until <= 0:
+            reward_text = f'Congrats <@{ctx.author.id}> you\'ve leveled up to **T-Level {ctx.author_t_level + 1}**, due to your contributions!'
+            embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+            embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
+            embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+            embed.set_author(name='T-Level Up!', icon_url=ctx.guild.icon_url)
+            await ctx.send(embed=embed)
+
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.t_level': 1}})
+            db.get_levels.invalidate(ctx.guild.id, ctx.author.id, 't_level')
+
 
     @commands.command(help='Shows your (or someone else\'s) rank, level and xp',
                       usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
@@ -24,17 +70,22 @@ class Levels(commands.Cog):
         if member.bot:
             return
 
-        member_xp = db.get_levels(ctx.guild.id, member.id, 'xp')
-        member_level = db.get_levels(ctx.guild.id, member.id, 'level')
-        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+        member_xp = ctx.author_xp
+        member_level = ctx.author_level
+        member_tp = ctx.author_tp
+        member_t_level = ctx.author_t_level
         rank = self.calculate_user_rank(ctx.guild.id, member.id)
+        t_rank = self.calculate_user_t_rank(ctx.guild.id, member.id)
 
+        sp_value = f'**#{rank}** | **XP:** {member_xp} - **Level:** {member_level}'
+        tp_value = f'**#{t_rank}** | **TP:** {member_tp} - **T-Level:** {member_t_level}'
+
+        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
         embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
         embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
-        embed.add_field(name='Rank', value=f'#{rank}', inline=True)
-        embed.add_field(name='Level', value=member_level, inline=True)
-        embed.add_field(name='XP', value=member_xp, inline=True)
+        embed.add_field(name='>Server Participation', value=sp_value, inline=False)
+        embed.add_field(name='>Contributions', value=tp_value, inline=False)
 
         return await ctx.send(embed=embed)
 
@@ -73,8 +124,13 @@ class Levels(commands.Cog):
         for i, u in enumerate(sorted_users):
             if u[0] == str(user_id):
                 return i + 1
-        else:
-            return False
+
+    def calculate_user_t_rank(self, guild_id, user_id):
+        doc = db.levels.find_one({'guild_id': guild_id})
+        sorted_users = sorted(doc['users'].items(), key=lambda x: x[1]['tp'], reverse=True)
+        for i, u in enumerate(sorted_users):
+            if u[0] == str(user_id):
+                return i + 1
 
     async def process_message(self, ctx):
         if ctx.guild.id not in xp_cooldown:
@@ -124,6 +180,18 @@ def xpi(ctx, new_xp):
         total_xp += (5 * (i ** 2) + 50 * i + 100)
 
     return total_xp - user_xp
+
+
+# How much tp is needed until t_level up
+def tpi(ctx, new_tp):
+    user_tp = new_tp
+    user_t_level = ctx.author_t_level
+
+    total_tp = 0
+    for i in range(user_t_level + 1):
+        total_tp += 1000 * i
+
+    return total_tp - user_tp
 
 
 def setup(bot):

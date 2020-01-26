@@ -36,7 +36,9 @@ class Connection:
                 'users': {
                     # 'user_id': {
                     #     'xp': 0,
-                    #     'level': 0
+                    #     'level': 0,
+                    #     'tp': 0,
+                    #     't_level': 0
                     # }
                 }
             }
@@ -49,7 +51,9 @@ class Connection:
         if str(user_id) not in doc['users']:
             user = {
                 'xp': 0,
-                'level': 0
+                'level': 0,
+                'tp': 0,
+                't_level': 0
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][str(user_id)] = user
