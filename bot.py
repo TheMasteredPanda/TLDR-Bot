@@ -36,16 +36,16 @@ class TLDR(commands.AutoShardedBot):
             general_cog = self.get_cog('General')
             return await ctx.invoke(general_cog.help)
 
-        await self.process_commands(message)
+        await self.process_commands(ctx)
 
         if not message.author.bot:
             levels_cog = self.get_cog('Levels')
             return await levels_cog.process_message(ctx)
 
-    async def process_commands(self, message):
-        ctx = await self.get_context(message, cls=context.Context)
-
+    async def process_commands(self, ctx):
         if ctx.command is None or ctx.guild is None:
+            return
+        if ctx.command.clearance not in ctx.author_clearance:
             return
 
         await self.invoke(ctx)
