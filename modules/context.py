@@ -14,20 +14,30 @@ class Context(commands.Context):
             self.author_xp = self.xp
             self.author_level = self.level
             self.author_clearance = self.clearance
-            self.author_tp = self.tp
-            self.author_t_level = self.t_level
+            self.author_cp = self.cp
+            self.author_c_level = self.c_level
+            self.author_role = self.role
+            self.author_c_role = self.c_role
 
     @property
     def session(self):
         return self.bot.session
 
     @property
-    def tp(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 'tp')
+    def role(self):
+        return db.get_levels(self.message.guild.id, self.message.author.id, 'role')
 
     @property
-    def t_level(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 't_level')
+    def c_role(self):
+        return db.get_levels(self.message.guild.id, self.message.author.id, 'c_role')
+
+    @property
+    def cp(self):
+        return db.get_levels(self.message.guild.id, self.message.author.id, 'cp')
+
+    @property
+    def c_level(self):
+        return db.get_levels(self.message.guild.id, self.message.author.id, 'c_level')
 
     @property
     def xp(self):

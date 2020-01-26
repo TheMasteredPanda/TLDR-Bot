@@ -53,8 +53,10 @@ class Connection:
             user = {
                 'xp': 0,
                 'level': 0,
-                'tp': 0,
-                't_level': 0
+                'cp': 0,
+                'c_level': 0,
+                'role': 'Member',
+                'c_role': ''
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][str(user_id)] = user

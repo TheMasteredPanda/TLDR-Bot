@@ -56,6 +56,10 @@ class TLDR(commands.AutoShardedBot):
 
         print(f'{self.user} is ready')
 
+    async def on_member_join(self, member):
+        # just adds the member to the database
+        db.get_levels(member.guild.id, member.id, 'xp')
+
     async def close(self):
         await super().close()
         await self.session.close()
