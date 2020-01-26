@@ -40,7 +40,8 @@ class Connection:
                     #     'tp': 0,
                     #     't_level': 0
                     # }
-                }
+                },
+                'level_up_channel': 0
             }
             self.levels.insert_one(doc)
         return doc
@@ -57,5 +58,8 @@ class Connection:
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][str(user_id)] = user
+
+        if value == 'level_up_channel':
+            return doc[value]
 
         return doc['users'][str(user_id)][value]

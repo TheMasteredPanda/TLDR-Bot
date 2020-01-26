@@ -53,7 +53,13 @@ class Levels(commands.Cog):
             embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             embed.set_author(name='T-Level Up!', icon_url=ctx.guild.icon_url)
-            await ctx.send(embed=embed)
+
+            channel_id = db.get_levels(ctx.guild.id, member.id, 'level_up_channel')
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                await ctx.send(embed=embed)
+            else:
+                await channel.send(embed=embed)
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.t_level': 1}})
             db.get_levels.invalidate(ctx.guild.id, ctx.author.id, 't_level')
@@ -191,7 +197,13 @@ class Levels(commands.Cog):
             embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             embed.set_author(name='Level Up!', icon_url=ctx.guild.icon_url)
-            await ctx.send(embed=embed)
+
+            channel_id = db.get_levels(ctx.guild.id, ctx.authorse.id, 'level_up_channel')
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                await ctx.send(embed=embed)
+            else:
+                await channel.send(embed=embed)
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.level': 1}})
             db.get_levels.invalidate(ctx.guild.id, ctx.author.id, 'level')
