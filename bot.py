@@ -2,6 +2,7 @@ import discord
 import os
 import aiohttp
 import re
+import asyncio
 from modules import database, context
 from discord.ext import commands
 from config import BOT_TOKEN

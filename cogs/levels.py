@@ -14,14 +14,14 @@ class Levels(commands.Cog):
         self.bot = bot
 
     @commands.command(help='Shows your (or someone else\'s) rank, level and xp',
-                      usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearence='User', cls=command.Command)
+                      usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
     async def rank(self, ctx, member=None):
         if member and ctx.message.mentions:
             member = ctx.message.mentions[0]
         else:
             member = ctx.author
 
-        if member.user.bot:
+        if member.bot:
             return
 
         member_xp = db.get_levels(ctx.guild.id, member.id, 'xp')
@@ -38,9 +38,11 @@ class Levels(commands.Cog):
 
         return await ctx.send(embed=embed)
 
-    @commands.command(help='Shows the levels leaderboard on the server', usage='leaderboard (page)', examples=['leaderboard', 'leaderboard 2'], clearence='User', cls=command.Command)
+    @commands.command(help='Shows the levels leaderboard on the server', usage='leaderboard (page)', examples=['leaderboard', 'leaderboard 2'], clearance='User', cls=command.Command)
     async def leaderboard(self, ctx, user_page=0):
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
+        # this creates a list of tuples, where [0] is the user's id and [1] is an object where xp and level is located
+        # same as in calculate_user_rank
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1]['xp'], reverse=True)
         embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
         page_num = 1
@@ -75,9 +77,11 @@ class Levels(commands.Cog):
             return False
 
     async def process_message(self, ctx):
-        if ctx.author.id in xp_cooldown:
-            if round(time()) >= xp_cooldown[ctx.author.id]:
-                del xp_cooldown[ctx.author.id]
+        if ctx.guild.id not in xp_cooldown:
+            xp_cooldown[ctx.guild.id] = {}
+        if ctx.author.id in xp_cooldown[ctx.guild.id]:
+            if round(time()) >= xp_cooldown[ctx.guild.id][ctx.author.id]:
+                del xp_cooldown[ctx.guild.id][ctx.author.id]
             else:
                 return
 
@@ -86,7 +90,8 @@ class Levels(commands.Cog):
         await self.xp_add(ctx, new_xp)
 
         cooldown_expire = round(time()) + 45
-        xp_cooldown[ctx.author.id] = cooldown_expire
+
+        xp_cooldown[ctx.guild.id][ctx.author.id] = cooldown_expire
 
     async def xp_add(self, ctx, new_xp):
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.xp': new_xp}})
@@ -97,7 +102,11 @@ class Levels(commands.Cog):
         xp_until = xpi(ctx, new_xp)
         if xp_until <= 0:
             reward_text = f'Congrats <@{ctx.author.id}> you\'ve leveled up to level **{ctx.author_level + 1}**!!'
-            await ctx.send(reward_text)
+            embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+            embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
+            embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+            embed.set_author(name='Level Up!', icon_url=ctx.guild.icon_url)
+            await ctx.send(embed=embed)
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.level': 1}})
             db.get_levels.invalidate(ctx.guild.id, ctx.author.id, 'level')
