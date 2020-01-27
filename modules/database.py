@@ -16,7 +16,7 @@ class Connection:
             new_doc = {
                 'guild_id': guild_id,
                 'prefix': '>',
-                'embed_colour': 0x551a8b
+                'embed_colour': 0x00a6ad
             }
             self.server_options.insert_one(new_doc)
             doc = new_doc
@@ -24,7 +24,7 @@ class Connection:
         return doc
 
     @cache.cache()
-    def get_server_options(self, guild_id, option):
+    def get_server_options(self, option, guild_id):
         doc = self._get_server_options(guild_id)
         return doc[option]
 

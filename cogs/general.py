@@ -12,8 +12,8 @@ class General(commands.Cog):
 
     @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'], clearance='User', cls=command.Command)
     async def help(self, ctx, _cmd=None):
-        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
-        prefix = db.get_server_options(ctx.guild.id, 'prefix')
+        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        prefix = db.get_server_options('prefix', ctx.guild.id)
         cmds = self.bot.commands
         help_object = {}
         for cmd in cmds:

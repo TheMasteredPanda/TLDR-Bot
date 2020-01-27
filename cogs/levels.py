@@ -21,7 +21,7 @@ class Levels(commands.Cog):
 
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         if branch not in leveling_routes:
-            embed = embed_maker.message(ctx, 'That is not a valid branch (contribution/participation)')
+            embed = embed_maker.message(ctx, 'That is not a valid branch (contribution/participation)', colour='red')
             return await ctx.send(embed=embed)
 
         async def role():
@@ -94,7 +94,7 @@ class Levels(commands.Cog):
 
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         if branch not in leveling_routes:
-            embed = embed_maker.message(ctx, 'That is not a valid branch (contribution/participation)')
+            embed = embed_maker.message(ctx, 'That is not a valid branch (contribution/participation)', colour='red')
             return await ctx.send(embed=embed)
 
         if role_name is None:
@@ -114,14 +114,17 @@ class Levels(commands.Cog):
     @commands.command(help='See current leveling routes', usage='leveling_routes', examples=['leveling_routes'], clearance='User', cls=command.Command)
     async def leveling_routes(self, ctx, new=False):
         lvl_routes = db.get_levels('leveling_routes', ctx.guild.id)
-        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
-        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
-        embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
 
         if new:
-            embed.set_author(name='New Leveling Routes', icon_url=ctx.guild.icon_url)
+            embed_colour = embed_maker.get_colour('green')
+            author = 'New Leveling Routes'
         else:
-            embed.set_author(name='Leveling Routes', icon_url=ctx.guild.icon_url)
+            author = 'Leveling Routes'
+
+        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+        embed.set_author(name=author, icon_url=ctx.guild.icon_url)
+        embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
 
         for branch in lvl_routes:
             value = ''
@@ -143,10 +146,10 @@ class Levels(commands.Cog):
             return await embed_maker.command_error(ctx, '[@member]')
 
         if member.bot:
-            embed = embed_maker.message(ctx, 'You can\'t give contribution points to bots')
+            embed = embed_maker.message(ctx, 'You can\'t give contribution points to bots', colour='red')
             return await ctx.send(embed=embed)
         if member == ctx.author:
-            embed = embed_maker.message(ctx, 'You can\'t give contribution points to yourself')
+            embed = embed_maker.message(ctx, 'You can\'t give contribution points to yourself', colour='red')
             return await ctx.send(embed=embed)
 
         if amount is None:
@@ -157,7 +160,7 @@ class Levels(commands.Cog):
         amount = round(int(amount))
 
         if amount > 1000:
-            embed = embed_maker.message(ctx, 'The max amount of contributions points you can give is 1000')
+            embed = embed_maker.message(ctx, 'The max amount of contributions points you can give is 1000', colour='red')
             return await ctx.send(embed=embed)
 
         user_cp = db.get_levels('cp', ctx.guild.id, member.id)
@@ -166,7 +169,7 @@ class Levels(commands.Cog):
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.cp': new_cp}})
         db.get_levels.invalidate('cp', ctx.guild.id, member.id)
 
-        embed = embed_maker.message(ctx, f'<@{member.id}> has been awarded **{amount} contribution points**')
+        embed = embed_maker.message(ctx, f'<@{member.id}> has been awarded **{amount} contribution points**', colour='green')
 
         if user_cp == 0:
             await ctx.send(embed=embed)
@@ -187,7 +190,7 @@ class Levels(commands.Cog):
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.c_role': first_role.name}})
             db.get_levels.invalidate('c_role', ctx.guild.id, member.id)
 
-            embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+            embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
             embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
             embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
             embed.set_author(name='Level Up!', icon_url=ctx.guild.icon_url)
@@ -233,7 +236,7 @@ class Levels(commands.Cog):
 
             cp_value = f'**#{c_rank}** | **Level** {member_c_level} <@&{member_c_role.id}>'
 
-        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
         embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
         embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
@@ -313,7 +316,7 @@ class Levels(commands.Cog):
         else:
             reward_text += '!'
 
-        embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
+        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
         embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
         embed.set_author(name='Level Up!', icon_url=ctx.guild.icon_url)
