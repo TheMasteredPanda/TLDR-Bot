@@ -33,15 +33,17 @@ class Connection:
         if doc is None:
             doc = {
                 'guild_id': guild_id,
-                'users': {
-                    # 'user_id': {
-                    #     'xp': 0,
-                    #     'level': 0,
-                    #     'tp': 0,
-                    #     't_level': 0
-                    # }
-                },
-                'level_up_channel': 0
+                'users': {},
+                'level_up_channel': 0,
+                'leveling_routes': {
+                    'participation': [
+                        ('Member', 5),
+                        ('Local Councillor', 5)
+                    ],
+                    'contribution': [
+                        ('Public Servant', 5)
+                    ]
+                }
             }
             self.levels.insert_one(doc)
         return doc
