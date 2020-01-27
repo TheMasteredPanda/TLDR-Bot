@@ -12,7 +12,7 @@ class Settings(commands.Cog):
 
     @commands.command(help='Change the channel where level up messages are sent', usage='level_up_channel [#channel]', examples=['level_up_channel #bots'], clearance='Mod', cls=command.Command)
     async def level_up_channel(self, ctx, channel):
-        current_channel = db.get_levels(ctx.guild.id, ctx.author.id, 'level_up_channel')
+        current_channel = db.get_levels('level_up_channel', ctx.guild.id)
         if channel is None:
             embed_colour = db.get_server_options(ctx.guild.id, 'embed_colour')
             embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description='Change the channel where level up announcements are sent.')
@@ -29,7 +29,7 @@ class Settings(commands.Cog):
                 embed = embed_maker.message(ctx, f'Level up channel is already set to <#{channel.id}>')
                 return await ctx.send(embed=embed)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'level_up_channel': channel.id}})
-            db.get_levels.invalidate(ctx.guild.id, ctx.author.id, 'level_up_channel')
+            db.get_levels.invalidate('level_up_channel', ctx.guild.id)
 
             embed = embed_maker.message(ctx, f'Level up channel has been set to <#{channel.id}>')
             await ctx.send(embed=embed)

@@ -25,27 +25,27 @@ class Context(commands.Context):
 
     @property
     def role(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 'role')
+        return db.get_levels('role', self.message.guild.id, self.message.author.id)
 
     @property
     def c_role(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 'c_role')
+        return db.get_levels('c_role', self.message.guild.id, self.message.author.id)
 
     @property
     def cp(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 'cp')
+        return db.get_levels('cp', self.message.guild.id, self.message.author.id)
 
     @property
     def c_level(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 'c_level')
+        return db.get_levels('c_level', self.message.guild.id, self.message.author.id)
 
     @property
     def xp(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 'xp')
+        return db.get_levels('xp', self.message.guild.id, self.message.author.id)
 
     @property
     def level(self):
-        return db.get_levels(self.message.guild.id, self.message.author.id, 'level')
+        return db.get_levels('level', self.message.guild.id, self.message.author.id)
 
     @property
     def clearance(self):

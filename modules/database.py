@@ -47,8 +47,10 @@ class Connection:
         return doc
 
     @cache.cache()
-    def get_levels(self, guild_id, user_id, value):
+    def get_levels(self, value, guild_id, user_id=None):
         doc = self._get_levels(guild_id)
+        if user_id is None:
+            return doc[value]
         if str(user_id) not in doc['users']:
             user = {
                 'xp': 0,
@@ -60,8 +62,5 @@ class Connection:
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][str(user_id)] = user
-
-        if value == 'level_up_channel':
-            return doc[value]
 
         return doc['users'][str(user_id)][value]
