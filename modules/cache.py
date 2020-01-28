@@ -3,10 +3,10 @@ import asyncio
 from functools import wraps
 
 
-def create_and_store_coroutine(cache, key, coro):
+def create_and_store_coroutine(_cache, key, coro):
     async def func():
         value = await coro
-        cache[key] = value
+        _cache[key] = value
         return value
 
     return func()

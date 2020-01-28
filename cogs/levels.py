@@ -18,13 +18,16 @@ class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='Add a role to a leveling route (contribution/participation) - starts the process of adding a role', usage='add_role [branch]', examples=['add_role contribution', 'add_role participation'], clearance='Admin', cls=command.Command)
+    @commands.command(
+        help='Add a role to a leveling route (contribution/participation) - starts the process of adding a role',
+        usage='add_role [branch]', examples=['add_role contribution', 'add_role participation'], clearance='Admin',
+        cls=command.Command)
     async def add_role(self, ctx, branch=None):
         if branch is None:
             return await embed_maker.command_error(ctx)
 
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
-        if branch not in leveling_routes:
+        if branch.lower() not in leveling_routes:
             embed = embed_maker.message(ctx, 'That is not a valid branch (contribution/participation)', colour='red')
             return await ctx.send(embed=embed)
 
@@ -81,7 +84,8 @@ class Levels(commands.Cog):
             new_role_route_list = leveling_routes[branch][:]
             new_role_route_list.insert(new_role_position, (new_role.name, role_max_level))
 
-            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
+            db.levels.update_one({'guild_id': ctx.guild.id},
+                                 {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
             db.get_levels.invalidate('leveling_routes', ctx.guild.id)
 
         new_role = await role()
@@ -91,7 +95,8 @@ class Levels(commands.Cog):
         await ctx.send(f'added {new_role.name} to {branch} route')
         return await self.leveling_routes(ctx, True)
 
-    @commands.command(help='Remove role from a leveling route', usage='remove_role [branch] [role name]', examples=['remove_role participation Council member'], clearance='Admin', cls=command.Command)
+    @commands.command(help='Remove role from a leveling route', usage='remove_role [branch] [role name]',
+                      examples=['remove_role participation Council member'], clearance='Admin', cls=command.Command)
     async def remove_role(self, ctx, branch=None, *, role_name=None):
         if branch is None:
             return await embed_maker.command_error(ctx)
@@ -115,7 +120,9 @@ class Levels(commands.Cog):
         else:
             return await embed_maker.command_error(ctx, '[role name]')
 
-    @commands.command(help='Add a channel to the list of channels, in which contribution points can be gained', usage='add_cp_channel [#channel]', examples=['add_cp_channel #court'], clearance='Admin', cls=command.Command)
+    @commands.command(help='Add a channel to the list of channels, in which contribution points can be gained',
+                      usage='add_cp_channel [#channel]', examples=['add_cp_channel #court'], clearance='Admin',
+                      cls=command.Command)
     async def add_cp_channel(self, ctx, channel=None):
         if channel is None:
             return await embed_maker.command_error(ctx)
@@ -135,7 +142,8 @@ class Levels(commands.Cog):
         else:
             return await embed_maker.command_error(ctx, '[#channel]')
 
-    @commands.command(help='See the current list of channels where contribution points can be earned', usage='cp_channel_list', examples=['add_cp_channel'], clearance='Mod', cls=command.Command)
+    @commands.command(help='See the current list of channels where contribution points can be earned',
+                      usage='cp_channel_list', examples=['add_cp_channel'], clearance='Mod', cls=command.Command)
     async def cp_channel_list(self, ctx):
         channel_list = db.get_levels('cp_channels', ctx.guild.id)
 
@@ -149,7 +157,9 @@ class Levels(commands.Cog):
         embed = embed_maker.message(ctx, channel_list_str)
         return await ctx.send(embed=embed)
 
-    @commands.command(help='start the role editing process, edit attributes of a role (max level/name)', usage='edit_role [branch]', examples=['edit_role participation'], clearance='Admin', cls=command.Command)
+    @commands.command(help='start the role editing process, edit attributes of a role (max level/name)',
+                      usage='edit_role [branch]', examples=['edit_role participation'], clearance='Admin',
+                      cls=command.Command)
     async def edit_role(self, ctx, branch=None):
         if branch is None:
             return await embed_maker.command_error(ctx)
@@ -212,16 +222,12 @@ class Levels(commands.Cog):
         role = await role()
         attribute = await attribute()
         new_value = await new_value()
-        print(role, attribute, new_value)
         new_role_list = leveling_routes[branch][:]
         for i, _role in enumerate(leveling_routes[branch]):
             if _role[0] == role:
-                print('found')
                 if attribute == 'level':
-                    print('editing level')
-                    new_role_list[i] = (_role[0], new_value)
+                    new_role_list[i] = (_role[0], round(int(new_value)))
                 elif attribute == 'name':
-                    print('editing name')
                     role = discord.utils.find(lambda r: r.name == _role[0], ctx.guild.roles)
                     await role.edit(name=new_value)
                     new_role_list[i] = (new_value, _role[1])
@@ -231,11 +237,9 @@ class Levels(commands.Cog):
 
                 embed = embed_maker.message(ctx, f'{role} has been updated', colour='green')
                 return await ctx.send(embed=embed)
-        else:
-            print('for loop failed')
 
-
-    @commands.command(help='See current leveling routes', usage='leveling_routes', examples=['leveling_routes'], clearance='User', cls=command.Command)
+    @commands.command(help='See current leveling routes', usage='leveling_routes', examples=['leveling_routes'],
+                      clearance='User', cls=command.Command)
     async def leveling_routes(self, ctx, new=False):
         lvl_routes = db.get_levels('leveling_routes', ctx.guild.id)
         embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
@@ -256,11 +260,13 @@ class Levels(commands.Cog):
                 role = discord.utils.find(lambda r: r.name == _role[0], ctx.guild.roles)
                 if role is None:
                     role = await ctx.guild.create_role(name=_role[0])
-                value += f'\n**#{i+1}:** <@&{role.id}> - Max Level: {_role[1]}'
+                value += f'\n**#{i + 1}:** <@&{role.id}> - Max Level: {_role[1]}'
             embed.add_field(name=f'>{branch.title()}', value=value, inline=False)
         return await ctx.send(embed=embed)
 
-    @commands.command(help='award someone contribution points, for contributing to the server or youtube channels', usage='award [@member] [amount]', examples=['award @Hattyot 500'], clearance='Mod', cls=command.Command)
+    @commands.command(help='award someone contribution points, for contributing to the server or youtube channels',
+                      usage='award [@member] [amount]', examples=['award @Hattyot 500'], clearance='Mod',
+                      cls=command.Command)
     async def award(self, ctx, member=None, amount=None):
         if member is None:
             return await embed_maker.command_error(ctx)
@@ -277,14 +283,15 @@ class Levels(commands.Cog):
             return await ctx.send(embed=embed)
 
         if amount is None:
-            return await embed_maker.command_error(ctx, '[@member]')
+            return await embed_maker.command_error(ctx, '[amount]')
         if not amount.isdigit():
             return await embed_maker.command_error(ctx, '[amount]')
 
         amount = round(int(amount))
 
         if amount > 1000:
-            embed = embed_maker.message(ctx, 'The max amount of contributions points you can give is 1000', colour='red')
+            embed = embed_maker.message(ctx, 'The max amount of contributions points you can give is 1000',
+                                        colour='red')
             return await ctx.send(embed=embed)
 
         user_cp = db.get_levels('cp', ctx.guild.id, member.id)
@@ -293,43 +300,42 @@ class Levels(commands.Cog):
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.cp': new_cp}})
         db.get_levels.invalidate('cp', ctx.guild.id, member.id)
 
-        embed = embed_maker.message(ctx, f'<@{member.id}> has been awarded **{amount} contribution points**', colour='green')
+        embed = embed_maker.message(ctx, f'<@{member.id}> has been awarded **{amount} contribution points**',
+                                    colour='green')
+        await ctx.send(embed=embed)
 
         if user_cp == 0:
-            await ctx.send(embed=embed)
-            leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
-            first_role_name = leveling_routes['contribution'][0][0]
-            first_role = discord.utils.find(lambda r: r.name == first_role_name, ctx.guild.roles)
-            if first_role is None:
-                first_role = await ctx.guild.create_role(name=first_role_name)
-            await member.add_roles(first_role)
+            return await self.cp_init(ctx, member, new_cp)
 
-            if new_cp < 1000:
-                reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **0** <@&{first_role.id}>, due to your contributions!'
-            else:
-                reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **1** <@&{first_role.id}>, due to your contributions!'
-                db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.c_level': 1}})
-                db.get_levels.invalidate('c_level', ctx.guild.id, member.id)
+        return await self.level_up(ctx, member, 'contribution', new_cp)
 
-            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.c_role': first_role.name}})
-            db.get_levels.invalidate('c_role', ctx.guild.id, member.id)
+    async def cp_init(self, ctx, member, new_cp):
+        leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
+        first_role_name = leveling_routes['contribution'][0][0]
+        first_role = discord.utils.find(lambda r: r.name == first_role_name, ctx.guild.roles)
 
-            embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
-            embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
-            embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
-            embed.set_author(name='Level Up!', icon_url=ctx.guild.icon_url)
+        if first_role is None:
+            first_role = await ctx.guild.create_role(name=first_role_name)
 
-            channel_id = db.get_levels('level_up_channel', ctx.guild.id)
-            channel = self.bot.get_channel(channel_id)
-            if channel is None:
-                return await ctx.send(embed=embed)
-            else:
-                return await channel.send(embed=embed)
+        await member.add_roles(first_role)
 
-        await ctx.send(embed=embed)
-        return await self.level_up(ctx, member, 'contribution')
+        if new_cp < 1000:
+            lvl = 0
+        else:
+            lvl = 1
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.c_level': 1}})
+            db.get_levels.invalidate('c_level', ctx.guild.id, member.id)
 
-    @commands.command(help='Shows the leveling leaderboards (participation/contribution) on the server', usage='leaderboard [branch] (page)', examples=['leaderboard participation', 'leaderboard contribution 2'], clearance='User', cls=command.Command)
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.c_role': first_role.name}})
+        db.get_levels.invalidate('c_role', ctx.guild.id, member.id)
+
+        reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{lvl}** <@&{first_role.id}>, due to your contributions!'
+        await self.level_up_message(ctx, member, reward_text)
+
+    @commands.command(help='Shows the leveling leaderboards (participation/contribution) on the server',
+                      usage='leaderboard [branch] (page)',
+                      examples=['leaderboard participation', 'leaderboard contribution 2'], clearance='User',
+                      cls=command.Command)
     async def leaderboard(self, ctx, branch=None, user_page=0):
         if branch is None:
             return await embed_maker.command_error(ctx)
@@ -342,8 +348,6 @@ class Levels(commands.Cog):
             pre = ''
 
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
-        # this creates a list of tuples, where [0] is the user's id and [1] is an object where xp, level etc. is located
-        # same as in calculate_user_rank
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][points], reverse=True)
         embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
         page_num = 1
@@ -358,7 +362,7 @@ class Levels(commands.Cog):
             if member is None:
                 member = await self.bot.fetch_user(u[0])
 
-            role_level = self.user_role_level(ctx, branch, member, True)
+            role_level = self.user_role_level(ctx.guild.id, branch, member.id, True)
             user_role_name = u[1][f'{pre}role']
             if user_role_name == '':
                 continue
@@ -373,13 +377,15 @@ class Levels(commands.Cog):
             description = 'Damn, this place is empty'
         else:
             description = '\n'.join(lboard[user_page])
+
         lboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=description)
         lboard_embed.set_footer(text=f'Page {user_page}/{page_num} - {ctx.author}', icon_url=ctx.author.avatar_url)
         lboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
         await ctx.send(embed=lboard_embed)
 
-    @commands.command(help='Shows your (or someone else\'s) rank, level and xp', usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
+    @commands.command(help='Shows your (or someone else\'s) rank, level and xp', usage='rank (@member)',
+                      examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
     async def rank(self, ctx, member=None):
         if member and ctx.message.mentions:
             member = ctx.message.mentions[0]
@@ -389,24 +395,27 @@ class Levels(commands.Cog):
         if member.bot:
             return
 
-        member_level = self.user_role_level(ctx, 'participation', member, True)
-        member_role = discord.utils.find(lambda r: r.name == db.get_levels('role', ctx.guild.id, member.id), ctx.guild.roles)
-        member_c_role = discord.utils.find(lambda r: r.name == db.get_levels('c_role', ctx.guild.id, member.id), ctx.guild.roles)
+        member_level = self.user_role_level(ctx.guild.id, 'participation', member.id, True)
+        member_c_level = self.user_role_level(ctx.guild.id, 'contribution', member.id, True)
 
-        member_c_level = self.user_role_level(ctx, 'contribution', member, True)
+        role_name = db.get_levels('role', ctx.guild.id, member.id)
+        c_role_name = db.get_levels('c_role', ctx.guild.id, member.id)
+        member_role = discord.utils.find(lambda r: r.name == role_name, ctx.guild.roles)
+        member_c_role = discord.utils.find(lambda r: r.name == c_role_name, ctx.guild.roles)
+
         rank = self.calculate_user_rank('xp', ctx.guild.id, member.id)
         c_rank = self.calculate_user_rank('cp', ctx.guild.id, member.id)
 
         if member_role is None:
-            member_role = await ctx.guild.create_role(name=db.get_levels('role', ctx.guild.id, member.id))
+            member_role = await ctx.guild.create_role(name=role_name)
 
         sp_value = f'**#{rank}** | **Level** {member_level} <@&{member_role.id}>'
 
-        if db.get_levels('c_role', ctx.guild.id, member.id, ) == '':
+        if c_role_name == '':
             cp_value = f'**#{c_rank}** | **Level** {member_c_level}'
         else:
             if member_c_role is None:
-                member_c_role = await ctx.guild.create_role(name=db.get_levels('c_role', ctx.guild.id, member.id))
+                member_c_role = await ctx.guild.create_role(name=c_role_name)
 
             cp_value = f'**#{c_rank}** | **Level** {member_c_level} <@&{member_c_role.id}>'
 
@@ -428,97 +437,88 @@ class Levels(commands.Cog):
 
     async def process_reaction(self, payload):
         guild = self.bot.get_guild(payload.guild_id)
+        user = guild.get_member(payload.user_id)
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        author = message.author
-        user = self.bot.get_user(payload.user_id)
         ctx = await self.bot.get_context(message, cls=context.Context)
 
         # Add xp to user who received reaction
-        if self.cooldown_expired(receive_cooldown, guild, author):
+        if self.cooldown_expired(receive_cooldown, guild.id, message.author, 60):
             xp_add = 10
-            await self.add_reaction_xp(ctx, guild, author, xp_add)
+            await self.add_reaction_xp(ctx, message.author, xp_add)
 
         # Add xp to user who gave reaction
-        if self.cooldown_expired(give_cooldown, guild, user):
+        if self.cooldown_expired(give_cooldown, guild.id, user, 60):
             xp_add = 5
-            await self.add_reaction_xp(ctx, guild, user, xp_add)
+            await self.add_reaction_xp(ctx, user, xp_add)
 
-    async def add_reaction_xp(self, ctx, guild, user, xp_add):
-        new_xp = db.get_levels('xp', guild.id, user.id) + xp_add
+    async def add_reaction_xp(self, ctx, user, xp_add):
+        new_xp = db.get_levels('xp', ctx.guild.id, user.id) + xp_add
 
-        db.levels.update_one({'guild_id': guild.id}, {'$set': {f'users.{user.id}.xp': new_xp}})
-        db.get_levels.invalidate('xp', guild.id, user.id)
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{user.id}.xp': new_xp}})
+        db.get_levels.invalidate('xp', ctx.guild.id, user.id)
 
-        xp_until = xpi(guild, user, new_xp)
-        if xp_until <= 0:
-            await self.level_up(ctx, user, 'participation')
+        await self.level_up(ctx, user, 'participation', new_xp)
 
-    def cooldown_expired(self, cooldown, guild, member):
-        if guild.id not in cooldown:
-            cooldown[guild.id] = {}
-        if member.id in cooldown[guild.id]:
-            if round(time()) >= cooldown[guild.id][member.id]:
-                del cooldown[guild.id][member.id]
+    def cooldown_expired(self, cooldown_dict, guild_id, member_id, cooldown_time):
+        if guild_id not in cooldown_dict:
+            cooldown_dict[guild_id] = {}
+        if member_id in cooldown_dict[guild_id]:
+            if round(time()) >= cooldown_dict[guild_id][member_id]:
+                del cooldown_dict[guild_id][member_id]
             else:
                 return False
 
-        cooldown_expire = round(time()) + 60
-        cooldown[guild.id][member.id] = cooldown_expire
+        cooldown_expire = round(time()) + cooldown_time
+        cooldown_dict[guild_id][member_id] = cooldown_expire
         return True
 
-    async def proccess_cp_message(self, ctx):
-        if self.cooldown_expired(cp_cooldown, ctx.guild, ctx.author):
+    async def process_cp_message(self, ctx):
+        if self.cooldown_expired(cp_cooldown, ctx.guild.id, ctx.author.id, 60):
             cp_add = 5
-            new_cp = db.get_levels('cp', ctx.guild.id, ctx.author.id) + cp_add
+            user_cp = ctx.author_cp
+            new_cp = user_cp + cp_add
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.cp': new_cp}})
             db.get_levels.invalidate('cp', ctx.guild.id, ctx.author.id)
 
-            cp_until = cpi(ctx, ctx.author, new_cp)
-            if cp_until <= 0:
-                await self.level_up(ctx, ctx.author, 'contribution')
+            if user_cp == 0:
+                return await self.cp_init(ctx, ctx.author, new_cp)
+
+            await self.level_up(ctx, ctx.author, 'contribution', new_cp)
 
     async def process_message(self, ctx):
-        if ctx.guild.id not in xp_cooldown:
-            xp_cooldown[ctx.guild.id] = {}
-        if ctx.author.id in xp_cooldown[ctx.guild.id]:
-            if round(time()) >= xp_cooldown[ctx.guild.id][ctx.author.id]:
-                del xp_cooldown[ctx.guild.id][ctx.author.id]
-            else:
-                return
+        if self.cooldown_expired(xp_cooldown, ctx.guild.id, ctx.author.id, 45):
+            xp_add = randint(15, 25)
+            new_xp = ctx.author_xp + xp_add
 
-        cooldown_expire = round(time()) + 45
-        xp_cooldown[ctx.guild.id][ctx.author.id] = cooldown_expire
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.xp': new_xp}})
+            db.get_levels.invalidate('xp', ctx.guild.id, ctx.author.id)
 
-        xp_add = randint(15, 25)
-        new_xp = ctx.author_xp + xp_add
+            await self.level_up(ctx, ctx.author, 'participation', new_xp)
 
-        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.xp': new_xp}})
-        db.get_levels.invalidate('xp', ctx.guild.id, ctx.author.id)
-
-        xp_until = xpi(ctx.guild, ctx.author, new_xp)
-        if xp_until <= 0:
-            await self.level_up(ctx, ctx.author, 'participation')
-
-    async def level_up(self, ctx, member, branch):
+    async def level_up(self, ctx, member, branch, new_value):
         if branch == 'contribution':
             pre = 'c_'
+            until = cpi(ctx.guild.id, member.id, new_value)
         else:
             pre = ''
+            until = xpi(ctx.guild.id, member.id, new_value)
+
+        if until > 0:
+            return
 
         user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
-        user_role_level = self.user_role_level(ctx, branch, member)
+        user_role_level = self.user_role_level(ctx.guild.id, branch, member.id)
 
         if user_role_level == -1:
             # Get next role
             leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
             roles = leveling_routes[branch]
-            role_index = -2
+            role_index = self.get_role_index(branch, ctx.guild.id, member.id)
             next_role = ''
             for i, role in enumerate(roles):
-                if role[0] == user_role:
-                    role_index = i
+                # finds the next role by index
                 if role_index == i - 1:
                     next_role = role[0]
                     break
@@ -543,6 +543,12 @@ class Levels(commands.Cog):
         else:
             reward_text += '!'
 
+        await self.level_up_message(ctx, member, reward_text)
+
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.{pre}level': 1}})
+        db.get_levels.invalidate(f'{pre}level', ctx.guild.id, member.id)
+
+    async def level_up_message(self, ctx, member, reward_text):
         embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
         embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
@@ -555,18 +561,15 @@ class Levels(commands.Cog):
         else:
             await channel.send(embed=embed)
 
-        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.{pre}level': 1}})
-        db.get_levels.invalidate(f'{pre}level', ctx.guild.id, member.id)
-
     # Returns the level of current role
-    def user_role_level(self, ctx, branch, member, current=False):
+    def user_role_level(self, guild_id, branch, member_id, current=False):
         if branch == 'contribution':
             pre = 'c_'
         else:
             pre = ''
 
-        user_level = db.get_levels(f'{pre}level', ctx.guild.id, member.id)
-        user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
+        user_level = db.get_levels(f'{pre}level', guild_id, member_id)
+        user_role = db.get_levels(f'{pre}role', guild_id, member_id)
 
         if user_role == '':
             return user_level
@@ -574,22 +577,17 @@ class Levels(commands.Cog):
         if not current:
             user_level += 1
 
-        leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
+        leveling_routes = db.get_levels('leveling_routes', guild_id)
         all_roles = leveling_routes[branch]
 
-        role_index = 0
-        for role in all_roles:
-            if role[0] != user_role:
-                role_index += 1
-            else:
-                break
+        role_index = self.get_role_index(branch, guild_id, user_role)
 
         current_level_total = 0
         previous_level_total = 0
         role_amount = len(all_roles)
         for i, role in enumerate(all_roles):
             current_level_total += role[1]
-            if role_amount - 1 == i:
+            if role_amount == i + 1:
                 return user_level - previous_level_total
             if role_index > i:
                 previous_level_total += role[1]
@@ -601,11 +599,19 @@ class Levels(commands.Cog):
             if current_level_total < user_level:
                 return -1
 
+    def get_role_index(self, branch, guild_id, user_role):
+        leveling_routes = db.get_levels('leveling_routes', guild_id)
+        all_roles = leveling_routes[branch]
+
+        for i, role in enumerate(all_roles):
+            if role[0] == user_role:
+                return i
+
 
 # How much xp is needed until level up
-def xpi(guild, member, new_xp):
+def xpi(guild_id, member_id, new_xp):
     user_xp = new_xp
-    user_level = db.get_levels('level', guild.id, member.id)
+    user_level = db.get_levels('level', guild_id, member_id)
 
     # total xp needed to gain the next level
     total_xp = 0
@@ -617,14 +623,12 @@ def xpi(guild, member, new_xp):
 
 
 # How much cp is needed until level up, works the same way as xpi
-def cpi(ctx, member, new_cp):
+def cpi(guild_id, member_id, new_cp):
     user_cp = new_cp
-    user_level = db.get_levels('c_level', ctx.guild.id, member.id)
+    user_level = db.get_levels('c_level', guild_id, member_id)
 
     total_cp = 1000 * (user_level + 1)
     return total_cp - user_cp
-
-
 
 
 def setup(bot):

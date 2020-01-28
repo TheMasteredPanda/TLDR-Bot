@@ -42,7 +42,8 @@ class TLDR(commands.AutoShardedBot):
             cp_channels = db.get_levels('cp_channels', ctx.guild.id)
 
             if message.channel.id in cp_channels:
-                await levels_cog.proccess_cp_message(ctx)
+                await levels_cog.process_cp_message(ctx)
+
             return await levels_cog.process_message(ctx)
 
     async def on_raw_reaction_add(self, payload):
@@ -59,7 +60,6 @@ class TLDR(commands.AutoShardedBot):
         if author.bot or user.bot:
             return
 
-        # check if reaction is either thumbs up or thumbs down
         if emote.name not in ('👍', '👎'):
             return
 

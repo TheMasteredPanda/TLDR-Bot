@@ -11,7 +11,7 @@ class Connection:
         self.levels = self.db['levels']
 
     def _get_server_options(self, guild_id):
-        doc = self.server_options.find_one({'guild_id' : guild_id})
+        doc = self.server_options.find_one({'guild_id': guild_id})
         if doc is None:
             new_doc = {
                 'guild_id': guild_id,
@@ -54,7 +54,8 @@ class Connection:
         doc = self._get_levels(guild_id)
         if user_id is None:
             return doc[value]
-        if str(user_id) not in doc['users']:
+        user_id = str(user_id)
+        if user_id not in doc['users']:
             user = {
                 'xp': 0,
                 'level': 0,
@@ -64,6 +65,6 @@ class Connection:
                 'c_role': ''
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
-            doc['users'][str(user_id)] = user
+            doc['users'][user_id] = user
 
-        return doc['users'][str(user_id)][value]
+        return doc['users'][user_id][value]
