@@ -45,10 +45,14 @@ class TLDR(commands.AutoShardedBot):
         channel = self.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         author = message.author
+        user = self.bot.get_user(payload.user_id)
         emote = payload.emoji
 
         # skip if user gave reaction to themselves
         if author.id == payload.user_id:
+            return
+
+        if author.bot or user.bot:
             return
 
         # check if reaction is either thumbs up or thumbs down
@@ -73,6 +77,8 @@ class TLDR(commands.AutoShardedBot):
         print(f'{self.user} is ready')
 
     async def on_member_join(self, member):
+        if member.bot:
+            return
         # just adds the member to the database
         db.get_levels('xp', member.guild.id, member.id)
 

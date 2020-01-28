@@ -208,6 +208,56 @@ class Levels(commands.Cog):
         await ctx.send(embed=embed)
         return await self.level_up(ctx, member, 'contribution')
 
+    @commands.command(help='Shows the leveling leaderboards (participation/contribution) on the server', usage='leaderboard [branch] (page)', examples=['leaderboard participation', 'leaderboard contribution 2'], clearance='User', cls=command.Command)
+    async def leaderboard(self, ctx, branch=None, user_page=0):
+        if branch is None:
+            return await embed_maker.command_error(ctx)
+
+        if branch == 'contribution':
+            pre = 'c_'
+            points = 'cp'
+        else:
+            points = 'xp'
+            pre = ''
+
+        doc = db.levels.find_one({'guild_id': ctx.guild.id})
+        # this creates a list of tuples, where [0] is the user's id and [1] is an object where xp, level etc. is located
+        # same as in calculate_user_rank
+        sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][points], reverse=True)
+        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        page_num = 1
+        lboard = {page_num: []}
+
+        for i, u in enumerate(sorted_users):
+            if i == 10 * page_num:
+                page_num += 1
+                lboard[page_num] = []
+
+            member = self.bot.get_user(u[0])
+            if member is None:
+                member = await self.bot.fetch_user(u[0])
+
+            role_level = self.user_role_level(ctx, branch, member, True)
+            user_role_name = u[1][f'{pre}role']
+            if user_role_name == '':
+                continue
+            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+            page_message = f'**#{i + 1}** - <@{u[0]}> | **Level {role_level}** <@&{user_role.id}>'
+            lboard[page_num].append(page_message)
+
+        if user_page not in lboard:
+            user_page = 1
+
+        if not lboard[user_page]:
+            description = 'Damn, this place is empty'
+        else:
+            description = '\n'.join(lboard[user_page])
+        lboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=description)
+        lboard_embed.set_footer(text=f'Page {user_page}/{page_num} - {ctx.author}', icon_url=ctx.author.avatar_url)
+        lboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
+
+        await ctx.send(embed=lboard_embed)
+
     @commands.command(help='Shows your (or someone else\'s) rank, level and xp', usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
     async def rank(self, ctx, member=None):
         if member and ctx.message.mentions:
