@@ -270,7 +270,7 @@ class Levels(commands.Cog):
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.xp': new_xp}})
         db.get_levels.invalidate('xp', ctx.guild.id, ctx.author.id)
 
-        xp_until = xpi(ctx, new_xp)
+        xp_until = xpi(ctx.guild, ctx.author, new_xp)
         if xp_until <= 0:
             await self.level_up(ctx, ctx.author, 'participation')
 
@@ -376,9 +376,9 @@ class Levels(commands.Cog):
 
 
 # How much xp is needed until level up
-def xpi(ctx, new_xp):
+def xpi(guild, member, new_xp):
     user_xp = new_xp
-    user_level = ctx.author_level
+    user_level = db.get_levels('level', guild.id, member.id)
 
     # total xp needed to gain the next level
     total_xp = 0
