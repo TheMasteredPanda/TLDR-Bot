@@ -43,7 +43,8 @@ class Connection:
                     'contribution': [
                         ('Public Servant', 5)
                     ]
-                }
+                },
+                'cp_channels': []
             }
             self.levels.insert_one(doc)
         return doc

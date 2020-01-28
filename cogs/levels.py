@@ -8,6 +8,7 @@ from modules import database, command, embed_maker, context
 
 db = database.Connection()
 xp_cooldown = {}
+cp_cooldown = {}
 # Cooldown objects for giving and receiving reactions
 receive_cooldown = {}
 give_cooldown = {}
@@ -113,6 +114,126 @@ class Levels(commands.Cog):
                 return await self.leveling_routes(ctx, True)
         else:
             return await embed_maker.command_error(ctx, '[role name]')
+
+    @commands.command(help='Add a channel to the list of channels, in which contribution points can be gained', usage='add_cp_channel [#channel]', examples=['add_cp_channel #court'], clearance='Admin', cls=command.Command)
+    async def add_cp_channel(self, ctx, channel=None):
+        if channel is None:
+            return await embed_maker.command_error(ctx)
+
+        channel_list = db.get_levels('cp_channels', ctx.guild.id)
+
+        if ctx.message.channel_mentions:
+            channel = ctx.message.channel_mentions[0]
+            if channel.id in channel_list:
+                embed = embed_maker.message(ctx, f'That channel is already on the list', colour='red')
+                return await ctx.send(embed=embed)
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'cp_channels': channel.id}})
+            db.get_levels.invalidate('cp_channels', ctx.guild.id)
+
+            embed = embed_maker.message(ctx, f'<#{channel.id}> has been added to the list', colour='green')
+            await ctx.send(embed=embed)
+        else:
+            return await embed_maker.command_error(ctx, '[#channel]')
+
+    @commands.command(help='See the current list of channels where contribution points can be earned', usage='cp_channel_list', examples=['add_cp_channel'], clearance='Mod', cls=command.Command)
+    async def cp_channel_list(self, ctx):
+        channel_list = db.get_levels('cp_channels', ctx.guild.id)
+
+        if channel_list:
+            channel_list_str = ''
+            for i in channel_list:
+                channel_list_str += f'<#{i}>\n'
+        else:
+            channel_list_str = 'None'
+
+        embed = embed_maker.message(ctx, channel_list_str)
+        return await ctx.send(embed=embed)
+
+    @commands.command(help='start the role editing process, edit attributes of a role (max level/name)', usage='edit_role [branch]', examples=['edit_role participation'], clearance='Admin', cls=command.Command)
+    async def edit_role(self, ctx, branch=None):
+        if branch is None:
+            return await embed_maker.command_error(ctx)
+
+        leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
+        if branch not in leveling_routes:
+            embed = embed_maker.message(ctx, 'That is not a valid branch (contribution/participation)', colour='red')
+            return await ctx.send(embed=embed)
+
+        async def role():
+            def check(m):
+                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+
+            msg = 'What is the name of the role you want to edit?'
+            await ctx.send(msg)
+            try:
+                role_message = await self.bot.wait_for('message', check=check, timeout=60)
+            except asyncio.TimeoutError:
+                return await ctx.send('edit_role function timed out')
+
+            for _role in leveling_routes[branch]:
+                if _role[0] == role_message.content:
+                    return role_message.content
+            else:
+                embed = embed_maker.message(ctx, 'That is not a valid role', colour='red')
+                await ctx.send(embed=embed)
+                return await role()
+
+        async def attribute():
+            def check(m):
+                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+
+            msg = 'What attribute of the role do you want to edit? (name/level)'
+            await ctx.send(msg)
+            try:
+                attribute_message = await self.bot.wait_for('message', check=check, timeout=60)
+            except asyncio.TimeoutError:
+                return await ctx.send('edit_role function timed out')
+
+            if attribute_message.content not in ('name', 'level'):
+                embed = embed_maker.message(ctx, 'That is not a valid attribute', colour='red')
+                await ctx.send(embed=embed)
+                return await attribute()
+            else:
+                return attribute_message.content
+
+        async def new_value():
+            def check(m):
+                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+
+            msg = 'What do you want the new value of the attribute to be?'
+            await ctx.send(msg)
+            try:
+                new_value_message = await self.bot.wait_for('message', check=check, timeout=60)
+            except asyncio.TimeoutError:
+                return await ctx.send('edit_role function timed out')
+
+            return new_value_message.content
+
+        role = await role()
+        attribute = await attribute()
+        new_value = await new_value()
+        print(role, attribute, new_value)
+        new_role_list = leveling_routes[branch][:]
+        for i, _role in enumerate(leveling_routes[branch]):
+            if _role[0] == role:
+                print('found')
+                if attribute == 'level':
+                    print('editing level')
+                    new_role_list[i] = (_role[0], new_value)
+                elif attribute == 'name':
+                    print('editing name')
+                    role = discord.utils.find(lambda r: r.name == _role[0], ctx.guild.roles)
+                    await role.edit(name=new_value)
+                    new_role_list[i] = (new_value, _role[1])
+
+                db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_list}})
+                db.get_levels.invalidate('leveling_routes', ctx.guild.id)
+
+                embed = embed_maker.message(ctx, f'{role} has been updated', colour='green')
+                return await ctx.send(embed=embed)
+        else:
+            print('for loop failed')
+
 
     @commands.command(help='See current leveling routes', usage='leveling_routes', examples=['leveling_routes'], clearance='User', cls=command.Command)
     async def leveling_routes(self, ctx, new=False):
@@ -345,6 +466,18 @@ class Levels(commands.Cog):
         cooldown_expire = round(time()) + 60
         cooldown[guild.id][member.id] = cooldown_expire
         return True
+
+    async def proccess_cp_message(self, ctx):
+        if self.cooldown_expired(cp_cooldown, ctx.guild, ctx.author):
+            cp_add = 5
+            new_cp = db.get_levels('cp', ctx.guild.id, ctx.author.id) + cp_add
+
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.cp': new_cp}})
+            db.get_levels.invalidate('cp', ctx.guild.id, ctx.author.id)
+
+            cp_until = cpi(ctx, ctx.author, new_cp)
+            if cp_until <= 0:
+                await self.level_up(ctx, ctx.author, 'contribution')
 
     async def process_message(self, ctx):
         if ctx.guild.id not in xp_cooldown:

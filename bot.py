@@ -39,13 +39,17 @@ class TLDR(commands.AutoShardedBot):
 
         if not message.author.bot:
             levels_cog = self.get_cog('Levels')
+            cp_channels = db.get_levels('cp_channels', ctx.guild.id)
+
+            if message.channel.id in cp_channels:
+                await levels_cog.proccess_cp_message(ctx)
             return await levels_cog.process_message(ctx)
 
     async def on_raw_reaction_add(self, payload):
         channel = self.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
         author = message.author
-        user = self.bot.get_user(payload.user_id)
+        user = self.get_user(payload.user_id)
         emote = payload.emoji
 
         # skip if user gave reaction to themselves
