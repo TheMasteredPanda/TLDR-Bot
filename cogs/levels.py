@@ -4,10 +4,13 @@ from datetime import datetime
 from time import time
 from random import randint
 from discord.ext import commands
-from modules import database, command, embed_maker
+from modules import database, command, embed_maker, context
 
 db = database.Connection()
 xp_cooldown = {}
+# Cooldown objects for giving and receiving reactions
+receive_cooldown = {}
+give_cooldown = {}
 
 
 class Levels(commands.Cog):
@@ -251,6 +254,47 @@ class Levels(commands.Cog):
         for i, u in enumerate(sorted_users):
             if u[0] == str(user_id):
                 return i + 1
+
+    async def process_reaction(self, payload):
+        guild = self.bot.get_guild(payload.guild_id)
+        channel = self.bot.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        author = message.author
+        user = self.bot.get_user(payload.user_id)
+        ctx = await self.bot.get_context(message, cls=context.Context)
+
+        # Add xp to user who received reaction
+        if self.cooldown_expired(receive_cooldown, guild, author):
+            xp_add = 10
+            await self.add_reaction_xp(ctx, guild, author, xp_add)
+
+        # Add xp to user who gave reaction
+        if self.cooldown_expired(give_cooldown, guild, user):
+            xp_add = 5
+            await self.add_reaction_xp(ctx, guild, user, xp_add)
+
+    async def add_reaction_xp(self, ctx, guild, user, xp_add):
+        new_xp = db.get_levels('xp', guild.id, user.id) + xp_add
+
+        db.levels.update_one({'guild_id': guild.id}, {'$set': {f'users.{user.id}.xp': new_xp}})
+        db.get_levels.invalidate('xp', guild.id, user.id)
+
+        xp_until = xpi(guild, user, new_xp)
+        if xp_until <= 0:
+            await self.level_up(ctx, user, 'participation')
+
+    def cooldown_expired(self, cooldown, guild, member):
+        if guild.id not in cooldown:
+            cooldown[guild.id] = {}
+        if member.id in cooldown[guild.id]:
+            if round(time()) >= cooldown[guild.id][member.id]:
+                del cooldown[guild.id][member.id]
+            else:
+                return False
+
+        cooldown_expire = round(time()) + 60
+        cooldown[guild.id][member.id] = cooldown_expire
+        return True
 
     async def process_message(self, ctx):
         if ctx.guild.id not in xp_cooldown:
