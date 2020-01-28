@@ -39,10 +39,10 @@ class TLDR(commands.AutoShardedBot):
 
         if not message.author.bot:
             levels_cog = self.get_cog('Levels')
-            cp_channels = db.get_levels('cp_channels', ctx.guild.id)
+            honours_channels = db.get_levels('honours_channels', ctx.guild.id)
 
-            if message.channel.id in cp_channels:
-                await levels_cog.process_cp_message(ctx)
+            if message.channel.id in honours_channels:
+                await levels_cog.process_hp_message(ctx)
 
             return await levels_cog.process_message(ctx)
 
@@ -84,7 +84,7 @@ class TLDR(commands.AutoShardedBot):
         if member.bot:
             return
         # just adds the member to the database
-        db.get_levels('xp', member.guild.id, member.id)
+        db.get_levels('pp', member.guild.id, member.id)
 
     async def close(self):
         await super().close()

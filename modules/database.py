@@ -36,15 +36,15 @@ class Connection:
                 'users': {},
                 'level_up_channel': 0,
                 'leveling_routes': {
-                    'participation': [
-                        ('Member', 5),
+                    'parliamentary': [
+                        ('Citizen', 5),
                         ('Local Councillor', 5)
                     ],
-                    'contribution': [
+                    'honours': [
                         ('Public Servant', 5)
                     ]
                 },
-                'cp_channels': []
+                'honours_channels': []
             }
             self.levels.insert_one(doc)
         return doc
@@ -57,12 +57,12 @@ class Connection:
         user_id = str(user_id)
         if user_id not in doc['users']:
             user = {
-                'xp': 0,
-                'level': 0,
-                'cp': 0,
-                'c_level': 0,
-                'role': 'Member',
-                'c_role': ''
+                'pp': 0,
+                'p_level': 0,
+                'hp': 0,
+                'h_level': 0,
+                'p_role': 'Member',
+                'h_role': ''
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][user_id] = user
