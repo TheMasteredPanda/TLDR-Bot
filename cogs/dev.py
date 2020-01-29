@@ -57,6 +57,18 @@ class Dev(commands.Cog):
         result = (await eval(f"{fn_name}()", env))
         await ctx.send(result)
 
+    @commands.command(hidden=True, help='Pause the bot until further notice', usage='pause', examples=['pause'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def pause(self, ctx):
+        self.bot.paused = True
+        return await ctx.send('bot has been paused and it wont accept commands anymore')
+
+    @commands.command(hidden=True, help='Unpause the bot', usage='unpause', examples=['unpause'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def unpause(self, ctx):
+        self.bot.paused = False
+        return await ctx.send('bot has been unpaused and will continue accepting commands')
+
 
 def setup(bot):
     bot.add_cog(Dev(bot))

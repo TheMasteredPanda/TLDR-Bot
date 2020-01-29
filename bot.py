@@ -7,7 +7,7 @@ from discord.ext import commands
 from config import BOT_TOKEN
 
 db = database.Connection()
-
+paused = False
 
 async def get_prefix(bot, message):
     prefix = db.get_server_options('prefix', message.guild.id)
@@ -19,6 +19,7 @@ class TLDR(commands.AutoShardedBot):
         super().__init__(command_prefix=get_prefix, case_insensitive=True, help_command=None)
 
         self.session = aiohttp.ClientSession(loop=self.loop)
+        self.paused = False
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
@@ -36,6 +37,9 @@ class TLDR(commands.AutoShardedBot):
 
     async def on_message(self, message):
         ctx = await self.get_context(message, cls=context.Context)
+
+        if self.paused and ctx.command.name != 'unpause':
+            return
 
         # just checks if message was sent in pms
         if ctx.guild.id is None:

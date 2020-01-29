@@ -1,3 +1,4 @@
+import time
 from discord.ext import commands
 from modules import database, command
 
@@ -10,7 +11,10 @@ class Utility(commands.Cog):
 
     @commands.command(help='Get bot\'s latency', usage='ping', examples=['ping'], clearance='User', cls=command.Command)
     async def ping(self, ctx):
-        await ctx.send('Pong! {0}ms'.format(round(self.bot.latency, 1)))
+        before = time.monotonic()
+        message = await ctx.send("Pong")
+        ping = (time.monotonic() - before) * 1000
+        await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping)}ms")
 
 
 def setup(bot):
