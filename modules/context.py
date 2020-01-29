@@ -11,41 +11,20 @@ class Context(commands.Context):
         self.bot = kwargs['bot']
         self.message = kwargs['message']
         if not self.message.author.bot:
-            self.author_pp = self.pp
-            self.author_p_level = self.p_level
+            self.author_pp = self.get('pp')
+            self.author_p_level = self.get('p_level')
             self.author_clearance = self.clearance
-            self.author_hp = self.hp
-            self.author_h_level = self.h_level
-            self.author_role = self.role
-            self.author_h_role = self.h_role
+            self.author_hp = self.get('hp')
+            self.author_h_level = self.get('h_level')
+            self.author_p_role = self.get('p_role')
+            self.author_h_role = self.get('h_role')
 
     @property
     def session(self):
         return self.bot.session
 
-    @property
-    def role(self):
-        return db.get_levels('p_role', self.message.guild.id, self.message.author.id)
-
-    @property
-    def h_role(self):
-        return db.get_levels('h_role', self.message.guild.id, self.message.author.id)
-
-    @property
-    def hp(self):
-        return db.get_levels('hp', self.message.guild.id, self.message.author.id)
-
-    @property
-    def h_level(self):
-        return db.get_levels('h_level', self.message.guild.id, self.message.author.id)
-
-    @property
-    def pp(self):
-        return db.get_levels('pp', self.message.guild.id, self.message.author.id)
-
-    @property
-    def p_level(self):
-        return db.get_levels('p_level', self.message.guild.id, self.message.author.id)
+    def get(self, value):
+        return db.get_levels(value, self.message.guild.id, self.message.author.id)
 
     @property
     def clearance(self):

@@ -277,11 +277,6 @@ class Levels(commands.Cog):
 
         amount = round(int(amount))
 
-        if amount > 1000:
-            embed = embed_maker.message(ctx, 'The max amount of honours points you can give is 1000',
-                                        colour='red')
-            return await ctx.send(embed=embed)
-
         user_hp = db.get_levels('hp', ctx.guild.id, member.id)
         new_hp = amount + user_hp
 
@@ -299,26 +294,26 @@ class Levels(commands.Cog):
 
     async def hp_init(self, ctx, member, new_hp):
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
-        first_role_name = leveling_routes['honours'][0][0]
-        first_role = discord.utils.find(lambda r: r.name == first_role_name, ctx.guild.roles)
+        h_role_name = leveling_routes['honours'][0][0]
+        h_role = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
 
-        if first_role is None:
-            first_role = await ctx.guild.create_role(name=first_role_name)
+        if h_role is None:
+            h_role = await ctx.guild.create_role(name=h_role_name)
 
-        await member.add_roles(first_role)
+        await member.add_roles(h_role)
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.h_role': h_role.name}})
+        db.get_levels.invalidate('h_role', ctx.guild.id, member.id)
 
         if new_hp < 1000:
             lvl = 0
+            reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{lvl}** <@&{h_role.id}>, due to your contributions!'
+            return await self.level_up_message(ctx, member, reward_text)
         else:
-            lvl = 1
-            db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.h_level': 1}})
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.h_level': 1}})
             db.get_levels.invalidate('h_level', ctx.guild.id, member.id)
+            return await self.level_up(ctx, member, 'honours', new_hp)
 
-        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.h_role': first_role.name}})
-        db.get_levels.invalidate('h_role', ctx.guild.id, member.id)
 
-        reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{lvl}** <@&{first_role.id}>, due to your contributions!'
-        await self.level_up_message(ctx, member, reward_text)
 
     @commands.command(help='Shows the leveling leaderboards (parliamentary/honours) on the server', usage='leaderboard [branch] (page)', examples=['leaderboard parliamentary', 'leaderboard honours 2'], clearance='User', cls=command.Command)
     async def leaderboard(self, ctx, branch=None, user_page=0):
@@ -345,7 +340,7 @@ class Levels(commands.Cog):
             if member is None:
                 member = await self.bot.fetch_user(u[0])
 
-            role_level = self.user_role_level(ctx.guild.id, branch, member.id, True)
+            role_level = self.user_role_level(ctx.guild.id, branch, member.id)
             user_role_name = u[1][f'{pre}_role']
             if user_role_name == '':
                 continue
@@ -377,8 +372,8 @@ class Levels(commands.Cog):
         if member.bot:
             return
 
-        member_p_level = self.user_role_level(ctx.guild.id, 'parliamentary', member.id, True)
-        member_h_level = self.user_role_level(ctx.guild.id, 'honours', member.id, True)
+        member_p_level = self.user_role_level(ctx.guild.id, 'parliamentary', member.id)
+        member_h_level = self.user_role_level(ctx.guild.id, 'honours', member.id)
 
         p_role_name = db.get_levels('p_role', ctx.guild.id, member.id)
         h_role_name = db.get_levels('h_role', ctx.guild.id, member.id)
@@ -482,16 +477,16 @@ class Levels(commands.Cog):
     async def level_up(self, ctx, member, branch, new_value):
         if branch == 'honours':
             pre = 'h_'
-            until = hpi(ctx.guild.id, member.id, new_value)
+            lvl_up, lvls_up = hpi(ctx.guild.id, member.id, new_value)
         else:
             pre = 'p_'
-            until = ppi(ctx.guild.id, member.id, new_value)
+            lvl_up, lvls_up = ppi(ctx.guild.id, member.id, new_value)
 
-        if until > 0:
+        if not lvl_up:
             return
 
         user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
-        user_role_level = self.user_role_level(ctx.guild.id, branch, member.id)
+        user_role_level = self.user_role_level(ctx.guild.id, branch, member.id, lvls_up)
 
         if user_role_level == -1:
             # Get next role
@@ -510,7 +505,7 @@ class Levels(commands.Cog):
             if role is None:
                 role = await ctx.guild.create_role(name=next_role)
 
-            reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **1** <@&{role.id}>'
+            reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{lvls_up}** <@&{role.id}>'
 
             await member.add_roles(role)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.{pre}role': role.name}})
@@ -527,7 +522,7 @@ class Levels(commands.Cog):
 
         await self.level_up_message(ctx, member, reward_text)
 
-        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.{pre}level': 1}})
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.{pre}level': lvls_up}})
         db.get_levels.invalidate(f'{pre}level', ctx.guild.id, member.id)
 
     async def level_up_message(self, ctx, member, reward_text):
@@ -544,7 +539,7 @@ class Levels(commands.Cog):
             await channel.send(embed=embed)
 
     # Returns the level of current role
-    def user_role_level(self, guild_id, branch, member_id, current=False):
+    def user_role_level(self, guild_id, branch, member_id, lvl_add=0):
         if branch == 'honours':
             pre = 'h_'
         else:
@@ -556,8 +551,7 @@ class Levels(commands.Cog):
         if user_role == '':
             return user_level
 
-        if not current:
-            user_level += 1
+        user_level += lvl_add
 
         leveling_routes = db.get_levels('leveling_routes', guild_id)
         all_roles = leveling_routes[branch]
@@ -597,13 +591,20 @@ def ppi(guild_id, member_id, new_pp):
     user_pp = new_pp
     user_level = db.get_levels('p_level', guild_id, member_id)
 
-    # total pp needed to gain the next level
-    total_pp = 0
-    for i in range(user_level + 1):
-        # the formula to calculate how much pp you need for the next level
-        total_pp += (5 * (i ** 2) + 50 * i + 100)
+    levels_up = -1
+    for i in range(10):
+        # total pp needed to gain the next level
+        total_pp = 0
+        for j in range(user_level + i):
+            # the formula to calculate how much pp you need for the next level
+            total_pp += (5 * (i ** 2) + 50 * i + 100)
 
-    return total_pp - user_pp
+        if total_pp - user_pp > 0 and levels_up >= 1:
+            return True, levels_up
+        elif total_pp - user_pp > 0:
+            return False, levels_up
+
+        levels_up += 1
 
 
 # How much hp is needed until level up, works the same way as ppi
@@ -611,8 +612,18 @@ def hpi(guild_id, member_id, new_hp):
     user_hp = new_hp
     user_level = db.get_levels('h_level', guild_id, member_id)
 
-    total_hp = 1000 * (user_level + 1)
-    return total_hp - user_hp
+    levels_up = -1
+    for i in range(10):
+        total_hp = 0
+        for j in range(user_level + i):
+            total_hp = 1000 * (user_level + i)
+
+        if total_hp - user_hp > 0 and levels_up >= 1:
+            return True, levels_up
+        elif total_hp - user_hp > 0:
+            return False, levels_up
+
+        levels_up += 1
 
 
 def setup(bot):

@@ -26,7 +26,7 @@ class General(commands.Cog):
         if _cmd is None:
             embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'**Prefix** : `{prefix}`\nFor additional info on a command, type `{prefix}help [command]`')
             embed.set_author(name=f'Help - {clearance[0]}', icon_url=ctx.guild.icon_url)
-            embed.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
+            embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             for cat in help_object:
                 cat_commands = []
                 for cmd in help_object[cat]:

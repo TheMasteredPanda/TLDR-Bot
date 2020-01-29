@@ -12,10 +12,6 @@ class Utility(commands.Cog):
     async def ping(self, ctx):
         await ctx.send('Pong! {0}ms'.format(round(self.bot.latency, 1)))
 
-    @commands.command(help='test', usage='test', examples=['test'], clearance='Dev', cls=command.Command)
-    async def test(self, ctx, hmm):
-        return
-
 
 def setup(bot):
     bot.add_cog(Utility(bot))

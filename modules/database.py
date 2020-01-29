@@ -61,7 +61,7 @@ class Connection:
                 'p_level': 0,
                 'hp': 0,
                 'h_level': 0,
-                'p_role': 'Member',
+                'p_role': 'Citizen',
                 'h_role': ''
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
