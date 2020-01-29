@@ -32,24 +32,24 @@ class Levels(commands.Cog):
             def role_check(m):
                 return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
 
-            msg = 'What would you like the name of the new role to be?\nValid input: Any name that can be used as a role name'
+            msg = 'What would you like the name of the new role to be?'
             await ctx.send(msg)
             try:
                 role_message = await self.bot.wait_for('message', check=role_check, timeout=60)
                 try:
-                    new_role = await ctx.guild.create_role(name=role_message.content)
+                    new_add_role = await ctx.guild.create_role(name=role_message.content)
                 except discord.Forbidden:
                     return await ctx.send('failed to create role, missing permissions')
             except asyncio.TimeoutError:
                 return await ctx.send('add_role function timed out')
 
-            return new_role
+            return new_add_role
 
         async def max_level():
             def level_check(m):
                 return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.isdigit()
 
-            msg = 'How many levels will a user have to be in this role, before they advance onto the next role?\nValid input: any number'
+            msg = 'How many levels will a user have to be in this role, before they advance onto the next role?'
             await ctx.send(msg)
 
             try:
@@ -59,14 +59,14 @@ class Levels(commands.Cog):
 
             return round(int(level_message.content))
 
-        async def finish(new_role, role_max_level):
+        async def finish(new_add_role, add_role_max_level):
             def after_check(m):
                 return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.isdigit()
 
             role_list_msg = ''
             for i, _role in enumerate(leveling_routes[branch]):
                 role_list_msg += f'#{i + 1} | {_role[0]} - Max Level: {_role[1]}\n'
-            msg = f'What role should the new role come after?\nValid input: any role in this ordered list (number in list):\n{role_list_msg}'
+            msg = f'What role should the new role come after (number in the list)?\n{role_list_msg}'
             await ctx.send(msg)
 
             try:
@@ -77,12 +77,11 @@ class Levels(commands.Cog):
             new_role_position = int(after_message.content)
             if new_role_position > len(leveling_routes[branch]) + 1 or new_role_position < 1:
                 await ctx.send('Invalid number')
-                return await finish(new_role, role_max_level)
+                return await finish(new_add_role, add_role_max_level)
             new_role_route_list = leveling_routes[branch][:]
-            new_role_route_list.insert(new_role_position, (new_role.name, role_max_level))
+            new_role_route_list.insert(new_role_position, (new_add_role.name, add_role_max_level))
 
-            db.levels.update_one({'guild_id': ctx.guild.id},
-                                 {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
             db.get_levels.invalidate('leveling_routes', ctx.guild.id)
 
         new_role = await role()
@@ -160,7 +159,7 @@ class Levels(commands.Cog):
             embed = embed_maker.message(ctx, 'That is not a valid branch (honours/parliamentary)', colour='red')
             return await ctx.send(embed=embed)
 
-        async def role():
+        async def _role():
             def check(m):
                 return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
 
@@ -171,15 +170,15 @@ class Levels(commands.Cog):
             except asyncio.TimeoutError:
                 return await ctx.send('edit_role function timed out')
 
-            for _role in leveling_routes[branch]:
-                if _role[0] == role_message.content:
+            for r in leveling_routes[branch]:
+                if r[0] == role_message.content:
                     return role_message.content
             else:
-                embed = embed_maker.message(ctx, 'That is not a valid role', colour='red')
-                await ctx.send(embed=embed)
+                error_embed = embed_maker.message(ctx, 'That is not a valid role', colour='red')
+                await ctx.send(embed=error_embed)
                 return await role()
 
-        async def attribute():
+        async def _attribute():
             def check(m):
                 return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
 
@@ -191,13 +190,13 @@ class Levels(commands.Cog):
                 return await ctx.send('edit_role function timed out')
 
             if attribute_message.content not in ('name', 'level'):
-                embed = embed_maker.message(ctx, 'That is not a valid attribute', colour='red')
-                await ctx.send(embed=embed)
+                error_embed = embed_maker.message(ctx, 'That is not a valid attribute', colour='red')
+                await ctx.send(embed=error_embed)
                 return await attribute()
             else:
                 return attribute_message.content
 
-        async def new_value():
+        async def _new_value():
             def check(m):
                 return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
 
@@ -210,9 +209,10 @@ class Levels(commands.Cog):
 
             return new_value_message.content
 
-        role = await role()
-        attribute = await attribute()
-        new_value = await new_value()
+        role = await _role()
+        attribute = await _attribute()
+        new_value = await _new_value()
+
         new_role_list = leveling_routes[branch][:]
         for i, _role in enumerate(leveling_routes[branch]):
             if _role[0] == role:

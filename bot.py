@@ -26,8 +26,20 @@ class TLDR(commands.AutoShardedBot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
+    async def on_command_error(self, ctx, exception):
+        guild = self.get_guild(669640013666975784)
+        if guild is not None:
+            channel = self.get_channel(671991712800964620)
+            embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+            embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}```')
+            return await channel.send(embed=embed)
+
     async def on_message(self, message):
         ctx = await self.get_context(message, cls=context.Context)
+
+        # just checks if message was sent in pms
+        if ctx.guild.id is None:
+            return
 
         regex = re.compile(rf'<@!?{self.user.id}>')
         match = re.findall(regex, message.content)
