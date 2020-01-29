@@ -2,6 +2,7 @@ import discord
 import os
 import aiohttp
 import re
+import traceback
 from modules import database, context
 from discord.ext import commands
 from config import BOT_TOKEN
@@ -28,11 +29,19 @@ class TLDR(commands.AutoShardedBot):
                 print(f'{filename[:-3]} is now loaded')
 
     async def on_command_error(self, ctx, exception):
+        trace = exception.__traceback__
+        verbosity = 4
+        lines = traceback.format_exception(type(exception), exception, trace, verbosity)
+        traceback_text = ''.join(lines)
+
+        print(traceback_text)
+        print(exception)
+
         guild = self.get_guild(669640013666975784)
         if guild is not None:
             channel = self.get_channel(671991712800964620)
             embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
-            embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}```')
+            embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
             return await channel.send(embed=embed)
 
     async def on_message(self, message):

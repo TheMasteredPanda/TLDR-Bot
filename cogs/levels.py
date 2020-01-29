@@ -283,8 +283,7 @@ class Levels(commands.Cog):
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.hp': new_hp}})
         db.get_levels.invalidate('hp', ctx.guild.id, member.id)
 
-        embed = embed_maker.message(ctx, f'<@{member.id}> has been awarded **{amount} honours points**',
-                                    colour='green')
+        embed = embed_maker.message(ctx, f'<@{member.id}> has been awarded **{amount} honours points**', colour='green')
         await ctx.send(embed=embed)
 
         if user_hp == 0:
@@ -309,11 +308,7 @@ class Levels(commands.Cog):
             reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{lvl}** <@&{h_role.id}>, due to your contributions!'
             return await self.level_up_message(ctx, member, reward_text)
         else:
-            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.h_level': 1}})
-            db.get_levels.invalidate('h_level', ctx.guild.id, member.id)
             return await self.level_up(ctx, member, 'honours', new_hp)
-
-
 
     @commands.command(help='Shows the leveling leaderboards (parliamentary/honours) on the server', usage='leaderboard [branch] (page)', examples=['leaderboard parliamentary', 'leaderboard honours 2'], clearance='User', cls=command.Command)
     async def leaderboard(self, ctx, branch=None, user_page=0):
