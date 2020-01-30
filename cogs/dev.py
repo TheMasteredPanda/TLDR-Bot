@@ -30,7 +30,7 @@ class Dev(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         
-    @commands.command(hidden=True, descrition='Evaluate code', usage='eval [code]', examples=['eval ctx.author.id'], clearence='Dev', cls=command.Command)
+    @commands.command(hidden=True, help='Evaluate code', usage='eval [code]', examples=['eval ctx.author.id'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def eval(self, ctx, *, cmd):
         fn_name = "_eval_expr"
@@ -56,6 +56,18 @@ class Dev(commands.Cog):
 
         result = (await eval(f"{fn_name}()", env))
         await ctx.send(result)
+
+    @commands.command(hidden=True, help='Pause the bot until further notice', usage='pause', examples=['pause'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def pause(self, ctx):
+        self.bot.paused = True
+        return await ctx.send('bot has been paused and it wont accept commands anymore')
+
+    @commands.command(hidden=True, help='Unpause the bot', usage='unpause', examples=['unpause'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def unpause(self, ctx):
+        self.bot.paused = False
+        return await ctx.send('bot has been unpaused and will continue accepting commands')
 
 
 def setup(bot):

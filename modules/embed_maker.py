@@ -5,8 +5,20 @@ from modules import database
 db = database.Connection()
 
 
-def message(ctx, msg, title = None):
-    embed_colour = db.get_embed_colour(ctx.guild.id)
+def get_colour(colour):
+    return {
+        'red': discord.Colour.red(),
+        'orange': discord.Colour.orange(),
+        'green': discord.Colour.green(),
+    }.get(colour, 0x00a6ad)
+
+
+def message(ctx, msg, *, title=None, colour=None):
+    if colour is None:
+        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+    else:
+        embed_colour = get_colour(colour)
+
     embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
     embed.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
     if title is not None:
@@ -15,29 +27,17 @@ def message(ctx, msg, title = None):
     return embed
 
 
-async def command_error(ctx, bad_arg = None):
+async def command_error(ctx, bad_arg=None):
     command = ctx.command
-    cog = command.cog
-    command_info = cog.info['Commands'][command.name]
-    embed_colour = db.get_embed_colour(ctx.guild.id)
+    examples = ', '.join(command.examples)
 
-    examples = ', '.join(command_info['Examples'])
     if bad_arg is None:
-        description = f"""
-        Command: `{command}`
-        
-        Description: `{command_info['Description']}`
-        Usage: `{command_info['Usage']}`
-        Examples: `{examples}`
-        """
+        embed_colour = get_colour('orange')
+        description = f'**Description:** {command.help}\n**Usage:** {command.usage}\n**Examples:** {examples}'
     else:
-        description = f"""
-        Invalid Argument: `{bad_arg}`
-    
-        Usage: `{command_info['Usage']}`
-        Examples: `{examples}`
-        """
+        embed_colour = get_colour('red')
+        description = f'**Invalid Argument:** {bad_arg}\n\n**Usage:** {command.usage}\n**Examples:** {examples}'
 
-    embed = discord.Embed(colour = embed_colour, description = description)
-    embed.set_footer(text = f'{ctx.author}', icon_url = ctx.author.avatar_url)
-    await ctx.send(embed = embed)
+    embed = discord.Embed(colour=embed_colour, description=description, title=f'>{command.name}')
+    embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+    await ctx.send(embed=embed)

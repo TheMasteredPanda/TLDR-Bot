@@ -2,15 +2,16 @@ import discord
 import os
 import aiohttp
 import re
+import traceback
 from modules import database, context
 from discord.ext import commands
 from config import BOT_TOKEN
 
 db = database.Connection()
-
+paused = False
 
 async def get_prefix(bot, message):
-    prefix = db.get_prefix(message.guild.id)
+    prefix = db.get_server_options('prefix', message.guild.id)
     return commands.when_mentioned_or(prefix)(bot, message)
 
 
@@ -19,6 +20,7 @@ class TLDR(commands.AutoShardedBot):
         super().__init__(command_prefix=get_prefix, case_insensitive=True, help_command=None)
 
         self.session = aiohttp.ClientSession(loop=self.loop)
+        self.paused = False
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
@@ -26,21 +28,73 @@ class TLDR(commands.AutoShardedBot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
+    async def on_command_error(self, ctx, exception):
+        trace = exception.__traceback__
+        verbosity = 4
+        lines = traceback.format_exception(type(exception), exception, trace, verbosity)
+        traceback_text = ''.join(lines)
+
+        print(traceback_text)
+        print(exception)
+
+        guild = self.get_guild(669640013666975784)
+        if guild is not None:
+            channel = self.get_channel(671991712800964620)
+            embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+            embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
+            return await channel.send(embed=embed)
+
     async def on_message(self, message):
         ctx = await self.get_context(message, cls=context.Context)
+
+        if self.paused and ctx.command.name != 'unpause':
+            return
+
+        # just checks if message was sent in pms
+        if ctx.guild.id is None:
+            return
+
         regex = re.compile(rf'<@!?{self.user.id}>')
         match = re.findall(regex, message.content)
         if match:
             general_cog = self.get_cog('General')
-            print(self.cogs)
             return await ctx.invoke(general_cog.help)
 
-        await self.process_commands(message)
+        await self.process_commands(ctx)
 
-    async def process_commands(self, message):
-        ctx = await self.get_context(message, cls=context.Context)
+        if not message.author.bot:
+            levels_cog = self.get_cog('Levels')
+            honours_channels = db.get_levels('honours_channels', ctx.guild.id)
 
+            if message.channel.id in honours_channels:
+                await levels_cog.process_hp_message(ctx)
+
+            return await levels_cog.process_message(ctx)
+
+    async def on_raw_reaction_add(self, payload):
+        channel = self.get_channel(payload.channel_id)
+        message = await channel.fetch_message(payload.message_id)
+        author = message.author
+        user = self.get_user(payload.user_id)
+        emote = payload.emoji
+
+        # skip if user gave reaction to themselves
+        if author.id == payload.user_id:
+            return
+
+        if author.bot or user.bot:
+            return
+
+        if emote.name not in ('👍', '👎'):
+            return
+
+        levels_cog = self.get_cog('Levels')
+        return await levels_cog.process_reaction(payload)
+
+    async def process_commands(self, ctx):
         if ctx.command is None or ctx.guild is None:
+            return
+        if ctx.command.clearance not in ctx.author_clearance:
             return
 
         await self.invoke(ctx)
@@ -51,11 +105,11 @@ class TLDR(commands.AutoShardedBot):
 
         print(f'{self.user} is ready')
 
-    async def on_resumed(self):
-        print('resumed...')
-
-    async def on_guild_join(self, guild):
-        print(f'Joined new guild: {guild.id} - {guild.name}')
+    async def on_member_join(self, member):
+        if member.bot:
+            return
+        # just adds the member to the database
+        db.get_levels('pp', member.guild.id, member.id)
 
     async def close(self):
         await super().close()
