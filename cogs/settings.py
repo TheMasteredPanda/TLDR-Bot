@@ -51,8 +51,7 @@ class Settings(commands.Cog):
     async def embed_colour(self, ctx, new_colour=None):
         current_colour = db.get_server_options('embed_colour', ctx.guild.id)
         if new_colour is None:
-            embed = discord.Embed(colour=current_colour, timestamp=datetime.now(),
-                                  description='Change the default embed colour')
+            embed = discord.Embed(colour=current_colour, timestamp=datetime.now(), description='Change the default embed colour')
             embed.add_field(name='>Current Settings', value=str(current_colour).replace('0x', '#'), inline=False)
             embed.add_field(name='>Update', value='**embed_colour [hex code]**', inline=False)
             embed.add_field(name='>Valid Input', value='**Hex Colour Code**', inline=False)

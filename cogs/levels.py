@@ -310,15 +310,19 @@ class Levels(commands.Cog):
         else:
             return await self.level_up(ctx, member, 'honours', new_hp)
 
-    @commands.command(help='Shows the leveling leaderboards (parliamentary/honours) on the server', usage='leaderboard [branch] (page)', examples=['leaderboard parliamentary', 'leaderboard honours 2'], clearance='User', cls=command.Command)
-    async def leaderboard(self, ctx, branch=None, user_page=0):
+    @commands.command(help='Shows the leveling leaderboards (parliamentary(p)/honours(h)) on the server', usage='leaderboard [branch] (page)', examples=['leaderboard parliamentary', 'leaderboard honours 2'], clearance='User', cls=command.Command)
+    async def leaderboard(self, ctx, branch=None, user_page=1):
         if branch is None:
             return await embed_maker.command_error(ctx)
 
+        branch = 'honours' if branch == 'h' else 'parliamentary'
+
         if branch == 'honours':
             pre = 'h'
-        else:
+        elif branch == 'parliamentary':
             pre = 'p'
+        else:
+            return
 
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][f'{pre}p'], reverse=True)
@@ -331,16 +335,17 @@ class Levels(commands.Cog):
                 page_num += 1
                 lboard[page_num] = []
 
-            member = self.bot.get_user(u[0])
+            user_id, user_values = u
+            member = self.bot.get_user(user_id)
             if member is None:
-                member = await self.bot.fetch_user(u[0])
+                member = await self.bot.fetch_user(user_id)
 
             role_level = self.user_role_level(ctx.guild.id, branch, member.id)
-            user_role_name = u[1][f'{pre}_role']
+            user_role_name = user_values[f'{pre}_role']
             if user_role_name == '':
                 continue
             user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
-            page_message = f'**#{i + 1}** - <@{u[0]}> | **Level {role_level}** <@&{user_role.id}>'
+            page_message = f'**#{i + 1}** - <@{user_id}> | **Level {role_level}** <@&{user_role.id}>'
             lboard[page_num].append(page_message)
 
         if user_page not in lboard:
@@ -355,7 +360,37 @@ class Levels(commands.Cog):
         lboard_embed.set_footer(text=f'Page {user_page}/{page_num} - {ctx.author}', icon_url=ctx.author.avatar_url)
         lboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
-        await ctx.send(embed=lboard_embed)
+        lboard_msg = await ctx.send(embed=lboard_embed)
+
+        if page_num > 1:
+            async def next_page(user, msg):
+                if ctx.author.id != user.id and msg.channel.id != ctx.channel.id:
+                    return
+                new_page_num = user_page + 1
+                if new_page_num not in lboard:
+                    return
+                new_description = '\n'.join(lboard[new_page_num])
+                lboard_embed.description = new_description
+                msg.edit(embed=lboard_embed)
+
+            async def previous_page(user, msg):
+                if ctx.author.id != user.id and msg.channel.id != ctx.channel.id:
+                    return
+                new_page_num = user_page - 1
+                if new_page_num not in lboard:
+                    return
+                new_description = '\n'.join(lboard[new_page_num])
+                lboard_embed.description = new_description
+                msg.edit(embed=lboard_embed)
+
+            buttons = {
+                '⬅️': previous_page,
+                '➡️': next_page
+            }
+
+            menu_cog = self.bot.get_cog('Menu')
+
+            return await menu_cog.new_menu(lboard_msg, buttons)
 
     @commands.command(help='Shows your (or someone else\'s) rank and level', usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
     async def rank(self, ctx, member=None):
@@ -404,7 +439,8 @@ class Levels(commands.Cog):
         doc = db.levels.find_one({'guild_id': guild_id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][branch], reverse=True)
         for i, u in enumerate(sorted_users):
-            if u[0] == str(user_id):
+            u_id, _ = u
+            if u_id == str(user_id):
                 return i + 1
 
     async def process_reaction(self, payload):
@@ -491,8 +527,9 @@ class Levels(commands.Cog):
             next_role = ''
             for i, role in enumerate(roles):
                 # finds the next role by index
+                role_name, _ = role
                 if role_index == i - 1:
-                    next_role = role[0]
+                    next_role = role_name
                     break
 
             role = discord.utils.find(lambda r: r.name == next_role, ctx.guild.roles)
@@ -508,6 +545,10 @@ class Levels(commands.Cog):
 
         else:
             role = discord.utils.find(lambda r: r.name == user_role, ctx.guild.roles)
+
+            if role is None:
+                role = await ctx.guild.create_role(name=user_role)
+
             reward_text = f'Congrats <@{member.id}> you\'ve become a level **{user_role_level}** <@&{role.id}>'
 
         if branch == 'honours':
@@ -586,13 +627,13 @@ def ppi(guild_id, member_id, new_pp):
     user_pp = new_pp
     user_level = db.get_levels('p_level', guild_id, member_id)
 
-    levels_up = -1
+    levels_up = 0
     for i in range(10):
         # total pp needed to gain the next level
         total_pp = 0
-        for j in range(user_level + i):
+        for j in range(user_level + (i + 1)):
             # the formula to calculate how much pp you need for the next level
-            total_pp += (5 * (i ** 2) + 50 * i + 100)
+            total_pp += (5 * ((i + 1) ** 2) + 50 * (i + 1) + 100)
 
         if total_pp - user_pp > 0 and levels_up >= 1:
             return True, levels_up
