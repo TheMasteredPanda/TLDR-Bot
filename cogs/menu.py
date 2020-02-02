@@ -15,7 +15,7 @@ class Menu(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.menus = TTLItemCache(maxsize=2048, ttl=2*60)
-        self.no_expire_menus = LRUCache(maxsize=2048)
+        self.no_expire_menus = {}
 
     async def new_no_expire_menu(self, message, buttons):
         self.no_expire_menus[message.id] = buttons

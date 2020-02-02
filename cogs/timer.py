@@ -34,7 +34,6 @@ class Timer(commands.Cog):
         timer_doc = db.get_timers(guild_id, timer_id)
         if timer_doc:
             db.timers.update_one({'guild_id': guild_id}, {'$unset': {f'timers.{timer_id}': timer}})
-            print(f'{timer["event"]}_timer_over')
             self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
 
     async def create_timer(self, **kwargs):
