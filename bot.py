@@ -37,6 +37,11 @@ class TLDR(commands.AutoShardedBot):
         print(traceback_text)
         print(exception)
 
+        # Returns if bot isn't main bot
+        if self.user.id != 669877023753109524:
+            return
+
+        # send error message to certain channel in a guild if error happens during bot run
         guild = self.get_guild(669640013666975784)
         if guild is not None:
             channel = self.get_channel(671991712800964620)
@@ -51,7 +56,7 @@ class TLDR(commands.AutoShardedBot):
             return
 
         # just checks if message was sent in pms
-        if ctx.guild.id is None:
+        if ctx.guild is None:
             return
 
         regex = re.compile(rf'<@!?{self.user.id}>')
@@ -81,11 +86,9 @@ class TLDR(commands.AutoShardedBot):
         # skip if user gave reaction to themselves
         if author.id == payload.user_id:
             return
-
-        if author.bot or user.bot:
+        elif author.bot or user.bot:
             return
-
-        if emote.name not in ('👍', '👎'):
+        elif emote.name not in ('👍', '👎'):
             return
 
         levels_cog = self.get_cog('Levels')
@@ -104,6 +107,10 @@ class TLDR(commands.AutoShardedBot):
         await self.change_presence(activity=bot_game)
 
         print(f'{self.user} is ready')
+
+        # Run old timers
+        timer_cog = self.get_cog('Timer')
+        await timer_cog.run_old_timers()
 
     async def on_member_join(self, member):
         if member.bot:

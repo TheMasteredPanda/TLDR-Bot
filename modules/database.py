@@ -9,6 +9,7 @@ class Connection:
         self.db = self.mongo_client['TLDR']
         self.server_options = self.db['server_options']
         self.levels = self.db['levels']
+        self.timers = self.db['timers']
 
     def _get_server_options(self, guild_id):
         doc = self.server_options.find_one({'guild_id': guild_id})
@@ -68,3 +69,24 @@ class Connection:
             doc['users'][user_id] = user
 
         return doc['users'][user_id][value]
+
+    def _get_timers(self, guild_id):
+        doc = self.timers.find_one({'guild_id': guild_id})
+        if doc is None:
+            doc = {
+                'guild_id': guild_id,
+                'timers': {
+                    # '_id': {
+                    #     'expires': 0,
+                    #     'event': 0,
+                    # }
+                }
+            }
+            self.timers.insert_one(doc)
+        return doc
+
+    @cache.cache()
+    def get_timers(self, guild_id, id):
+        doc = self._get_timers(guild_id)
+        timers = doc['timers']
+        return timers[id] if id in timers else None

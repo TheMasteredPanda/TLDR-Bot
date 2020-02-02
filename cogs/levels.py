@@ -363,7 +363,7 @@ class Levels(commands.Cog):
         lboard_msg = await ctx.send(embed=lboard_embed)
 
         if page_num > 1:
-            async def next_page(user, msg):
+            async def next_page(user, msg, _):
                 if ctx.author.id != user.id and msg.channel.id != ctx.channel.id:
                     return
                 new_page_num = user_page + 1
@@ -373,7 +373,7 @@ class Levels(commands.Cog):
                 lboard_embed.description = new_description
                 msg.edit(embed=lboard_embed)
 
-            async def previous_page(user, msg):
+            async def previous_page(user, msg, _):
                 if ctx.author.id != user.id and msg.channel.id != ctx.channel.id:
                     return
                 new_page_num = user_page - 1
