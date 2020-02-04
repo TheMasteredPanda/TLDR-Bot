@@ -4,7 +4,7 @@ import re
 import config
 from datetime import datetime
 from discord.ext import commands
-from modules import database, command, embed_maker
+from modules import database, command, embed_maker, format_time
 
 db = database.Connection()
 
@@ -65,7 +65,7 @@ class Utility(commands.Cog):
         del self.poll_counts[message.id]
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [length in minutes] [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t time limit (mins))',
+                      usage='anon_poll [length in minutes] [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time]m/h/d)',
                       examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK]'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
@@ -78,7 +78,7 @@ class Utility(commands.Cog):
         poll_time = args['poll_time']
         option_emotes = args['option_emotes']
 
-        if not option_emotes:
+        if option_emotes is None:
             embed = embed_maker.message(ctx, 'Error with custom option emotes', colour='red')
             return await ctx.send(embed=embed)
 
@@ -151,7 +151,7 @@ class Utility(commands.Cog):
         await menu_cog.new_no_expire_menu(poll_msg, buttons)
 
         timer_cog = self.bot.get_cog('Timer')
-        expires = round(time.time()) + round(poll_time*60)
+        expires = round(time.time()) + round(poll_time)
         await timer_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='anon_poll', extras={'message_id': poll_msg.id, 'channel_id': poll_msg.channel.id, 'question': question})
 
         return await ctx.message.delete(delay=5)
@@ -259,7 +259,8 @@ class Utility(commands.Cog):
                 options = a.replace('o', '', 1).strip().replace(', ', ',').split(',')
                 continue
             elif a.lower().startswith('t'):
-                poll_time = float(a.replace('t', '', 1).strip())
+                poll_time = a.replace('t', '', 1).strip()
+                poll_time = format_time.parse(poll_time)
                 continue
 
         # check for custom option emotes
@@ -274,13 +275,12 @@ class Utility(commands.Cog):
                 option = re.findall(option_regex, o)[0]
                 option_emotes[emote] = option
             else:
-                option_emotes = False
+                option_emotes = None
 
         return {'question': question,
                 'options': options,
                 'option_emotes': option_emotes,
                 'poll_time': poll_time}
-
 
 def setup(bot):
     bot.add_cog(Utility(bot))
