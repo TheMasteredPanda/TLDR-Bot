@@ -65,8 +65,8 @@ class Utility(commands.Cog):
         del self.poll_counts[message.id]
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [length in minutes] [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time]m/h/d)',
-                      examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK]'],
+                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time]m/h/d)',
+                      examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
         if args is None:
