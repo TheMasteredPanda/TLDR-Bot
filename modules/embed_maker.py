@@ -1,4 +1,5 @@
 import discord
+import config
 from datetime import datetime
 from modules import database
 
@@ -15,7 +16,7 @@ def get_colour(colour):
 
 def message(ctx, msg, *, title=None, colour=None):
     if colour is None:
-        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        embed_colour = config.DEFAULT_EMBED_COLOUR
     else:
         embed_colour = get_colour(colour)
 

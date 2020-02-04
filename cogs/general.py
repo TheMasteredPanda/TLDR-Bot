@@ -1,4 +1,5 @@
 import discord
+import config
 from discord.ext import commands
 from modules import database, embed_maker, command
 from datetime import datetime
@@ -12,11 +13,14 @@ class General(commands.Cog):
 
     @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'], clearance='User', cls=command.Command)
     async def help(self, ctx, _cmd=None):
-        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
-        prefix = db.get_server_options('prefix', ctx.guild.id)
+        embed_colour = config.DEFAULT_EMBED_COLOUR
+        prefix = config.DEFAULT_PREFIX
         cmds = self.bot.commands
         help_object = {}
         for cmd in cmds:
+            if hasattr(cmd, 'dm_only'):
+                continue
+
             if cmd.cog_name not in help_object:
                 help_object[cmd.cog_name] = [cmd]
             else:
@@ -40,6 +44,8 @@ class General(commands.Cog):
         else:
             if self.bot.get_command(_cmd):
                 cmd = self.bot.get_command(_cmd)
+                if cmd.hidden:
+                    return
                 examples = f' | {prefix}'.join(cmd.examples)
                 cmd_help = f"""
                 **Description:** {cmd.help}

@@ -1,6 +1,7 @@
 import time
 import discord
 import re
+import config
 from datetime import datetime
 from discord.ext import commands
 from modules import database, command, embed_maker
@@ -90,7 +91,7 @@ class Utility(commands.Cog):
             return await ctx.send(embed=embed)
 
         description = f'**{question}**\n'
-        colour = db.get_server_options('embed_colour', ctx.guild.id)
+        colour = config.DEFAULT_EMBED_COLOUR
         used_emotes = []
         poll_msg = ''
         if not options:
@@ -190,6 +191,8 @@ class Utility(commands.Cog):
         del menu_cog.no_expire_menus[message_id]
         del self.poll_counts[message_id]
 
+        return await message.clear_reactions()
+
     @commands.command(help='Create a poll. with options adds numbers as reactions, without it just adds thumbs up and down.',
                       usage='poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...)',
                       examples=['poll -q best food? -o pizza, burger, fish and chips, salad -l 2', 'poll -q Do you guys like pizza?', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK]'],
@@ -212,7 +215,7 @@ class Utility(commands.Cog):
             return await ctx.send(embed=embed)
 
         description = f'**{question}**\n'
-        colour = db.get_server_options('embed_colour', ctx.guild.id)
+        colour = config.DEFAULT_EMBED_COLOUR
 
         used_emotes = []
         if not options:

@@ -10,6 +10,8 @@ class Context(commands.Context):
         super().__init__(**kwargs)
         self.bot = kwargs['bot']
         self.message = kwargs['message']
+        if not self.message.guild:
+            return
         if not self.message.author.bot:
             self.author_pp = self.get('pp')
             self.author_p_level = self.get('p_level')

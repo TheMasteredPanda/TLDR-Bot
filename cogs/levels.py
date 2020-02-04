@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import config
 from datetime import datetime
 from time import time
 from random import randint
@@ -63,9 +64,7 @@ class Levels(commands.Cog):
             def after_check(m):
                 return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.isdigit()
 
-            role_list_msg = ''
-            for i, _role in enumerate(leveling_routes[branch]):
-                role_list_msg += f'#{i + 1} | {_role[0]} - Max Level: {_role[1]}\n'
+            role_list_msg = '\n'.join(f'#{i + 1} | {_role[0]} - Max Level: {_role[1]}' for i, _role in enumerate(leveling_routes[branch]))
             msg = f'What role should the new role come after (number in the list)?\n{role_list_msg}'
             await ctx.send(msg)
 
@@ -138,13 +137,7 @@ class Levels(commands.Cog):
     @commands.command(help='See the current list of channels where honours points can be earned', usage='honours_channel_list', examples=['honours_channel_list'], clearance='Mod', cls=command.Command)
     async def honours_channel_list(self, ctx):
         channel_list = db.get_levels('honours_channels', ctx.guild.id)
-
-        if channel_list:
-            channel_list_str = ''
-            for i in channel_list:
-                channel_list_str += f'<#{i}>\n'
-        else:
-            channel_list_str = 'None'
+        channel_list_str = '\n'.join(f'<#{i}>\n' for i in channel_list) if channel_list else 'None'
 
         embed = embed_maker.message(ctx, channel_list_str)
         return await ctx.send(embed=embed)
@@ -232,7 +225,7 @@ class Levels(commands.Cog):
     @commands.command(help='See current leveling routes', usage='leveling_routes', examples=['leveling_routes'], clearance='User', cls=command.Command)
     async def leveling_routes(self, ctx, new=False):
         lvl_routes = db.get_levels('leveling_routes', ctx.guild.id)
-        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        embed_colour = config.DEFAULT_EMBED_COLOUR
 
         if new:
             embed_colour = embed_maker.get_colour('green')
@@ -326,7 +319,7 @@ class Levels(commands.Cog):
 
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][f'{pre}p'], reverse=True)
-        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        embed_colour = config.DEFAULT_EMBED_COLOUR
         page_num = 1
         lboard = {page_num: []}
 
@@ -426,7 +419,7 @@ class Levels(commands.Cog):
 
             hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{member_h_role.id}>'
 
-        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        embed_colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
         embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
@@ -562,7 +555,7 @@ class Levels(commands.Cog):
         db.get_levels.invalidate(f'{pre}level', ctx.guild.id, member.id)
 
     async def level_up_message(self, ctx, member, reward_text):
-        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        embed_colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
         embed.set_author(name='Level Up!', icon_url=ctx.guild.icon_url)
