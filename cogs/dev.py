@@ -69,6 +69,11 @@ class Dev(commands.Cog):
         self.bot.paused = False
         return await ctx.send('bot has been unpaused and will continue accepting commands')
 
+    @commands.command(hidden=True, help='Kill the bot', usage='kill_bot', examples=['kill_bot'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def kill_bot(self, ctx):
+        await self.bot.close()
+
 
 def setup(bot):
     bot.add_cog(Dev(bot))
