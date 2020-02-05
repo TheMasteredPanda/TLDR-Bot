@@ -71,7 +71,7 @@ class Dev(commands.Cog):
 
     @commands.command(hidden=True, help='Kill the bot', usage='kill_bot', examples=['kill_bot'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
-    async def kill_bot(self, ctx):
+    async def kill_bot(self):
         await self.bot.close()
 
 

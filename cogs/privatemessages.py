@@ -36,7 +36,7 @@ class PrivateMessages(commands.Cog):
         cmds = self.commands
 
         if _cmd is None:
-            embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'Commands don\'t use prefixes in pms. For extra info type `help [command]`')
+            embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'**Prefix** : `{config.DEFAULT_PREFIX}`\nFor additional info on a command, type `{config.DEFAULT_PREFIX}help [command]`')
             embed.set_author(name=f'Help', icon_url=self.bot.user.avatar_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             embed.add_field(name=f'>Pm Commands', value=" \| ".join(f'`{c}`' for c in cmds), inline=False)

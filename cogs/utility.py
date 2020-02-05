@@ -12,7 +12,6 @@ db = database.Connection()
 class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.poll_counts = {}
 
     @commands.command(help='Get bot\'s latency', usage='ping', examples=['ping'], clearance='User', cls=command.Command)
     async def ping(self, ctx):
@@ -26,25 +25,41 @@ class Utility(commands.Cog):
     async def end_poll(self, ctx, channel=None, message_id=None):
         if channel is None:
             return await embed_maker.command_error(ctx)
-        else:
-            channel = ctx.message.channel_mentions[0]
+
+        if not ctx.message.channel_mentions:
+            return await embed_maker.command_error(ctx, '[#Channel]')
+
+        channel = ctx.message.channel_mentions[0]
+
         if message_id is None:
             return await embed_maker.command_error(ctx, '[#Channel]')
-        else:
-            message = await channel.fetch_message(message_id)
+
+        poll = db.get_polls(ctx.guild.id, message_id)
+        message = await channel.fetch_message(message_id)
+        if message is None or poll is None:
+            embed = embed_maker.message(ctx, 'That is not a valid poll', colour='red')
+            return await ctx.send(embed=embed)
+
+        message_id = message.id
+
+        db.timers.update_one({'guild_id': ctx.guild.id}, {'$pull': {'timers': {'extras.message_id': message_id}}})
+        db.polls.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'polls.{message_id}': ''}})
 
         menu_cog = self.bot.get_cog('Menu')
-        if message.id not in self.poll_counts or message.id not in menu_cog.no_expire_menus:
-            embed = embed_maker.message(ctx, 'That is not a valid poll')
-            return await ctx.send(embed=embed)
 
         # Get question from embed
         poll_embed = message.embeds[0]
         description = poll_embed.description
-        question_regex = re.compile(r'(\*\*.*\*\*)\n\n')
-        question = re.findall(question_regex, description)[0]
+        question_regex = re.compile(r'(\*\*.*\*\*)\n?\n?')
+        question = re.findall(question_regex, description)
+        if question:
+            question = question[0]
+        else:
+            embed = embed_maker.message(ctx, 'Couldn\'t parse question from that poll, this is weird', colour='red')
+            return await ctx.send(embed=embed)
 
-        emote_count = self.poll_counts[message.id]
+        # Calculate results
+        emote_count = poll
         sorted_emote_count = sorted(emote_count.items(), key=lambda x: x[1], reverse=True)
         total_emotes = sum(emote_count.values())
         new_description = question
@@ -61,8 +76,12 @@ class Utility(commands.Cog):
         await message.edit(embed=poll_embed)
         await ctx.message.delete()
 
-        del menu_cog.no_expire_menus[message.id]
-        del self.poll_counts[message.id]
+        db.get_polls.invalidate(ctx.guild.id, message_id)
+        if message_id in menu_cog.no_expire_menus:
+            del menu_cog.no_expire_menus[message_id]
+
+        embed = embed_maker.message(ctx, 'Ended poll', colour='green')
+        return await ctx.send(embed=embed)
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
                       usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time]m/h/d)',
@@ -90,7 +109,7 @@ class Utility(commands.Cog):
             embed = embed_maker.message(ctx, 'Too many options', colour='red')
             return await ctx.send(embed=embed)
 
-        description = f'**{question}**\n'
+        description = f'**{question}**\n\n'
         colour = config.DEFAULT_EMBED_COLOUR
         used_emotes = []
         poll_msg = ''
@@ -120,7 +139,7 @@ class Utility(commands.Cog):
             for e in used_emotes:
                 await poll_msg.add_reaction(e)
 
-        self.poll_counts[poll_msg.id] = {}
+        poll = {}
         voted_users = {}
         buttons = {}
 
@@ -133,19 +152,19 @@ class Utility(commands.Cog):
                 if emote == previous_emote:
                     return await user.send(f'Your vote has been already counted towards: {emote}')
 
-                self.poll_counts[poll_msg.id][emote] += 1
-                self.poll_counts[poll_msg.id][previous_emote] -= 1
+                db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1}})
+                db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{previous_emote}': -1}})
 
                 voted_users[user.id] = emote
 
                 return await user.send(f'Your vote has been changed to: {emote}')
 
             voted_users[user.id] = emote
-            self.poll_counts[poll_msg.id][emote] += 1
+            db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1}})
 
         for e in used_emotes:
             buttons[e] = count
-            self.poll_counts[poll_msg.id][e] = 0
+            poll[e] = 0
 
         menu_cog = self.bot.get_cog('Menu')
         await menu_cog.new_no_expire_menu(poll_msg, buttons)
@@ -154,20 +173,24 @@ class Utility(commands.Cog):
         expires = round(time.time()) + round(poll_time)
         await timer_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='anon_poll', extras={'message_id': poll_msg.id, 'channel_id': poll_msg.channel.id, 'question': question})
 
+        db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{poll_msg.id}': poll}})
+
         return await ctx.message.delete(delay=5)
 
     @commands.Cog.listener()
     async def on_anon_poll_timer_over(self, timer):
         message_id = timer['extras']['message_id']
-        if message_id not in self.poll_counts:
+        guild_id = timer['guild_id']
+        poll = db.get_polls(guild_id, message_id)
+        if not poll:
             return
+
+        db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ""}})
 
         menu_cog = self.bot.get_cog('Menu')
-        if message_id not in menu_cog.no_expire_menus:
-            return
 
         question = timer['extras']['question']
-        emote_count = self.poll_counts[message_id]
+        emote_count = poll
 
         channel = self.bot.get_channel(timer['extras']['channel_id'])
         message = await channel.fetch_message(message_id)
@@ -186,11 +209,12 @@ class Utility(commands.Cog):
 
         embed = message.embeds[0]
         embed.description = description
+
+        if message_id in menu_cog.no_expire_menus:
+            del menu_cog.no_expire_menus[message_id]
+
+        db.get_polls.invalidate(guild_id, message_id)
         await message.edit(embed=embed)
-
-        del menu_cog.no_expire_menus[message_id]
-        del self.poll_counts[message_id]
-
         return await message.clear_reactions()
 
     @commands.command(help='Create a poll. with options adds numbers as reactions, without it just adds thumbs up and down.',
@@ -281,6 +305,7 @@ class Utility(commands.Cog):
                 'options': options,
                 'option_emotes': option_emotes,
                 'poll_time': poll_time}
+
 
 def setup(bot):
     bot.add_cog(Utility(bot))
