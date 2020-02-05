@@ -19,76 +19,69 @@ class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='Add a role to a leveling route (honours/parliamentary) - starts the process of adding a role', usage='add_role [branch]', examples=['add_role honours', 'add_role parliamentary'], clearance='Admin', cls=command.Command)
-    async def add_role(self, ctx, branch=None):
-        if branch is None:
+    @commands.command(help='Add a role to a leveling route (honours/parliamentary)',
+                      usage='add_role -b [branch] -r [role name] -l [max level]',
+                      examples=['add_role -b honours -r Lord -l 5'], clearance='Admin', cls=command.Command)
+    async def add_role(self, ctx, *, args=None):
+        if args is None:
             return await embed_maker.command_error(ctx)
 
+        parsed_args = self.parse_role_args(args)
+        branch = parsed_args['branch']
+        role_name = parsed_args['role_name']
+        role_level = parsed_args['level']
+
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
-        if branch.lower() not in leveling_routes:
-            embed = embed_maker.message(ctx, 'That is not a valid branch (honours/parliamentary)', colour='red')
+        if branch not in leveling_routes:
+            embed = embed_maker.message(ctx, 'That is not a valid branch. (honours/parliamentary)', colour='red')
             return await ctx.send(embed=embed)
 
-        async def role():
-            def role_check(m):
-                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+        if not role_name or not role_level:
+            embed = embed_maker.message(ctx, 'One or more of the args is invalid', colour='red')
+            return await ctx.send(embed=embed)
 
-            msg = 'What would you like the name of the new role to be?'
-            await ctx.send(msg)
-            try:
-                role_message = await self.bot.wait_for('message', check=role_check, timeout=60)
-                try:
-                    new_add_role = await ctx.guild.create_role(name=role_message.content)
-                except discord.Forbidden:
-                    return await ctx.send('failed to create role, missing permissions')
-            except asyncio.TimeoutError:
-                return await ctx.send('add_role function timed out')
+        try:
+            new_role = await ctx.guild.create_role(name=role_name)
+        except discord.Forbidden:
+            return await ctx.send('failed to create role, missing permissions')
 
-            return new_add_role
+        new_role_route_list = leveling_routes[branch][:]
+        new_role_route_list.insert(len(leveling_routes[branch]), (new_role.name, round(int(role_level))))
 
-        async def max_level():
-            def level_check(m):
-                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.isdigit()
-
-            msg = 'How many levels will a user have to be in this role, before they advance onto the next role?'
-            await ctx.send(msg)
-
-            try:
-                level_message = await self.bot.wait_for('message', check=level_check, timeout=60)
-            except asyncio.TimeoutError:
-                return await ctx.send('add_role function timed out')
-
-            return round(int(level_message.content))
-
-        async def finish(new_add_role, add_role_max_level):
-            def after_check(m):
-                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.isdigit()
-
-            role_list_msg = '\n'.join(f'#{i + 1} | {_role[0]} - Max Level: {_role[1]}' for i, _role in enumerate(leveling_routes[branch]))
-            msg = f'What role should the new role come after (number in the list)?\n{role_list_msg}'
-            await ctx.send(msg)
-
-            try:
-                after_message = await self.bot.wait_for('message', check=after_check, timeout=60)
-            except asyncio.TimeoutError:
-                return await ctx.send('add_role function timed out')
-
-            new_role_position = int(after_message.content)
-            if new_role_position > len(leveling_routes[branch]) + 1 or new_role_position < 1:
-                await ctx.send('Invalid number')
-                return await finish(new_add_role, add_role_max_level)
-            new_role_route_list = leveling_routes[branch][:]
-            new_role_route_list.insert(new_role_position, (new_add_role.name, add_role_max_level))
-
-            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
-            db.get_levels.invalidate('leveling_routes', ctx.guild.id)
-
-        new_role = await role()
-        role_max_level = await max_level()
-        await finish(new_role, role_max_level)
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
+        db.get_levels.invalidate('leveling_routes', ctx.guild.id)
 
         await ctx.send(f'added {new_role.name} to {branch} route')
-        return await self.leveling_routes(ctx, True)
+        await self.leveling_routes(ctx, True)
+
+        prev_role_name = ''
+        for i, r in enumerate(new_role_route_list):
+            if r[0] == new_role.name:
+                prev_role_name = new_role_route_list[i - 1][0]
+                break
+
+        prev_role = discord.utils.find(lambda r: r.name == prev_role_name, ctx.guild.roles)
+        pre = 'p' if branch.lower() == 'parliamentary' else 'h'
+        for m in prev_role.members:
+            user_role_level = self.user_role_level(ctx.guild.id, branch, m.id, 0)
+
+            if user_role_level < 0:
+                # Get next role
+                role_index = self.get_role_index(branch, ctx.guild.id, prev_role_name)
+                new_role = new_role_route_list[role_index + abs(user_role_level)][0]
+
+                role = discord.utils.find(lambda r: r.name == new_role, ctx.guild.roles)
+                if role is None:
+                    role = await ctx.guild.create_role(name=new_role)
+
+                await m.add_roles(role)
+                db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{m.id}.{pre}_role': role.name}})
+                db.get_levels.invalidate(f'{pre}_role', ctx.guild.id, m.id)
+
+                user_role_level = self.user_role_level(ctx.guild.id, branch, m.id, 0)
+                reward_text = f'Congrats <@{m.id}> you\'ve advanced to a level **{user_role_level}** <@&{role.id}>'
+
+                return await self.level_up_message(ctx, m, reward_text)
 
     @commands.command(help='Remove role from a leveling route', usage='remove_role [branch] [role name]', examples=['remove_role parliamentary Council Member'], clearance='Admin', cls=command.Command)
     async def remove_role(self, ctx, branch=None, *, role_name=None):
@@ -142,85 +135,92 @@ class Levels(commands.Cog):
         embed = embed_maker.message(ctx, channel_list_str)
         return await ctx.send(embed=embed)
 
-    @commands.command(help='start the role editing process, edit attributes of a role (max level/name)', usage='edit_role [branch]', examples=['edit_role parliamentary'], clearance='Admin', cls=command.Command)
-    async def edit_role(self, ctx, branch=None):
-        if branch is None:
+    @commands.command(help='Edit attributes of a role',
+                      usage='edit_role -b [branch] -r [role name] -nr [new role name] -nl [new max level]',
+                      examples=['edit_role -b parliamentary -r Member -nr Citizen -nl 5'], clearance='Admin', cls=command.Command)
+    async def edit_role(self, ctx, *, args=None):
+        if args is None:
             return await embed_maker.command_error(ctx)
+
+        parsed_args = self.parse_role_args(args)
+        branch = parsed_args['branch']
+        role_name = parsed_args['role_name']
+        new_role_name = parsed_args['new_role_name']
+        new_role_level = parsed_args['new_role_level']
 
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         if branch not in leveling_routes:
-            embed = embed_maker.message(ctx, 'That is not a valid branch (honours/parliamentary)', colour='red')
+            embed = embed_maker.message(ctx, 'That is not a valid branch. (honours/parliamentary)', colour='red')
             return await ctx.send(embed=embed)
 
-        async def _role():
-            def check(m):
-                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
-            msg = 'What is the name of the role you want to edit?'
-            await ctx.send(msg)
-            try:
-                role_message = await self.bot.wait_for('message', check=check, timeout=60)
-            except asyncio.TimeoutError:
-                return await ctx.send('edit_role function timed out')
-
-            for r in leveling_routes[branch]:
-                if r[0] == role_message.content:
-                    return role_message.content
-            else:
-                error_embed = embed_maker.message(ctx, 'That is not a valid role', colour='red')
-                await ctx.send(embed=error_embed)
-                return await role()
-
-        async def _attribute():
-            def check(m):
-                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
-            msg = 'What attribute of the role do you want to edit? (name/level)'
-            await ctx.send(msg)
-            try:
-                attribute_message = await self.bot.wait_for('message', check=check, timeout=60)
-            except asyncio.TimeoutError:
-                return await ctx.send('edit_role function timed out')
-
-            if attribute_message.content not in ('name', 'level'):
-                error_embed = embed_maker.message(ctx, 'That is not a valid attribute', colour='red')
-                await ctx.send(embed=error_embed)
-                return await attribute()
-            else:
-                return attribute_message.content
-
-        async def _new_value():
-            def check(m):
-                return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
-            msg = 'What do you want the new value of the attribute to be?'
-            await ctx.send(msg)
-            try:
-                new_value_message = await self.bot.wait_for('message', check=check, timeout=60)
-            except asyncio.TimeoutError:
-                return await ctx.send('edit_role function timed out')
-
-            return new_value_message.content
-
-        role = await _role()
-        attribute = await _attribute()
-        new_value = await _new_value()
+        for r in leveling_routes[branch]:
+            if r[0] == role_name:
+                break
+        else:
+            error_embed = embed_maker.message(ctx, f'{role_name} is not a valid role', colour='red')
+            await ctx.send(embed=error_embed)
 
         new_role_list = leveling_routes[branch][:]
         for i, _role in enumerate(leveling_routes[branch]):
-            if _role[0] == role:
-                if attribute == 'level':
-                    new_role_list[i] = (_role[0], round(int(new_value)))
-                elif attribute == 'name':
-                    role = discord.utils.find(lambda r: r.name == _role[0], ctx.guild.roles)
-                    await role.edit(name=new_value)
-                    new_role_list[i] = (new_value, _role[1])
+            old_role_name, old_role_level = _role
+            if old_role_name == role_name:
+                role_level = new_role_level if new_role_level else old_role_level
+
+                if new_role_name:
+                    role_name = new_role_name
+                    role = discord.utils.find(lambda r: r.name == old_role_name, ctx.guild.roles)
+                    await role.edit(name=role_name)
+
+                    # Update users in db
+                    await self.update_user_roles(ctx, branch, role)
+                else:
+                    role_name = old_role_name
+
+                new_role_list[i] = (role_name, round(int(role_level)))
 
                 db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_list}})
                 db.get_levels.invalidate('leveling_routes', ctx.guild.id)
 
-                embed = embed_maker.message(ctx, f'{role} has been updated', colour='green')
-                return await ctx.send(embed=embed)
+                await ctx.send(f'Edited {role_name}')
+                return await self.leveling_routes(ctx, True)
+
+    async def update_user_roles(self, ctx, branch, role):
+        pre = 'p_' if branch.lower() == 'parliamentary' else 'h_'
+        for m in role.members:
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{m.id}.{pre}role': role.name}})
+            db.get_levels.invalidate(f'{pre}role', ctx.guild.id, m.id)
+
+    def parse_role_args(self, args):
+        args = args.split('-')
+        branch = None
+        role_name = None
+        level = None
+        new_role_name = None
+        new_role_level = None
+        for a in args:
+            if a.lower().startswith('b'):
+                branch = a.replace('b', '', 1).strip()
+                continue
+            if a.lower().startswith('r'):
+                role_name = a.replace('r', '', 1).strip()
+                continue
+            if a.lower().startswith('l'):
+                level = a.replace('l', '', 1).strip()
+                continue
+            if a.lower().startswith('nr'):
+                new_role_name = a.replace('nr', '', 1).strip()
+                continue
+            if a.lower().startswith('nl'):
+                new_role_level = a.replace('nl', '', 1).strip()
+                continue
+
+        return {
+            'branch': branch,
+            'role_name': role_name,
+            'level': level,
+            'new_role_name': new_role_name,
+            'new_role_level': new_role_level
+        }
 
     @commands.command(help='See current leveling routes', usage='leveling_routes', examples=['leveling_routes'], clearance='User', cls=command.Command)
     async def leveling_routes(self, ctx, new=False):
@@ -408,6 +408,7 @@ class Levels(commands.Cog):
 
         if member_p_role is None:
             member_p_role = await ctx.guild.create_role(name=p_role_name)
+            await member.add_roles(member_p_role)
 
         sp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{member_p_role.id}>'
 
@@ -416,6 +417,7 @@ class Levels(commands.Cog):
         else:
             if member_h_role is None:
                 member_h_role = await ctx.guild.create_role(name=h_role_name)
+                await member.add_roles(member_h_role)
 
             hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{member_h_role.id}>'
 
@@ -512,35 +514,30 @@ class Levels(commands.Cog):
         user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
         user_role_level = self.user_role_level(ctx.guild.id, branch, member.id, lvls_up)
 
-        if user_role_level == -1:
+        if user_role_level < 0:
             # Get next role
             leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
             roles = leveling_routes[branch]
             role_index = self.get_role_index(branch, ctx.guild.id, member.id)
-            next_role = ''
-            for i, role in enumerate(roles):
-                # finds the next role by index
-                role_name, _ = role
-                if role_index == i - 1:
-                    next_role = role_name
-                    break
+            new_role = roles[role_index + abs(user_role_level)][0]
 
-            role = discord.utils.find(lambda r: r.name == next_role, ctx.guild.roles)
-
+            role = discord.utils.find(lambda r: r.name == new_role, ctx.guild.roles)
             if role is None:
-                role = await ctx.guild.create_role(name=next_role)
-
-            reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{lvls_up}** <@&{role.id}>'
+                role = await ctx.guild.create_role(name=new_role)
 
             await member.add_roles(role)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.{pre}role': role.name}})
             db.get_levels.invalidate(f'{pre}role', ctx.guild.id, member.id)
+
+            user_role_level = self.user_role_level(ctx.guild.id, branch, member.id, lvls_up)
+            reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{user_role_level}** <@&{role.id}>'
 
         else:
             role = discord.utils.find(lambda r: r.name == user_role, ctx.guild.roles)
 
             if role is None:
                 role = await ctx.guild.create_role(name=user_role)
+                await member.add_roles(role)
 
             reward_text = f'Congrats <@{member.id}> you\'ve become a level **{user_role_level}** <@&{role.id}>'
 
@@ -604,7 +601,19 @@ class Levels(commands.Cog):
             if current_level_total == user_level:
                 return role[1]
             if current_level_total < user_level:
-                return -1
+                break
+
+        roles_up = 0
+        current_level_total = 0
+        previous_level_total = 0
+        for i, role in enumerate(all_roles):
+            current_level_total += role[1]
+            if role_index >= i:
+                previous_level_total += role[1]
+                continue
+            if current_level_total < user_level:
+                roles_up -= 1
+        return roles_up
 
     def get_role_index(self, branch, guild_id, user_role):
         leveling_routes = db.get_levels('leveling_routes', guild_id)
@@ -613,6 +622,8 @@ class Levels(commands.Cog):
         for i, role in enumerate(all_roles):
             if role[0] == user_role:
                 return i
+        else:
+            return 0
 
 
 # How much pp is needed until level up
@@ -621,15 +632,15 @@ def ppi(guild_id, member_id, new_pp):
     user_level = db.get_levels('p_level', guild_id, member_id)
 
     levels_up = 0
-    for i in range(10):
+    for i in range(1000):
         # total pp needed to gain the next level
         total_pp = 0
         for j in range(user_level + (i + 1)):
             # the formula to calculate how much pp you need for the next level
-            total_pp += (5 * ((i + 1) ** 2) + 50 * (i + 1) + 100)
+            total_pp += (5 * ((j + 1) ** 2) + 50 * (j + 1) + 100)
 
         if total_pp - user_pp > 0 and levels_up >= 1:
-            return True, levels_up
+            return True, levels_up + 1
         elif total_pp - user_pp > 0:
             return False, levels_up
 
@@ -641,11 +652,11 @@ def hpi(guild_id, member_id, new_hp):
     user_hp = new_hp
     user_level = db.get_levels('h_level', guild_id, member_id)
 
-    levels_up = -1
-    for i in range(10):
+    levels_up = 0
+    for i in range(1000):
         total_hp = 0
         for j in range(user_level + i):
-            total_hp = 1000 * (user_level + i)
+            total_hp = 1000 * (user_level + j)
 
         if total_hp - user_hp > 0 and levels_up >= 1:
             return True, levels_up
