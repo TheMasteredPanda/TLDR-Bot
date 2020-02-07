@@ -16,7 +16,7 @@ class Context(commands.Context):
 
         self.author_pp = self.get('pp')
         self.author_hp = self.get('hp')
-        self.author_clearance = self.clearance(self.message.author)
+        self.author_clearance = self.clearance
 
     @property
     def session(self):
@@ -25,12 +25,12 @@ class Context(commands.Context):
     def get(self, value):
         return db.get_levels(value, self.message.guild.id, self.message.author.id)
 
-    @cache.cache()
-    def clearance(self, author):
-        user_permissions = self.message.channel.permissions_for(author)
+    @property
+    def clearance(self):
+        user_permissions = self.message.channel.permissions_for(self.message.author)
         clearance = []
 
-        if author.id in DEV_IDS:
+        if self.message.author.id in DEV_IDS:
             clearance.append('Dev')
         if user_permissions.administrator:
             clearance.append('Admin')

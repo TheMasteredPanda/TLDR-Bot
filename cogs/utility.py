@@ -240,7 +240,7 @@ class Utility(commands.Cog):
             embed = embed_maker.message(ctx, err, colour='red')
             return await ctx.send(embed=embed)
 
-        description = f'**{question}**\n'
+        description = f'**"{question}"**\n\n'
         colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(title='Poll', colour=colour, description=description, timestamp=datetime.now())
         embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)

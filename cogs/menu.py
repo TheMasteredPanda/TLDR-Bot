@@ -45,8 +45,10 @@ class Menu(commands.Cog):
             menu = self.menus
         elif message_id in self.no_expire_menus:
             menu = self.no_expire_menus
+        else:
+            return
 
-        if menu is None or user.bot or payload.emoji.is_custom_emoji():
+        if user.bot or payload.emoji.is_custom_emoji():
             return
         
         if emote_name in menu[message_id]:

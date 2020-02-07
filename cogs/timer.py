@@ -18,7 +18,7 @@ class Timer(commands.Cog):
         for g in timers_collection:
             timers = g['timers']
             if timers:
-                print(f'running old {g["guild_id"]} timers')
+                print(f'running old timers for: {g["guild_id"]}')
                 for timer in timers:
                     asyncio.create_task(self.run_timer(g['guild_id'], timer))
 

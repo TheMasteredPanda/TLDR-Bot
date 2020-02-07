@@ -124,10 +124,6 @@ class TLDR(commands.AutoShardedBot):
         # just adds the member to the database
         db.get_levels('pp', member.guild.id, member.id)
 
-    async def on_member_update(self, m_before, m_after):
-        if m_before.roles != m_after.roles:
-            context.Context().clearance.invalidate(m_after)
-
     async def close(self):
         await super().close()
         await self.session.close()

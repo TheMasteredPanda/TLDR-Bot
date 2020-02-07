@@ -1,5 +1,4 @@
 import discord
-import asyncio
 import config
 from datetime import datetime
 from time import time
@@ -27,9 +26,9 @@ class Levels(commands.Cog):
             return await embed_maker.command_error(ctx)
 
         parsed_args = self.parse_role_args(args)
-        branch = parsed_args['branch']
-        role_name = parsed_args['role_name']
-        role_level = parsed_args['level']
+        branch = parsed_args['b']
+        role_name = parsed_args['r']
+        role_level = parsed_args['l']
 
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         if branch not in leveling_routes:
@@ -40,10 +39,12 @@ class Levels(commands.Cog):
             embed = embed_maker.message(ctx, 'One or more of the args is invalid', colour='red')
             return await ctx.send(embed=embed)
 
-        try:
-            new_role = await ctx.guild.create_role(name=role_name)
-        except discord.Forbidden:
-            return await ctx.send('failed to create role, missing permissions')
+        new_role = discord.utils.find(lambda r: r.name == role_name, ctx.guild.roles)
+        if new_role is None:
+            try:
+                new_role = await ctx.guild.create_role(name=role_name)
+            except discord.Forbidden:
+                return await ctx.send('failed to create role, missing permissions')
 
         new_role_route_list = leveling_routes[branch][:]
         new_role_route_list.insert(len(leveling_routes[branch]), (new_role.name, round(int(role_level))))
@@ -143,10 +144,14 @@ class Levels(commands.Cog):
             return await embed_maker.command_error(ctx)
 
         parsed_args = self.parse_role_args(args)
-        branch = parsed_args['branch']
-        role_name = parsed_args['role_name']
-        new_role_name = parsed_args['new_role_name']
-        new_role_level = parsed_args['new_role_level']
+        branch = parsed_args['b']
+        role_name = parsed_args['r']
+        new_role_name = parsed_args['nr']
+        new_role_level = parsed_args['nl']
+
+        if not new_role_name and not new_role_name:
+            embed = embed_maker.message(ctx, 'Neither a new role name nor a new max level is defined', colour='red')
+            return await ctx.send(embed=embed)
 
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         if branch not in leveling_routes:
@@ -191,36 +196,14 @@ class Levels(commands.Cog):
             db.get_levels.invalidate(f'{pre}role', ctx.guild.id, m.id)
 
     def parse_role_args(self, args):
-        args = args.split('-')
-        branch = None
-        role_name = None
-        level = None
-        new_role_name = None
-        new_role_level = None
-        for a in args:
-            if a.lower().startswith('b'):
-                branch = a.replace('b', '', 1).strip()
-                continue
-            if a.lower().startswith('r'):
-                role_name = a.replace('r', '', 1).strip()
-                continue
-            if a.lower().startswith('l'):
-                level = a.replace('l', '', 1).strip()
-                continue
-            if a.lower().startswith('nr'):
-                new_role_name = a.replace('nr', '', 1).strip()
-                continue
-            if a.lower().startswith('nl'):
-                new_role_level = a.replace('nl', '', 1).strip()
-                continue
+        result = dict.fromkeys(['b', 'r', 'l', 'nr', 'nl'], '')
 
-        return {
-            'branch': branch,
-            'role_name': role_name,
-            'level': level,
-            'new_role_name': new_role_name,
-            'new_role_level': new_role_level
-        }
+        split_args = filter(None, args.split('-'))
+        for a in split_args:
+            key, value = tuple(map(str.strip, a.split(' ', 1)))
+            result[key] = value
+
+        return result
 
     @commands.command(help='See current leveling routes', usage='leveling_routes', examples=['leveling_routes'], clearance='User', cls=command.Command)
     async def leveling_routes(self, ctx, new=False):
@@ -616,6 +599,9 @@ class Levels(commands.Cog):
         return roles_up
 
     def get_role_index(self, branch, guild_id, user_role):
+        if user_role == '':
+            return None
+
         leveling_routes = db.get_levels('leveling_routes', guild_id)
         all_roles = leveling_routes[branch]
 
