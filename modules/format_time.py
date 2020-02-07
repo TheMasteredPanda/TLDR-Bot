@@ -46,14 +46,13 @@ def plural(sec, n, name):
 
 
 def parse(string):
-    string = str(string)
-    if len(string) > 100:
-        return
+    if string.isdigit():
+        return string
 
-    regex = re.compile(r"^((?:\d+)?\-?\d?\.?\d+) *(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$")
+    regex = re.compile(r'^((?:\d+)?\-?\d?\.?\d+) *(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$')
     match = re.findall(regex, string)
     if not match:
-        return
+        return None
 
     match = match[0]
     n = int(match[0])

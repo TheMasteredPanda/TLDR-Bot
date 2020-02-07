@@ -34,9 +34,14 @@ class Utility(commands.Cog):
         if message_id is None:
             return await embed_maker.command_error(ctx, '[#Channel]')
 
+        try:
+            message = await channel.fetch_message(int(message_id))
+        except discord.NotFound:
+            embed = embed_maker.message(ctx, 'I couldn\'t find the message, the message is either deleted, or you put the wrong channel', colour='red')
+            return await ctx.send(embed=embed)
+
         poll = db.get_polls(ctx.guild.id, message_id)
-        message = await channel.fetch_message(message_id)
-        if message is None or poll is None:
+        if poll is None:
             embed = embed_maker.message(ctx, 'That is not a valid poll', colour='red')
             return await ctx.send(embed=embed)
 
@@ -44,16 +49,15 @@ class Utility(commands.Cog):
 
         db.timers.update_one({'guild_id': ctx.guild.id}, {'$pull': {'timers': {'extras.message_id': message_id}}})
         db.polls.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'polls.{message_id}': ''}})
-
-        menu_cog = self.bot.get_cog('Menu')
+        db.get_polls.invalidate(ctx.guild.id, message_id)
 
         # Get question from embed
         poll_embed = message.embeds[0]
         description = poll_embed.description
-        question_regex = re.compile(r'(\*\*.*\*\*)\n?\n?')
-        question = re.findall(question_regex, description)
-        if question:
-            question = question[0]
+        question_regex = re.compile(r'(\*\*.*\*\*)')
+        match = re.findall(question_regex, description)
+        if match:
+            question = match[0]
         else:
             embed = embed_maker.message(ctx, 'Couldn\'t parse question from that poll, this is weird', colour='red')
             return await ctx.send(embed=embed)
@@ -63,20 +67,18 @@ class Utility(commands.Cog):
         sorted_emote_count = sorted(emote_count.items(), key=lambda x: x[1], reverse=True)
         total_emotes = sum(emote_count.values())
         new_description = question
-        for e in sorted_emote_count:
-            emote, e_count = e
-            try:
-                percent = (e_count * 100) / total_emotes
-            except ZeroDivisionError:
-                percent = 0
 
-            new_description += f'\n{emote} **- {e_count}** | **{percent}%**'
+        if total_emotes == 0:
+            description += '\n'.join(f'{emote} **- {emote_count}** | **0%**' for emote, emote_count in sorted_emote_count)
+        else:
+            description += '\n'.join(f'{emote} **- {emote_count}** | **{(emote_count * 100)/total_emotes}%**' for emote, emote_count in sorted_emote_count)
 
         poll_embed.description = new_description
+        poll_embed.timestamp = datetime.now()
+        poll_embed.set_footer(text='Ended at')
         await message.edit(embed=poll_embed)
-        await ctx.message.delete()
 
-        db.get_polls.invalidate(ctx.guild.id, message_id)
+        menu_cog = self.bot.get_cog('Menu')
         if message_id in menu_cog.no_expire_menus:
             del menu_cog.no_expire_menus[message_id]
 
@@ -84,7 +86,7 @@ class Utility(commands.Cog):
         return await ctx.send(embed=embed)
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time]m/h/d)',
+                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [(num)m/h/d\)',
                       examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
@@ -92,86 +94,85 @@ class Utility(commands.Cog):
             return await embed_maker.command_error(ctx)
 
         args = self.parse_poll_args(args)
-        question = args['question']
-        options = args['options']
-        poll_time = args['poll_time']
-        option_emotes = args['option_emotes']
+        question = args['q']
+        options = args['o']
+        poll_time = format_time.parse(args['t'])
+        option_emotes = args['o_emotes']
+
+        err = ''
+        if poll_time is None:
+            err = 'Invalid time arg'
 
         if option_emotes is None:
-            embed = embed_maker.message(ctx, 'Error with custom option emotes', colour='red')
-            return await ctx.send(embed=embed)
+            err = 'Error with custom option emotes'
 
         if question == '' or options == '':
-            embed = embed_maker.message(ctx, 'Empty arg', colour='red')
-            return await ctx.send(embed=embed)
+            err = 'Empty arg'
 
         if len(options) > 9:
-            embed = embed_maker.message(ctx, 'Too many options', colour='red')
+            err = 'Too many options'
+
+        if err:
+            embed = embed_maker.message(ctx, err, colour='red')
             return await ctx.send(embed=embed)
 
-        description = f'**{question}**\n\n'
+        description = f'**"{question}"**\n\n'
         colour = config.DEFAULT_EMBED_COLOUR
-        used_emotes = []
-        poll_msg = ''
+        embed = discord.Embed(title='Anonymous Poll', colour=colour, description=description, timestamp=datetime.now())
+        embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
+
         if not options:
             emotes = ['👍', '👎']
-            embed = discord.Embed(colour=colour, description=description, timestamp=datetime.now())
-            embed.set_author(name=ctx.author, icon_url=ctx.author.avatar_url)
-            poll_msg = await ctx.send(embed=embed)
-            for e in emotes:
-                used_emotes.append(e)
-                await poll_msg.add_reaction(e)
-
-        elif options:
+        else:
             if option_emotes:
                 emotes = list(option_emotes.keys())
                 options = list(option_emotes.values())
             else:
-                emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+                all_num_emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+                emotes = all_num_emotes[:len(options)]
 
-            for i, o in enumerate(options):
-                description += f'\n{emotes[i]}  {o}'
-                used_emotes.append(emotes[i])
+            description += '\n'.join(f'{e} | **{o}**' for o, e in zip(options, emotes))
+            embed.description = description
 
-            embed = discord.Embed(colour=colour, description=description, timestamp=datetime.now())
-            embed.set_author(name=ctx.author, icon_url=ctx.author.avatar_url)
-            poll_msg = await ctx.send(embed=embed)
-            for e in used_emotes:
-                await poll_msg.add_reaction(e)
-
-        poll = {}
+        poll_msg = await ctx.send(embed=embed)
         voted_users = {}
-        buttons = {}
 
         async def count(user, msg, emote):
             if msg.id != poll_msg.id:
                 return
 
             if user.id in voted_users:
-                previous_emote = voted_users[user.id]
+                if voted_users[user.id]['buffer'] >= 5:
+                    return await user.send(f'Don\'t spam please')
+                voted_users[user.id]['buffer'] += 1
+
+                previous_emote = voted_users[user.id]['emote']
                 if emote == previous_emote:
                     return await user.send(f'Your vote has been already counted towards: {emote}')
 
-                db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1}})
-                db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{previous_emote}': -1}})
+                db.polls.update_one({'guild_id': ctx.guild.id},
+                                    {'$inc': {f'polls.{msg.id}.{emote}': 1,
+                                              f'polls.{msg.id}.{previous_emote}': -1}})
 
-                voted_users[user.id] = emote
+                voted_users[user.id]['emote'] = emote
 
                 return await user.send(f'Your vote has been changed to: {emote}')
 
-            voted_users[user.id] = emote
+            voted_users[user.id] = {
+                'emote': emote,
+                'buffer': 0  # checking for spammers
+            }
             db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1}})
 
-        for e in used_emotes:
-            buttons[e] = count
-            poll[e] = 0
+        poll = dict.fromkeys(emotes, 0)
+        buttons = dict.fromkeys(emotes, count)
 
         menu_cog = self.bot.get_cog('Menu')
-        await menu_cog.new_no_expire_menu(poll_msg, buttons)
-
         timer_cog = self.bot.get_cog('Timer')
+
         expires = round(time.time()) + round(poll_time)
         await timer_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='anon_poll', extras={'message_id': poll_msg.id, 'channel_id': poll_msg.channel.id, 'question': question})
+        await menu_cog.new_no_expire_menu(poll_msg, buttons)
 
         db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{poll_msg.id}': poll}})
 
@@ -186,8 +187,7 @@ class Utility(commands.Cog):
             return
 
         db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ""}})
-
-        menu_cog = self.bot.get_cog('Menu')
+        db.get_polls.invalidate(guild_id, message_id)
 
         question = timer['extras']['question']
         emote_count = poll
@@ -198,22 +198,21 @@ class Utility(commands.Cog):
         sorted_emote_count = sorted(emote_count.items(), key=lambda x: x[1], reverse=True)
         total_emotes = sum(emote_count.values())
         description = f'**{question}**\n'
-        for e in sorted_emote_count:
-            emote, e_count = e
-            try:
-                percent = (e_count * 100)/total_emotes
-            except ZeroDivisionError:
-                percent = 0
 
-            description += f'\n{emote} **- {e_count}** | **{percent}%**'
+        if total_emotes == 0:
+            description += '\n'.join(f'{emote} **- {emote_count}** | **0%**' for emote, emote_count in sorted_emote_count)
+        else:
+            description += '\n'.join(f'{emote} **- {emote_count}** | **{(emote_count * 100)/total_emotes}%**' for emote, emote_count in sorted_emote_count)
 
         embed = message.embeds[0]
         embed.description = description
+        embed.timestamp = datetime.now()
+        embed.set_footer(text='Ended at')
 
+        menu_cog = self.bot.get_cog('Menu')
         if message_id in menu_cog.no_expire_menus:
             del menu_cog.no_expire_menus[message_id]
 
-        db.get_polls.invalidate(guild_id, message_id)
         await message.edit(embed=embed)
         return await message.clear_reactions()
 
@@ -226,85 +225,76 @@ class Utility(commands.Cog):
             return await embed_maker.command_error(ctx)
 
         args = self.parse_poll_args(args)
-        question = args['question']
-        options = args['options']
-        option_emotes = args['option_emotes']
+        question = args['q']
+        options = args['o']
+        option_emotes = args['o_emotes']
 
+        err = ''
         if question == '' or options == '':
-            embed = embed_maker.message(ctx, 'Empty arg', colour='red')
-            return await ctx.send(embed=embed)
+            err = 'Empty arg'
 
         if len(options) > 9:
-            embed = embed_maker.message(ctx, 'Too many options', colour='red')
+            err = 'Too many options'
+
+        if err:
+            embed = embed_maker.message(ctx, err, colour='red')
             return await ctx.send(embed=embed)
 
         description = f'**{question}**\n'
         colour = config.DEFAULT_EMBED_COLOUR
+        embed = discord.Embed(title='Poll', colour=colour, description=description, timestamp=datetime.now())
+        embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
 
-        used_emotes = []
         if not options:
             emotes = ['👍', '👎']
-            embed = discord.Embed(colour=colour, description=description, timestamp=datetime.now())
-            embed.set_author(name=ctx.author, icon_url=ctx.author.avatar_url)
-            poll_msg = await ctx.send(embed=embed)
-            for e in emotes:
-                used_emotes.append(e)
-                await poll_msg.add_reaction(e)
-
-        elif options:
+        else:
             if option_emotes:
                 emotes = list(option_emotes.keys())
                 options = list(option_emotes.values())
             else:
-                emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+                all_num_emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+                emotes = all_num_emotes[:len(options)]
 
-            for i, o in enumerate(options):
-                description += f'\n{emotes[i]}  {o}'
-                used_emotes.append(emotes[i])
+            description += '\n'.join(f'\n{e} | **{o}**' for e, o in zip(emotes, options))
+            embed.description = description
 
-            embed = discord.Embed(colour=colour, description=description, timestamp=datetime.now())
-            embed.set_author(name=ctx.author, icon_url=ctx.author.avatar_url)
-            poll_msg = await ctx.send(embed=embed)
-            for e in used_emotes:
-                await poll_msg.add_reaction(e)
+        poll_msg = await ctx.send(embed=embed)
+        for e in emotes:
+            await poll_msg.add_reaction(e)
 
         return await ctx.message.delete(delay=5)
 
     def parse_poll_args(self, args):
-        args = args.split('-')
-        question = ''
-        options = []
-        poll_time = 5
-        for a in args:
-            if a.lower().startswith('q'):
-                question = a.replace('q', '', 1).strip()
-                continue
-            elif a.lower().startswith('o'):
-                options = a.replace('o', '', 1).strip().replace(', ', ',').split(',')
-                continue
-            elif a.lower().startswith('t'):
-                poll_time = a.replace('t', '', 1).strip()
-                poll_time = format_time.parse(poll_time)
-                continue
+        result = {
+            'q': '',
+            'o': [],
+            't': '5m',
+            'o_emotes': {}
+        }
+        split_args = filter(None, args.split('-'))
+        for a in split_args:
+            key, value = tuple(map(str.strip, a.split(' ', 1)))
+            result[key] = value
+
+        if result['o']:
+            result['o'] = result['o'].replace(' ', '').split(',')
+        else:
+            return result
 
         # check for custom option emotes
-        option_emotes = {}
-        for o in options:
-            regex = re.compile(r'\[(.*?)\]')
-            if re.match(regex, o):
-                o.strip()
-                emote_regex = re.compile(r'\[(.*)\s?:')
-                option_regex = re.compile(r':\s?(.*)\]')
-                emote = re.findall(emote_regex, o)[0]
-                option = re.findall(option_regex, o)[0]
-                option_emotes[emote] = option
-            else:
-                option_emotes = None
+        oe_regex = re.compile(r'\[(.*):(.*)\]')
+        if re.match(oe_regex, result['o'][0]):
+            for option in result['o']:
+                oe = re.match(oe_regex, option)
+                if oe:
+                    e, o = oe.groups()
+                    result['o_emotes'][e] = o
+                    continue
 
-        return {'question': question,
-                'options': options,
-                'option_emotes': option_emotes,
-                'poll_time': poll_time}
+                result['o_emotes'] = None
+                break
+
+        return result
 
 
 def setup(bot):
