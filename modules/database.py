@@ -132,9 +132,10 @@ class Connection:
         user_id = str(user_id)
         if user_id not in doc['users']:
             user = {
-                'mutes': [],
-                'kicks': [],
-                'temp_bans': []
+                'warn': [],
+                'mute': [],
+                'kick': [],
+                'temp_ban': []
             }
             self.cases.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][user_id] = user

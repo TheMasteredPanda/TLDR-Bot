@@ -342,33 +342,18 @@ class Levels(commands.Cog):
         lboard_msg = await ctx.send(embed=lboard_embed)
 
         if page_num > 1:
-            async def next_page(user, msg, _):
-                if ctx.author.id != user.id and msg.channel.id != ctx.channel.id:
+            async def change_page(user, msg, emote):
+                if ctx.author.id != user.id or msg.channel.id != ctx.channel.id or lboard_msg.id != msg.id:
                     return
-                new_page_num = user_page + 1
+                new_page_num = user_page + 1 if emote == '➡' else user_page - 1
                 if new_page_num not in lboard:
                     return
                 new_description = '\n'.join(lboard[new_page_num])
                 lboard_embed.description = new_description
                 msg.edit(embed=lboard_embed)
 
-            async def previous_page(user, msg, _):
-                if ctx.author.id != user.id and msg.channel.id != ctx.channel.id:
-                    return
-                new_page_num = user_page - 1
-                if new_page_num not in lboard:
-                    return
-                new_description = '\n'.join(lboard[new_page_num])
-                lboard_embed.description = new_description
-                msg.edit(embed=lboard_embed)
-
-            buttons = {
-                '⬅️': previous_page,
-                '➡️': next_page
-            }
-
+            buttons = dict.fromkeys(['⬅️', '➡️'], change_page)
             menu_cog = self.bot.get_cog('Menu')
-
             return await menu_cog.new_menu(lboard_msg, buttons)
 
     @commands.command(help='Shows your (or someone else\'s) rank and level', usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
