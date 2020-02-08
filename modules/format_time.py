@@ -46,6 +46,8 @@ def plural(sec, n, name):
 
 
 def parse(string):
+    if string is None:
+        return None
     if string.isdigit():
         return string
 

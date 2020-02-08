@@ -84,30 +84,6 @@ class Levels(commands.Cog):
 
                 return await self.level_up_message(ctx, m, reward_text)
 
-    @commands.command(help='Remove role from a leveling route', usage='remove_role [branch] [role name]', examples=['remove_role parliamentary Council Member'], clearance='Admin', cls=command.Command)
-    async def remove_role(self, ctx, branch=None, *, role_name=None):
-        if branch is None:
-            return await embed_maker.command_error(ctx)
-
-        leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
-        if branch not in leveling_routes:
-            embed = embed_maker.message(ctx, 'That is not a valid branch (honours/parliamentary)', colour='red')
-            return await ctx.send(embed=embed)
-
-        if role_name is None:
-            return await embed_maker.command_error(ctx, '[role name]')
-
-        for role in leveling_routes[branch]:
-            if role[0] == role_name:
-                await ctx.send(f'removed {role[0]} from {branch} route')
-                new_branch = leveling_routes[branch][:]
-                new_branch.remove(role)
-                db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_branch}})
-                db.get_levels.invalidate('leveling_routes', ctx.guild.id)
-                return await self.leveling_routes(ctx, True)
-        else:
-            return await embed_maker.command_error(ctx, '[role name]')
-
     @commands.command(help='Add a channel to the list of channels, in which honours points can be gained', usage='add_honours_channels [#channel]', examples=['add_honours_channels #court'], clearance='Admin', cls=command.Command)
     async def add_honours_channel(self, ctx, channel=None):
         if channel is None:
@@ -124,6 +100,26 @@ class Levels(commands.Cog):
             db.get_levels.invalidate('honours_channels', ctx.guild.id)
 
             embed = embed_maker.message(ctx, f'<#{channel.id}> has been added to the list', colour='green')
+            await ctx.send(embed=embed)
+        else:
+            return await embed_maker.command_error(ctx, '[#channel]')
+
+    @commands.command(help='Remove a channel from the list of channels, in which honours points can be gained', usage='add_honours_channels [#channel]', examples=['add_honours_channels #court'], clearance='Admin', cls=command.Command)
+    async def remove_honours_channel(self, ctx, channel=None):
+        if channel is None:
+            return await embed_maker.command_error(ctx)
+
+        channel_list = db.get_levels('honours_channels', ctx.guild.id)
+
+        if ctx.message.channel_mentions:
+            channel = ctx.message.channel_mentions[0]
+            if channel.id not in channel_list:
+                embed = embed_maker.message(ctx, f'That channel is not on the list', colour='red')
+                return await ctx.send(embed=embed)
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'honours_channels': channel.id}})
+            db.get_levels.invalidate('honours_channels', ctx.guild.id)
+
+            embed = embed_maker.message(ctx, f'<#{channel.id}> has been removed from the list', colour='green')
             await ctx.send(embed=embed)
         else:
             return await embed_maker.command_error(ctx, '[#channel]')
@@ -149,13 +145,13 @@ class Levels(commands.Cog):
         new_role_name = parsed_args['nr']
         new_role_level = parsed_args['nl']
 
-        if not new_role_name and not new_role_name:
-            embed = embed_maker.message(ctx, 'Neither a new role name nor a new max level is defined', colour='red')
-            return await ctx.send(embed=embed)
-
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         if branch not in leveling_routes:
             embed = embed_maker.message(ctx, 'That is not a valid branch. (honours/parliamentary)', colour='red')
+            return await ctx.send(embed=embed)
+
+        if not role_name:
+            embed = embed_maker.message(ctx, 'Role arg is empty', colour='red')
             return await ctx.send(embed=embed)
 
         for r in leveling_routes[branch]:
@@ -163,7 +159,11 @@ class Levels(commands.Cog):
                 break
         else:
             error_embed = embed_maker.message(ctx, f'{role_name} is not a valid role', colour='red')
-            await ctx.send(embed=error_embed)
+            return await ctx.send(embed=error_embed)
+
+        if not new_role_name and not new_role_level:
+            embed = embed_maker.message(ctx, 'Neither a new role name nor a new max level is defined', colour='red')
+            return await ctx.send(embed=embed)
 
         new_role_list = leveling_routes[branch][:]
         for i, _role in enumerate(leveling_routes[branch]):
@@ -200,7 +200,10 @@ class Levels(commands.Cog):
 
         split_args = filter(None, args.split('-'))
         for a in split_args:
-            key, value = tuple(map(str.strip, a.split(' ', 1)))
+            match = tuple(map(str.strip, a.split(' ', 1)))
+            if len(match) < 2:
+                return result
+            key, value = match
             result[key] = value
 
         return result
@@ -593,9 +596,11 @@ class Levels(commands.Cog):
             current_level_total += role[1]
             if role_index >= i:
                 previous_level_total += role[1]
-                continue
             if current_level_total < user_level:
                 roles_up -= 1
+        else:
+            roles_up = -1
+
         return roles_up
 
     def get_role_index(self, branch, guild_id, user_role):
@@ -625,9 +630,9 @@ def ppi(guild_id, member_id, new_pp):
             # the formula to calculate how much pp you need for the next level
             total_pp += (5 * ((j + 1) ** 2) + 50 * (j + 1) + 100)
 
-        if total_pp - user_pp > 0 and levels_up >= 1:
+        if total_pp - user_pp >= 0 and levels_up >= 1:
             return True, levels_up + 1
-        elif total_pp - user_pp > 0:
+        elif total_pp - user_pp >= 0:
             return False, levels_up
 
         levels_up += 1
@@ -640,13 +645,10 @@ def hpi(guild_id, member_id, new_hp):
 
     levels_up = 0
     for i in range(1000):
-        total_hp = 0
-        for j in range(user_level + i):
-            total_hp = 1000 * (user_level + j)
-
-        if total_hp - user_hp > 0 and levels_up >= 1:
+        total_hp = 1000 * (user_level + i)
+        if total_hp - user_hp >= 0 and levels_up >= 1:
             return True, levels_up
-        elif total_hp - user_hp > 0:
+        elif total_hp - user_hp >= 0:
             return False, levels_up
 
         levels_up += 1
