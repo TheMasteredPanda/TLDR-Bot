@@ -80,7 +80,7 @@ class TLDR(commands.AutoShardedBot):
         if ctx.guild is None:
             if (ctx.command is None and ctx.message.content.startswith(DEFAULT_PREFIX)) or (ctx.command and ctx.command.name == 'help'):
                 pm_cog = self.get_cog('PrivateMessages')
-                return await pm_cog.pm_help(ctx)
+                return await pm_cog.process_pm(ctx)
 
             return await self.invoke(ctx) if hasattr(ctx.command, 'dm_only') else None
 

@@ -27,7 +27,7 @@ class PrivateMessages(commands.Cog):
         content = ctx.message.content
         content_list = content.split(' ')
         command = content_list[0]
-        args = content_list[1:]
+        args = ' '.join(content_list[1:])
         return command, args
 
     @commands.command(dm_only=True, help='get some pm help smh. Displays all pm commands or info about a specific pm command', usage='pm_help (command)', examples=['pm_help', 'pm_help report'], cls=command.Command)
@@ -35,7 +35,7 @@ class PrivateMessages(commands.Cog):
         embed_colour = config.DEFAULT_EMBED_COLOUR
         cmds = self.commands
 
-        if _cmd is None:
+        if not _cmd:
             embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'**Prefix** : `{config.DEFAULT_PREFIX}`\nFor additional info on a command, type `{config.DEFAULT_PREFIX}help [command]`')
             embed.set_author(name=f'Help', icon_url=self.bot.user.avatar_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
@@ -45,8 +45,6 @@ class PrivateMessages(commands.Cog):
         else:
             if _cmd in self.commands:
                 cmd = getattr(self, _cmd)
-                if hasattr(cmd, 'hidden'):
-                    return
                 examples = f' | '.join(cmd.examples)
                 cmd_help = f"""
                         **Description:** {cmd.help}
@@ -54,7 +52,7 @@ class PrivateMessages(commands.Cog):
                         **Examples:** {examples}
                         """
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=cmd_help)
-                embed.set_author(name=f'Help - {cmd.__name__}', icon_url=self.bot.user.avatar_url)
+                embed.set_author(name=f'Help - {cmd.name}', icon_url=self.bot.user.avatar_url)
                 embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
                 return await ctx.author.send(embed=embed)
             else:
@@ -86,7 +84,7 @@ class PrivateMessages(commands.Cog):
             user_ids = user_message.content.replace(' ', '').split(',')
             for _id in user_ids:
                 if not _id.isdigit():
-                    continue
+                    return False
                 u = self.bot.get_user(int(_id))
                 if u is None:
                     return False
@@ -102,7 +100,7 @@ class PrivateMessages(commands.Cog):
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             await ctx.author.send(embed=embed)
             try:
-                issues_message = await self.bot.wait_for('message', check=issues_check, timeout=60)
+                issues_message = await self.bot.wait_for('message', check=issues_check, timeout=3*60)
             except asyncio.TimeoutError:
                 error_msg = 'Report user function timed out'
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=error_msg)
