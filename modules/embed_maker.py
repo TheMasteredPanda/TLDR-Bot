@@ -1,4 +1,5 @@
 import discord
+import config
 from datetime import datetime
 from modules import database
 
@@ -13,16 +14,18 @@ def get_colour(colour):
     }.get(colour, 0x00a6ad)
 
 
-def message(ctx, msg, *, title=None, colour=None):
+def message(ctx, msg, *, title=None, footer=None,colour=None):
     if colour is None:
-        embed_colour = db.get_server_options('embed_colour', ctx.guild.id)
+        embed_colour = config.DEFAULT_EMBED_COLOUR
     else:
         embed_colour = get_colour(colour)
 
     embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
     embed.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
-    if title is not None:
+    if title:
         embed.set_author(name=title, icon_url=ctx.guild.icon_url)
+    if footer:
+        embed.set_footer(text=footer)
 
     return embed
 

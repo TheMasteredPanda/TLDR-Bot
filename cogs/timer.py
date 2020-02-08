@@ -1,0 +1,60 @@
+import time
+import asyncio
+import uuid
+from modules import database
+from discord.ext import commands
+
+db = database.Connection()
+
+
+class Timer(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+        self.loop = self.bot.loop
+        self.event = asyncio.Event(loop=self.loop)
+
+    async def run_old_timers(self):
+        timers_collection = db.timers.find({})
+        for g in timers_collection:
+            timers = g['timers']
+            if timers:
+                print(f'running old timers for: {g["guild_id"]}')
+                for timer in timers:
+                    asyncio.create_task(self.run_timer(g['guild_id'], timer))
+
+    async def run_timer(self, guild_id, timer):
+        now = round(time.time())
+
+        if timer['expires'] > now:
+            await asyncio.sleep(timer['expires'] - now)
+
+        await self.call_timer_event(guild_id, timer)
+
+    async def call_timer_event(self, guild_id, timer):
+        timer_doc = db.get_timer(guild_id, timer['id'])
+        if timer_doc:
+            db.timers.update_one({'guild_id': guild_id}, {'$pull': {'timers': {'id': timer['id']}}})
+            self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
+            db.get_timer.invalidate(guild_id, timer['id'])
+
+    async def create_timer(self, **kwargs):
+        timer_id = str(uuid.uuid4())
+        timer_object = {
+            'id': timer_id,
+            'guild_id': kwargs['guild_id'],
+            'expires': kwargs['expires'],
+            'event': kwargs['event'],
+            'extras': kwargs['extras']
+        }
+
+        # Adds timer database if it's missing
+        db.get_timer(timer_object['guild_id'], '0')
+
+        db.timers.update_one({'guild_id': timer_object['guild_id']}, {'$push': {f'timers': timer_object}})
+        asyncio.create_task(self.run_timer(timer_object['guild_id'], timer_object))
+
+        return timer_object
+
+
+def setup(bot):
+    bot.add_cog(Timer(bot))
