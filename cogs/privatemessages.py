@@ -19,8 +19,8 @@ class PrivateMessages(commands.Cog):
 
         cmd, args = self.parse_ctx(ctx)
         try:
-            command = self.__getattribute__(cmd)
-            return await command(ctx, args)
+            called_cmd = self.__getattribute__(cmd)
+            return await called_cmd(ctx, args)
         except AttributeError:
             return await self.pm_help(ctx, args)
 
