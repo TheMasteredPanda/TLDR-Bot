@@ -10,6 +10,7 @@ from modules import command, embed_maker
 class PrivateMessages(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.help = self.pm_help
         self.commands = ['help', 'report_user', 'report_issue']
 
     async def process_pm(self, ctx):
