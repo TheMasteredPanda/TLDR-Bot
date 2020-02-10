@@ -27,7 +27,7 @@ class PrivateMessages(commands.Cog):
     def parse_ctx(self, ctx):
         content = ctx.message.content
         content_list = content.split(' ')
-        command = content_list[0]
+        command = content_list[0].replace(config.DEFAULT_PREFIX, '')
         args = ' '.join(content_list[1:])
         return command, args
 
