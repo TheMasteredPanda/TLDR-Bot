@@ -462,7 +462,7 @@ class Levels(commands.Cog):
             await self.level_up(ctx, ctx.author, 'honours', new_hp)
 
     async def process_message(self, ctx):
-        if self.cooldown_expired(pp_cooldown, ctx.guild.id, ctx.author.id, 60):
+        if self.cooldown_expired(pp_cooldown, ctx.guild.id, ctx.author.id, 0):
             pp_add = randint(15, 25)
             new_pp = ctx.author_pp + pp_add
 
@@ -611,12 +611,12 @@ def ppi(guild_id, member_id, new_pp):
     for i in range(1000):
         # total pp needed to gain the next level
         total_pp = 0
-        for j in range(user_level + (i + 1)):
+        for j in range(user_level + i + 1):
             # the formula to calculate how much pp you need for the next level
-            total_pp += (5 * ((j + 1) ** 2) + 50 * (j + 1) + 100)
+            total_pp += (5 * ((j) ** 2) + 50 * (j) + 100)
 
         if total_pp - user_pp >= 0 and levels_up >= 1:
-            return True, levels_up + 1
+            return True, levels_up
         elif total_pp - user_pp >= 0:
             return False, levels_up
 
