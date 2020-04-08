@@ -50,7 +50,8 @@ class Dev(commands.Cog):
             'discord': discord,
             'commands': commands,
             'ctx': ctx,
-            '__import__': __import__
+            '__import__': __import__,
+            'db': db
         }
         exec(compile(parsed, filename="<ast>", mode="exec"), env)
 

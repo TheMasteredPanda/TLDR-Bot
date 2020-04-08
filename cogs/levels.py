@@ -225,6 +225,8 @@ class Levels(commands.Cog):
 
         for branch in lvl_routes:
             value = ''
+            if branch == 'honours':
+                continue
             for i, _role in enumerate(lvl_routes[branch]):
                 role = discord.utils.find(lambda r: r.name == _role[0], ctx.guild.roles)
                 if role is None:
@@ -289,20 +291,22 @@ class Levels(commands.Cog):
         else:
             return await self.level_up(ctx, member, 'honours', new_hp)
 
-    @commands.command(help='Shows the leveling leaderboards (parliamentary(p)/honours(h)) on the server', usage='leaderboard [branch] (page)', examples=['leaderboard parliamentary', 'leaderboard honours 2'], clearance='User', cls=command.Command)
-    async def leaderboard(self, ctx, branch=None, user_page=1):
-        if branch is None:
-            return await embed_maker.command_error(ctx)
+    @commands.command(help='Shows the leveling leaderboard on the server', usage='leaderboard (page)', examples=['leaderboard', 'leaderboard 2'], clearance='User', cls=command.Command)
+    async def leaderboard(self, ctx, user_page=1):
+        #if branch is None:
+        #    return await embed_maker.command_error(ctx)
 
-        branch = 'honours' if branch == 'h' else 'parliamentary'
-
-        if branch == 'honours':
+        #branch = 'honours' if branch == 'h' else 'parliamentary'
+        branch = 'parliamentary'
+        """
+	if branch == 'honours':
             pre = 'h'
         elif branch == 'parliamentary':
             pre = 'p'
         else:
             return
-
+	"""
+        pre = 'p'
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][f'{pre}p'], reverse=True)
         embed_colour = config.DEFAULT_EMBED_COLOUR
@@ -345,6 +349,8 @@ class Levels(commands.Cog):
             async def change_page(user, msg, emote):
                 if ctx.author.id != user.id or msg.channel.id != ctx.channel.id or lboard_msg.id != msg.id:
                     return
+                if user.bot:
+                    return
                 new_page_num = user_page + 1 if emote == '➡' else user_page - 1
                 if new_page_num not in lboard:
                     return
@@ -352,7 +358,7 @@ class Levels(commands.Cog):
                 lboard_embed.description = new_description
                 msg.edit(embed=lboard_embed)
 
-            buttons = dict.fromkeys(['⬅️', '➡️'], change_page)
+            buttons = dict.fromkeys(['⬅', '➡️'], change_page)
             menu_cog = self.bot.get_cog('Menu')
             return await menu_cog.new_menu(lboard_msg, buttons)
 
@@ -397,7 +403,7 @@ class Levels(commands.Cog):
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
         embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
         embed.add_field(name='>Parliamentary', value=sp_value, inline=False)
-        embed.add_field(name='>Honours', value=hp_value, inline=False)
+#       embed.add_field(name='>Honours', value=hp_value, inline=False)
 
         return await ctx.send(embed=embed)
 
@@ -462,7 +468,7 @@ class Levels(commands.Cog):
             await self.level_up(ctx, ctx.author, 'honours', new_hp)
 
     async def process_message(self, ctx):
-        if self.cooldown_expired(pp_cooldown, ctx.guild.id, ctx.author.id, 0):
+        if self.cooldown_expired(pp_cooldown, ctx.guild.id, ctx.author.id, 60):
             pp_add = randint(15, 25)
             new_pp = ctx.author_pp + pp_add
 
@@ -483,6 +489,9 @@ class Levels(commands.Cog):
             return
 
         user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
+        role = discord.utils.find(lambda r: r.name == user_role, ctx.guild.roles)
+        if role is not None and role not in ctx.author.roles:
+             await member.add_roles(role)
         user_role_level = self.user_role_level(ctx.guild.id, branch, member.id, lvls_up)
 
         if user_role_level < 0:
@@ -500,7 +509,7 @@ class Levels(commands.Cog):
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.{pre}role': role.name}})
             db.get_levels.invalidate(f'{pre}role', ctx.guild.id, member.id)
 
-            user_role_level = self.user_role_level(ctx.guild.id, branch, member.id, lvls_up)
+            user_role_level = self.user_role_level(ctx.guild.id, branch, member.id, lvls_up) 
             reward_text = f'Congrats <@{member.id}> you\'ve advanced to a level **{user_role_level}** <@&{role.id}>'
 
         else:
@@ -554,6 +563,7 @@ class Levels(commands.Cog):
         all_roles = leveling_routes[branch]
 
         role_index = self.get_role_index(branch, guild_id, user_role)
+        print(role_index)
         if role_index is None:
             return user_level
 

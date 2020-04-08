@@ -16,7 +16,7 @@ async def get_prefix(bot, message):
     return commands.when_mentioned_or(prefix)(bot, message)
 
 
-class TLDR(commands.AutoShardedBot):
+class TLDR(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix=get_prefix, case_insensitive=True, help_command=None)
 

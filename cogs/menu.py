@@ -50,7 +50,7 @@ class Menu(commands.Cog):
 
         if user.bot or payload.emoji.is_custom_emoji():
             return
-        
+
         if emote_name in menu[message_id]:
             channel = self.bot.get_channel(channel_id)
             message = await channel.fetch_message(message_id)

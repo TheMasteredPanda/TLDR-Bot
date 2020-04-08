@@ -37,8 +37,18 @@ class Connection:
                 'level_up_channel': 0,
                 'leveling_routes': {
                     'parliamentary': [
-                        ('Member', 5),
-                        ('Local Councillor', 5)
+                        ('Citizen', 5),
+                        ('Party Member', 5),
+			('Party Campaigner', 5),
+                        ('Local Councillor', 5),
+                        ('Council Chair', 5),
+                        ('Mayor', 5),
+                        ('Candidate', 5),
+                        ('Opposition Backbencher', 5),
+                        ('Shadow Minister', 5),
+                        ('Opposition Whip', 5),
+                        ('Shadow Cabinet Minister', 5),
+                        ('Government Backbencher', 5)
                     ],
                     'honours': [
                         ('Public Servant', 5)
@@ -61,7 +71,7 @@ class Connection:
                 'p_level': 0,
                 'hp': 0,
                 'h_level': 0,
-                'p_role': 'Member',
+                'p_role': 'Citizen',
                 'h_role': ''
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
