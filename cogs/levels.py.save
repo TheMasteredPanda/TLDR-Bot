@@ -64,7 +64,7 @@ class Levels(commands.Cog):
         prev_role = discord.utils.find(lambda r: r.name == prev_role_name, ctx.guild.roles)
         pre = 'p' if branch.lower() == 'parliamentary' else 'h'
         for m in prev_role.members:
-            user_role_level = self.user_role_level(ctx.guild.id, branch, m.id, 0)
+            user_role_level = self.user_role_level(ctx.guild.id, branch, m, 0)
 
             if user_role_level < 0:
                 # Get next role
@@ -79,7 +79,7 @@ class Levels(commands.Cog):
                 db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{m.id}.{pre}_role': role.name}})
                 db.get_levels.invalidate(f'{pre}_role', ctx.guild.id, m.id)
 
-                user_role_level = self.user_role_level(ctx.guild.id, branch, m.id, 0)
+                user_role_level = self.user_role_level(ctx.guild.id, branch, m, 0)
                 reward_text = f'Congrats <@{m.id}> you\'ve advanced to a level **{user_role_level}** <@&{role.id}>'
 
                 return await self.level_up_message(ctx, m, reward_text)
@@ -321,7 +321,7 @@ class Levels(commands.Cog):
             if member is None:
                 member = await self.bot.fetch_user(user_id)
 
-            role_level = self.user_role_level(ctx.guild.id, branch, member.id)
+            role_level = self.user_role_level(ctx.guild.id, branch, member)
             user_role_name = user_values[f'{pre}_role']
             if user_role_name == '':
                 continue
