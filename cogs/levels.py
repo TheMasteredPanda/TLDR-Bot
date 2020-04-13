@@ -64,7 +64,12 @@ class Levels(commands.Cog):
             role_level = await self.user_role_level(ctx, branch, user_id)
             user_role_name = user_values[f'{pre}_role']
             user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
-            page_message += f'**#{i + 1}** - <@{user_id}> | **Level {role_level}** <@&{user_role.id}>\n'
+
+            user = self.bot.get_user(user_id)
+            if user is None:
+                user = self.bot.fetch_user(user_id)
+
+            page_message += f'**#{i + 1}** - {user} | **Level {role_level}** <@&{user_role.id}>\n'
 
         if page_message == '':
             description = 'Damn, this place is empty'
