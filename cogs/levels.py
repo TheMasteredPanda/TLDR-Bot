@@ -64,7 +64,7 @@ class Levels(commands.Cog):
             role_level = await self.user_role_level(ctx, branch, user_id)
             user_role_name = user_values[f'{pre}_role']
             user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
-            page_message += f'**#{i + 1}** - <@{user_id}> | **Level {role_level}** <@&{user_role.id}>'
+            page_message += f'**#{i + 1}** - <@{user_id}> | **Level {role_level}** <@&{user_role.id}>\n'
 
         if page_message == '':
             description = 'Damn, this place is empty'
@@ -211,20 +211,32 @@ class Levels(commands.Cog):
         else:
             await channel.send(embed=embed)
 
-    async def user_role_level(self, message, branch, member_id, lvl_add=0):
+    async def user_role_level(self, ctx, branch, member, lvl_add=0):
         if branch == 'honours':
             pre = 'h_'
         else:
             pre = 'p_'
 
-        user_level = db.get_levels(f'{pre}level', message.guild.id, member_id)
-        user_role = db.get_levels(f'{pre}role', message.guild.id, member_id)
+        user_level = db.get_levels(f'{pre}level', ctx.guild.id, member.id)
+        user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
+
+        if user_role == '':
+            return user_level
+
+        role_obj = discord.utils.find(lambda r: r.name == user_role, ctx.guild.roles)
+
+        if role_obj not in member.roles:
+            await member.add_roles(role_obj)
+
         user_level = int(user_level + lvl_add)
 
-        leveling_routes = db.get_levels('leveling_routes', message.guild.id)
+        leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         all_roles = leveling_routes[branch]
 
-        role_index = self.get_role_index(branch, message.guild.id, user_role)
+        role_index = self.get_role_index(branch, ctx.guild.id, user_role)
+        print(role_index)
+        if role_index is None:
+            return user_level
 
         current_level_total = 0
         previous_level_total = 0
@@ -241,7 +253,21 @@ class Levels(commands.Cog):
             if current_level_total == user_level:
                 return role[1]
             if current_level_total < user_level:
-                return -(user_level - current_level_total)
+                break
+
+        roles_up = 0
+        current_level_total = 0
+        previous_level_total = 0
+        for i, role in enumerate(all_roles):
+            current_level_total += role[1]
+            if role_index >= i:
+                previous_level_total += role[1]
+            if current_level_total < user_level:
+                roles_up -= 1
+        else:
+            roles_up = -1
+
+        return roles_up
 
     @staticmethod
     def get_role_index(branch, guild_id, user_role):
