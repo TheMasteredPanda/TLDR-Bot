@@ -211,22 +211,14 @@ class Levels(commands.Cog):
         else:
             await channel.send(embed=embed)
 
-    async def user_role_level(self, ctx, branch, member, lvl_add=0):
+    async def user_role_level(self, ctx, branch, member_id, lvl_add=0):
         if branch == 'honours':
             pre = 'h_'
         else:
             pre = 'p_'
 
-        user_level = db.get_levels(f'{pre}level', ctx.guild.id, member.id)
-        user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
-
-        if user_role == '':
-            return user_level
-
-        role_obj = discord.utils.find(lambda r: r.name == user_role, ctx.guild.roles)
-
-        if role_obj not in member.roles:
-            await member.add_roles(role_obj)
+        user_level = db.get_levels(f'{pre}level', ctx.guild.id, member_id)
+        user_role = db.get_levels(f'{pre}role', ctx.guild.id, member_id)
 
         user_level = int(user_level + lvl_add)
 
@@ -234,9 +226,6 @@ class Levels(commands.Cog):
         all_roles = leveling_routes[branch]
 
         role_index = self.get_role_index(branch, ctx.guild.id, user_role)
-        print(role_index)
-        if role_index is None:
-            return user_level
 
         current_level_total = 0
         previous_level_total = 0
