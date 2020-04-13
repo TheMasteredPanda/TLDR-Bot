@@ -61,16 +61,10 @@ class Levels(commands.Cog):
                 break
 
             user_id, user_values = u
-            member = ctx.guild.get_member(user_id)
-            if member is None:
-                member = await ctx.guild.fetch_member(user_id)
-
-            role_level = await self.user_role_level(ctx, branch, member)
+            role_level = await self.user_role_level(ctx, branch, user_id)
             user_role_name = user_values[f'{pre}_role']
-            if user_role_name == '':
-                continue
             user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
-            page_message = f'**#{i + 1}** - <@{user_id}> | **Level {role_level}** <@&{user_role.id}>'
+            page_message += f'**#{i + 1}** - <@{user_id}> | **Level {role_level}** <@&{user_role.id}>'
 
         if page_message == '':
             description = 'Damn, this place is empty'
@@ -217,14 +211,14 @@ class Levels(commands.Cog):
         else:
             await channel.send(embed=embed)
 
-    async def user_role_level(self, message, branch, member, lvl_add=0):
+    async def user_role_level(self, message, branch, member_id, lvl_add=0):
         if branch == 'honours':
             pre = 'h_'
         else:
             pre = 'p_'
 
-        user_level = db.get_levels(f'{pre}level', message.guild.id, member.id)
-        user_role = db.get_levels(f'{pre}role', message.guild.id, member.id)
+        user_level = db.get_levels(f'{pre}level', message.guild.id, member_id)
+        user_role = db.get_levels(f'{pre}role', message.guild.id, member_id)
         user_level = int(user_level + lvl_add)
 
         leveling_routes = db.get_levels('leveling_routes', message.guild.id)
