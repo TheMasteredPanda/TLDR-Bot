@@ -413,17 +413,16 @@ class Levels(commands.Cog):
         user = guild.get_member(payload.user_id)
         channel = self.bot.get_channel(payload.channel_id)
         message = await channel.fetch_message(payload.message_id)
-        ctx = await self.bot.get_context(message, cls=context.Context)
 
         # Add pp to user who received reaction
         if self.cooldown_expired(receive_cooldown, guild.id, message.author, 60):
             pp_add = 10
-            await self.add_reaction_pp(ctx, message.author, pp_add)
+            await self.add_reaction_pp(message, message.author, pp_add)
 
         # Add pp to user who gave reaction
         if self.cooldown_expired(give_cooldown, guild.id, user, 60):
             pp_add = 5
-            await self.add_reaction_pp(ctx, user, pp_add)
+            await self.add_reaction_pp(message, user, pp_add)
 
     async def add_reaction_pp(self, ctx, user, pp_add):
         new_pp = db.get_levels('pp', ctx.guild.id, user.id) + pp_add
