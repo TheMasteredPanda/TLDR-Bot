@@ -312,7 +312,7 @@ class Levels(commands.Cog):
         if branch is None:
             return await embed_maker.command_error(ctx)
 
-        branch = 'honours' if branch == 'h' or 'honours' else 'parliamentary'
+        branch = 'honours' if branch in ['h', 'honours'] else 'parliamentary'
 
         if branch == 'honours':
             pre = 'h'
