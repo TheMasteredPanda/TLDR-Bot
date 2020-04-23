@@ -48,24 +48,6 @@ class TLDR(commands.Bot):
             embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
             return await channel.send(embed=embed)
 
-    async def on_raw_reaction_add(self, payload):
-        channel = self.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
-        author = message.author
-        user = self.get_user(payload.user_id)
-        emote = payload.emoji
-
-        # skip if user gave reaction to themselves
-        if author.id == payload.user_id:
-            return
-        elif author.bot or user.bot:
-            return
-        elif emote.name not in ('👍', '👎'):
-            return
-
-        levels_cog = self.get_cog('Levels')
-        return await levels_cog.process_reaction(payload)
-
     async def on_message(self, message):
         if message.author.bot:
             return
@@ -85,15 +67,15 @@ class TLDR(commands.Bot):
             return await utility_cog.help(ctx)
 
         if message.content.startswith(prefix):
-            await self.process_commands(message)
+            return await self.process_commands(message)
 
         # Starts leveling process
         levels_cog = self.get_cog('Levels')
         await levels_cog.process_message(message)
 
-        # honours_channels = db.get_levels('honours_channels', message.guild.id)
-        # if message.channel.id in honours_channels:
-        #     await levels_cog.process_hp_message(message)
+        honours_channels = db.get_levels('honours_channels', message.guild.id)
+        if message.channel.id in honours_channels:
+            await levels_cog.process_hp_message(message)
 
     async def process_commands(self, message):
         ctx = await self.get_context(message)
@@ -119,6 +101,9 @@ class TLDR(commands.Bot):
         if before.roles != after.roles:
             utils_cog = self.get_cog('Utils')
             utils_cog.get_user_clearance.invalidate(after.guild.id, after.id)
+
+    async def on_member_remove(self, member):
+        db.levels.update_one({'guild_id': member.guild.id}, {'$unset': {f'users.{member.id}': ''}})
 
     async def close(self):
         await super().close()
