@@ -331,6 +331,11 @@ class Levels(commands.Cog):
                 break
 
             user_id, user_values = u
+            user_role_name = user_values[f'{pre}_role']
+            if user_role_name == '':
+                i -= 1
+                continue
+
             member = ctx.guild.get_member(user_id)
             if member is None:
                 try:
@@ -341,7 +346,6 @@ class Levels(commands.Cog):
                     continue
 
             role_level = await self.user_role_level(ctx, branch, member)
-            user_role_name = user_values[f'{pre}_role']
             lboard_str += f'**#{i + 1}** - {member.name} | **Level {role_level}** {user_role_name}\n'
 
         if lboard_str == '':
@@ -365,38 +369,37 @@ class Levels(commands.Cog):
         if member.bot:
             return
 
+        embed_colour = config.DEFAULT_EMBED_COLOUR
+        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+        embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
+        embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
+
+        member_hp = db.get_levels('hp', ctx.guild.id, member.id)
+        if member_hp > 0:
+            member_h_level = await self.user_role_level(ctx, 'honours', member)
+            h_role_name = db.get_levels('h_role', ctx.guild.id, member.id)
+            member_h_role = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
+            h_rank = self.calculate_user_rank('hp', ctx.guild.id, member.id)
+
+            if h_role_name != '':
+                if member_h_role is None:
+                    member_h_role = await ctx.guild.create_role(name=h_role_name)
+                    await member.add_roles(member_h_role)
+
+                hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{member_h_role.id}>'
+                embed.add_field(name='>Honours', value=hp_value, inline=False)
+
         member_p_level = await self.user_role_level(ctx, 'parliamentary', member)
-        member_h_level = await self.user_role_level(ctx, 'honours', member)
-
         p_role_name = db.get_levels('p_role', ctx.guild.id, member.id)
-        h_role_name = db.get_levels('h_role', ctx.guild.id, member.id)
         member_p_role = discord.utils.find(lambda r: r.name == p_role_name, ctx.guild.roles)
-        member_h_role = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
-
         p_rank = self.calculate_user_rank('pp', ctx.guild.id, member.id)
-        h_rank = self.calculate_user_rank('hp', ctx.guild.id, member.id)
 
         if member_p_role is None:
             member_p_role = await ctx.guild.create_role(name=p_role_name)
             await member.add_roles(member_p_role)
 
-        sp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{member_p_role.id}>'
-
-        if h_role_name == '':
-            hp_value = f'**Level** {member_h_level}'
-        else:
-            if member_h_role is None:
-                member_h_role = await ctx.guild.create_role(name=h_role_name)
-                await member.add_roles(member_h_role)
-
-            hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{member_h_role.id}>'
-
-        embed_colour = config.DEFAULT_EMBED_COLOUR
-        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
-        embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
-        embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
-        embed.add_field(name='>Parliamentary', value=sp_value, inline=False)
-        embed.add_field(name='>Honours', value=hp_value, inline=False)
+        pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{member_p_role.id}>'
+        embed.add_field(name='>Parliamentary', value=pp_value, inline=False)
 
         return await ctx.send(embed=embed)
 
@@ -550,6 +553,10 @@ class Levels(commands.Cog):
 
         user_level = db.get_levels(f'{pre}level', ctx.guild.id, member.id)
         user_role = db.get_levels(f'{pre}role', ctx.guild.id, member.id)
+
+        if user_role == '':
+            return user_level
+
         role_obj = discord.utils.find(lambda r: r.name == user_role, ctx.guild.roles)
 
         if role_obj is None:
@@ -578,6 +585,9 @@ class Levels(commands.Cog):
             return -(int(((user_level-current_level_total)/5)) + 1)
 
     def get_role_index(self, branch, guild_id, user_role):
+        if user_role == '':
+            return None
+
         leveling_routes = db.get_levels('leveling_routes', guild_id)
         all_roles = leveling_routes[branch]
 
