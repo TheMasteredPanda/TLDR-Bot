@@ -237,13 +237,23 @@ class Levels(commands.Cog):
         embed.set_author(name='Leveling Routes', icon_url=ctx.guild.icon_url)
         embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
 
+        # Look up how many people are in a role
+        m_counts = dict.fromkeys([k[0] for k in lvl_routes[branch]], [])
+        count = dict.fromkeys([k[0] for k in lvl_routes[branch]], 0)
+        for r in reversed(lvl_routes[branch]):
+            role = discord.utils.find(lambda _r: _r.name == r[0], ctx.guild.roles)
+            for m in role.members:
+                if m.id not in m_counts[r[0]]:
+                    count[r[0]] += 1
+                    m_counts[r[0]].append(m.id)
+
         value = ''
         for i, _role in enumerate(lvl_routes[branch]):
             role = discord.utils.find(lambda r: r.name == _role[0], ctx.guild.roles)
             if role is None:
                 role = await ctx.guild.create_role(name=_role[0])
-            value += f'\n**#{i + 1}:** <@&{role.id}> - Max Level: {_role[1]}'
-        embed.add_field(name=f'>{branch.title()}', value=value, inline=False)
+            value += f'\n**#{i + 1}:** <@&{role.id}> - {count[role.name]} People'
+        embed.add_field(name=f'>{branch.title()} - Every 5 levels you advance a role', value=value, inline=False)
 
         return await ctx.send(embed=embed)
 
