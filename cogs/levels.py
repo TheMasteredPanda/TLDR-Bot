@@ -451,7 +451,7 @@ class Levels(commands.Cog):
     async def process_hp_message(self, ctx):
         if self.cooldown_expired(hp_cooldown, ctx.guild.id, ctx.author.id, 60):
             hp_add = 5
-            user_hp = db.get_levels('pp', ctx.guild.id, ctx.author.id)
+            user_hp = db.get_levels('hp', ctx.guild.id, ctx.author.id)
             new_hp = user_hp + hp_add
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.hp': new_hp}})
