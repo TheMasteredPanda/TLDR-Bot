@@ -38,17 +38,6 @@ class Connection:
                 'leveling_routes': {
                     'parliamentary': [
                         ('Citizen', 5),
-                        ('Party Member', 5),
-                        ('Party Campaigner', 5),
-                        ('Local Councillor', 5),
-                        ('Council Chair', 5),
-                        ('Mayor', 5),
-                        ('Candidate', 5),
-                        ('Opposition Backbencher', 5),
-                        ('Shadow Minister', 5),
-                        ('Opposition Whip', 5),
-                        ('Shadow Cabinet Minister', 5),
-                        ('Government Backbencher', 5)
                     ],
                     'honours': [
                         ('Public Servant', 5)
@@ -72,10 +61,28 @@ class Connection:
                 'hp': 0,
                 'h_level': 0,
                 'p_role': 'Citizen',
-                'h_role': ''
+                'h_role': '',
+                'settings': {
+                    '@_me': False
+                }
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][user_id] = user
+
+        if value not in doc['users'][user_id]:
+            variable_vals = {
+                'settings': {
+                    '@_me': False
+                }
+            }
+
+            if value not in variable_vals:
+                val = ''
+            else:
+                val = variable_vals[value]
+
+            self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}.{value}': val}})
+            return val
 
         return doc['users'][user_id][value]
 

@@ -473,8 +473,8 @@ class Levels(commands.Cog):
             await self.level_up(ctx, ctx.author, 'honours', new_hp)
 
     async def process_message(self, message):
-        if self.cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 60):
-            pp_add = randint(15, 25)
+        if self.cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 0):
+            pp_add = randint(100, 100)
             author_pp = db.get_levels('pp', message.guild.id, message.author.id)
             new_pp = author_pp + pp_add
 
@@ -541,6 +541,25 @@ class Levels(commands.Cog):
 
         await self.level_up_message(ctx, member, reward_text)
 
+    @commands.command(name='@_me', help='Makes the bot @ you when you level up', usage='@_me', examples=['@_me', '@_me'], clearance='User', cls=command.Command)
+    async def at_me(self, ctx):
+        settings = db.get_levels('settings', ctx.guild.id, ctx.author.id)
+        enabled = settings['@_me']
+        print(enabled)
+        if enabled:
+            msg = 'Disabling @ when you level up'
+            colour = 'orange'
+            boolean = False
+        else:
+            msg = 'Enabling @ when you level up'
+            colour = 'green'
+            boolean = True
+
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.settings.@_me': boolean}})
+        db.get_levels.invalidate('settings', ctx.guild.id, ctx.author.id)
+        embed = embed_maker.message(ctx, msg, colour=colour)
+        return await ctx.send(embed=embed)
+
     async def level_up_message(self, ctx, member, reward_text):
         embed_colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
@@ -549,8 +568,16 @@ class Levels(commands.Cog):
 
         channel_id = db.get_levels('level_up_channel', ctx.guild.id)
         channel = self.bot.get_channel(channel_id)
+
+        settings = db.get_levels('settings', ctx.guild.id, ctx.author.id)
+        enabled = settings['@_me']
+
         if channel is None:
-            await ctx.channel.send(embed=embed)
+            channel = ctx.channel
+
+        print(enabled)
+        if enabled:
+            await channel.send(embed=embed, content=f'<@{member.id}>')
         else:
             await channel.send(embed=embed)
 
