@@ -59,6 +59,7 @@ class Utility(commands.Cog):
 
         msg = await ctx.send(embed=embed)
         await msg.add_reaction('🥳')
+        await ctx.message.delete()
 
         asyncio.create_task(self.timer(msg, embed, giveaway_time, winners))
 
@@ -100,7 +101,7 @@ class Utility(commands.Cog):
             content = ''
             winners_str = 'No one won, no one entered :('
         else:
-            content = f'🎊Congrats to {winners_str}🎊'
+            content = f'🎊 Congrats to {winners_str} 🎊'
 
         new_desc = f"""
         Winners: {winners_str}
