@@ -2,6 +2,8 @@ import time
 import discord
 import re
 import config
+import asyncio
+import random
 from datetime import datetime
 from discord.ext import commands
 from modules import database, command, embed_maker, format_time
@@ -20,8 +22,114 @@ class Utility(commands.Cog):
         ping = (time.monotonic() - before) * 1000
         await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping)}ms")
 
+
+    @commands.command(help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)', usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)]',
+                      examples=['giveaway -i TLDR pin of choice -w 1 -t 7d', 'giveaway -i 1000xp -w 5 -t 24h'], clearance='Mod', cls=command.Command)
+    async def giveaway(self, ctx, *, args=None):
+        if args is None:
+            return await embed_maker.command_error(ctx)
+
+        args = self.parse_giveaway_args(args)
+        item = args['i']
+        winners = str(args['w'])
+        time = args['t']
+        giveaway_time = format_time.parse(time)
+        time_left = format_time.seconds(giveaway_time)
+
+        err = ''
+        if args['i'] == '':
+            err = 'empty items arg'
+        if not winners.isdigit():
+            err = 'invalid winner count'
+        if giveaway_time is None:
+            err = 'Invalid time arg'
+
+        if err:
+            embed = embed_maker.message(ctx, err, colour='red')
+            return await ctx.send(embed=embed)
+
+        description = f"""
+        React with :partying_face: to enter the giveaway!
+        Time Left: **{time_left}**
+        """
+
+        colour = config.DEFAULT_EMBED_COLOUR
+        embed = discord.Embed(title=item, colour=colour, description=description, timestamp=datetime.now())
+        embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
+
+        msg = await ctx.send(embed=embed)
+        await msg.add_reaction('🥳')
+
+        asyncio.create_task(self.timer(msg, embed, giveaway_time, winners))
+
+    async def timer(self, message, embed, time, winners):
+        sleep_duration = time
+        while sleep_duration > 0:
+            description = 'React with :partying_face: to enter the giveaway!'
+            await asyncio.sleep(10)
+            sleep_duration -= 10
+            if sleep_duration != 0:
+                time_left = format_time.seconds(sleep_duration)
+                description += f'\nTime Left: **{time_left}**'
+                embed.description = description
+                await message.edit(embed=embed)
+
+        return await self.timer_complete(message, embed, winners)
+
+    async def timer_complete(self, message, embed, winner_count):
+        msg = await message.channel.fetch_message(message.id)
+        reactions = msg.reactions
+        eligible = []
+        for r in reactions:
+            if r.emoji != '🥳':
+                continue
+            else:
+                eligible = await r.users().flatten()
+                eligible.pop(0)
+
+        winners = []
+        for i in range(int(winner_count)):
+            if len(eligible) == 0:
+                break
+            user = random.choice(eligible)
+            winners.append(user.id)
+            eligible.remove(user)
+
+        winners_str = ', '.join([f'<@{w}>' for w in winners])
+        if winners_str == '':
+            content = ''
+            winners_str = 'No one won, no one entered :('
+        else:
+            content = f'🎊Congrats to {winners_str}🎊'
+
+        new_desc = f"""
+        Winners: {winners_str}
+        """
+        embed.description = new_desc
+        embed.set_footer(text='Ended at')
+        embed.timestamp = datetime.now()
+        embed.color = embed_maker.get_colour('green')
+        await message.clear_reactions()
+        await message.edit(embed=embed, content=content)
+
+    def parse_giveaway_args(self, args):
+        result = {
+            'i': '',
+            'w': 1,
+            't': '24h',
+        }
+        split_args = filter(None, args.split('-'))
+        for v in split_args:
+            tup = tuple(map(str.strip, v.split(' ', 1)))
+            if len(tup) <= 1:
+                continue
+            key, value = tup
+            result[key] = value
+
+        return result
+
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [(num)m/h/d\)',
+                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d)',
                       examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
@@ -212,7 +320,10 @@ class Utility(commands.Cog):
         }
         split_args = filter(None, args.split('-'))
         for a in split_args:
-            key, value = tuple(map(str.strip, a.split(' ', 1)))
+            tup = tuple(map(str.strip, a.split(' ', 1)))
+            if len(tup) <= 1:
+                continue
+            key, value = tup
             result[key] = value
 
         if result['o']:
