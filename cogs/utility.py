@@ -48,11 +48,7 @@ class Utility(commands.Cog):
             embed = embed_maker.message(ctx, err, colour='red')
             return await ctx.send(embed=embed)
 
-        description = f"""
-        React with :partying_face: to enter the giveaway!
-        Time Left: **{time_left}**
-        """
-
+        description = f'React with :partying_face: to enter the giveaway!\nTime Left: **{time_left}**'
         colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(title=item, colour=colour, description=description, timestamp=datetime.now())
         embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
@@ -103,9 +99,7 @@ class Utility(commands.Cog):
         else:
             content = f'🎊 Congrats to {winners_str} 🎊'
 
-        new_desc = f"""
-        Winners: {winners_str}
-        """
+        new_desc = f'Winners: {winners_str}'
         embed.description = new_desc
         embed.set_footer(text='Ended at')
         embed.timestamp = datetime.now()
