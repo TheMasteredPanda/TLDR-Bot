@@ -473,8 +473,8 @@ class Levels(commands.Cog):
             await self.level_up(ctx, ctx.author, 'honours', new_hp)
 
     async def process_message(self, message):
-        if self.cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 0):
-            pp_add = randint(100, 100)
+        if self.cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 60):
+            pp_add = randint(15, 25)
             author_pp = db.get_levels('pp', message.guild.id, message.author.id)
             new_pp = author_pp + pp_add
 
