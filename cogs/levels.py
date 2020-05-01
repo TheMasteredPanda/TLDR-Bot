@@ -333,6 +333,10 @@ class Levels(commands.Cog):
 
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][f'{pre}p'], reverse=True)
+
+        user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
+        user_index = sorted_users.index(user[0])
+
         embed_colour = config.DEFAULT_EMBED_COLOUR
         lboard_str = ''
 
@@ -346,17 +350,21 @@ class Levels(commands.Cog):
                 i -= 1
                 continue
 
-            member = ctx.guild.get_member(user_id)
+            member = ctx.guild.get_member(int(user_id))
             if member is None:
                 try:
-                    member = await ctx.guild.fetch_member(user_id)
+                    member = await ctx.guild.fetch_member(int(user_id))
                 except:
                     i -= 1
                     db.levels.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'users.{user_id}': ''}})
                     continue
 
             role_level = await self.user_role_level(ctx, branch, member)
-            lboard_str += f'**#{i + 1}** - {member.name} | **Level {role_level}** {user_role_name}\n'
+
+            if user_id == str(ctx.author.id):
+                lboard_str += f'***`#{i + 1}`*** - *{member.name} | **Level {role_level}** {user_role_name}*\n'
+            else:
+                lboard_str += f'`#{i + 1}` - {member.name} | **Level {role_level}** {user_role_name}\n'
 
         if lboard_str == '':
             description = 'Damn, this place is empty'
@@ -367,7 +375,35 @@ class Levels(commands.Cog):
         lboard_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
         lboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
-        lboard_msg = await ctx.send(embed=lboard_embed)
+        if user_index <= 9:
+            return await ctx.send(embed=lboard_embed)
+
+        your_pos_str = ''
+        for i in range(-1, 2):
+            if user_index == 10 and i == -1:
+                continue
+
+            u = sorted_users[user_index + i]
+            u_obj = ctx.guild.get_member(int(u[0]))
+            if u_obj is None:
+                try:
+                    u_obj = await ctx.guild.fetch_member(int(u[0]))
+                except:
+                    i -= 1
+                    db.levels.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'users.{u[0]}': ''}})
+                    continue
+
+            user_role_name = u[1][f'{pre}_role']
+            role_level = await self.user_role_level(ctx, branch, u_obj)
+
+            if u[0] == str(ctx.author.id):
+                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name} | **Level {role_level}** {user_role_name}*\n'
+            else:
+                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name} | **Level {role_level}** {user_role_name}\n'
+
+        lboard_embed.add_field(name='Your Position', value=your_pos_str)
+
+        await ctx.send(embed=lboard_embed)
 
     @commands.command(help='Shows your (or someone else\'s) rank and level', usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
     async def rank(self, ctx, member=None):

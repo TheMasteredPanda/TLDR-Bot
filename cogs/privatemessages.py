@@ -239,7 +239,7 @@ class PrivateMessages(commands.Cog):
 
         user_id = open_tickets[ctx.channel.id]
         if user_id:
-            user = self.bot.get_user(user_id)
+            user = self.bot.get_user(int(user_id))
             if user is None:
                 user = await self.bot.fetch_user(user_id)
             await ctx.channel.set_permissions(user, read_messages=True, send_messages=True)

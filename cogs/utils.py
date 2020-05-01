@@ -10,9 +10,9 @@ class Utils(commands.Cog):
     @cache.cache()
     async def get_user_clearance(self, guild_id, member_id):
         guild = self.bot.get_guild(guild_id)
-        member = guild.get_member(member_id)
+        member = guild.get_member(int(member_id))
         if member is None:
-            member = await guild.fetch_member(member_id)
+            member = await guild.fetch_member(int(member_id))
 
         permissions = member.guild_permissions
         clearance = []
