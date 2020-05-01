@@ -32,9 +32,10 @@ class Utility(commands.Cog):
         args = self.parse_giveaway_args(args)
         item = args['i']
         winners = str(args['w'])
-        time = args['t']
-        giveaway_time = format_time.parse(time)
+        giveaway_time = format_time.parse(args['t'])
         time_left = format_time.seconds(giveaway_time)
+
+        expires = round(time.time()) + giveaway_time
 
         err = ''
         if args['i'] == '':
@@ -55,26 +56,24 @@ class Utility(commands.Cog):
 
         msg = await ctx.send(embed=embed)
         await msg.add_reaction('🥳')
-        await ctx.message.delete()
+        await ctx.message.delete(delay=3)
 
-        asyncio.create_task(self.timer(msg, embed, giveaway_time, winners))
+        timer_cog = self.bot.get_cog('Timer')
+        await timer_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='giveaway',
+                                     extras={'winner_count': winners, 'timer_cog': 'Utility', 'timer_function': 'giveaway_timer', 'args': (msg.id, msg.channel.id, embed.to_dict(), giveaway_time)})
 
-    async def timer(self, message, embed, time, winners):
-        sleep_duration = time
-        while sleep_duration > 0:
-            description = 'React with :partying_face: to enter the giveaway!'
-            await asyncio.sleep(10)
-            sleep_duration -= 10
-            if sleep_duration != 0:
-                time_left = format_time.seconds(sleep_duration)
-                description += f'\nTime Left: **{time_left}**'
-                embed.description = description
-                await message.edit(embed=embed)
+    @commands.Cog.listener()
+    async def on_giveaway_timer_over(self, timer):
+        print('over')
+        winner_count = timer['extras']['winner_count']
+        message_id, channel_id, embed, _ = timer['extras']['args']
+        embed = discord.Embed.from_dict(embed)
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            channel = await self.bot.fetch_channel(channel_id)
 
-        return await self.timer_complete(message, embed, winners)
+        msg = await channel.fetch_message(message_id)
 
-    async def timer_complete(self, message, embed, winner_count):
-        msg = await message.channel.fetch_message(message.id)
         reactions = msg.reactions
         eligible = []
         for r in reactions:
@@ -104,8 +103,33 @@ class Utility(commands.Cog):
         embed.set_footer(text='Ended at')
         embed.timestamp = datetime.now()
         embed.color = embed_maker.get_colour('green')
-        await message.clear_reactions()
-        await message.edit(embed=embed, content=content)
+        await msg.clear_reactions()
+        await msg.edit(embed=embed, content=content)
+
+    async def giveaway_timer(self, args):
+        message_id, channel_id, embed, sleep_duration = args
+        embed = discord.Embed.from_dict(embed)
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            channel = await self.bot.fetch_channel(channel_id)
+
+        message = await channel.fetch_message(message_id)
+
+        while sleep_duration > 0:
+            description = 'React with :partying_face: to enter the giveaway!'
+            await asyncio.sleep(10)
+            sleep_duration -= 10
+            if sleep_duration != 0:
+                time_left = format_time.seconds(sleep_duration)
+                prev_time_left = format_time.seconds(sleep_duration + 10)
+                if time_left == prev_time_left:
+                    continue
+
+                description += f'\nTime Left: **{time_left}**'
+                embed.description = description
+                await message.edit(embed=embed)
+
+        return
 
     def parse_giveaway_args(self, args):
         result = {
@@ -214,7 +238,7 @@ class Utility(commands.Cog):
 
         db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{poll_msg.id}': poll}})
 
-        return await ctx.message.delete(delay=5)
+        return await ctx.message.delete(delay=3)
 
     @commands.Cog.listener()
     async def on_anon_poll_timer_over(self, timer):
