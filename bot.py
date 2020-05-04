@@ -79,6 +79,8 @@ class TLDR(commands.Bot):
 
     async def process_commands(self, message):
         ctx = await self.get_context(message)
+        if not ctx.command:
+            return
         utils_cog = self.get_cog('Utils')
         clearance = await utils_cog.get_user_clearance(message.guild.id, message.author.id)
         if ctx.command.clearance not in clearance:
