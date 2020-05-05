@@ -366,11 +366,12 @@ class Levels(commands.Cog):
                     continue
 
             role_level = await self.user_role_level(ctx, branch, member)
+            progress_percent = self.percent_till_next_level(branch, ctx.guild.id, member.id)
 
             if user_id == str(ctx.author.id):
-                lboard_str += f'***`#{i + 1}`*** - *{member.name} | **Level {role_level}** {user_role_name}*\n'
+                lboard_str += f'***`#{i + 1}`*** - *{member.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%***\n'
             else:
-                lboard_str += f'`#{i + 1}` - {member.name} | **Level {role_level}** {user_role_name}\n'
+                lboard_str += f'`#{i + 1}` - {member.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%**\n'
 
         if lboard_str == '':
             description = 'Damn, this place is empty'
@@ -440,7 +441,8 @@ class Levels(commands.Cog):
                     member_h_role = await ctx.guild.create_role(name=h_role_name)
                     await member.add_roles(member_h_role)
 
-                hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{member_h_role.id}>'
+                hp_progress = self.percent_till_next_level('honours', ctx.guild.id, member.id)
+                hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{member_h_role.id}> | Progress: **{hp_progress}%**'
                 embed.add_field(name='>Honours', value=hp_value, inline=False)
 
         member_p_level = await self.user_role_level(ctx, 'parliamentary', member)
@@ -452,7 +454,8 @@ class Levels(commands.Cog):
             member_p_role = await ctx.guild.create_role(name=p_role_name)
             await member.add_roles(member_p_role)
 
-        pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{member_p_role.id}>'
+        pp_progress = self.percent_till_next_level('parliamentary', ctx.guild.id, member.id)
+        pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{member_p_role.id}> | Progress: **{pp_progress}%**'
         embed.add_field(name='>Parliamentary', value=pp_value, inline=False)
 
         return await ctx.send(embed=embed)
@@ -674,6 +677,37 @@ class Levels(commands.Cog):
                 return i
         else:
             return 0
+
+    def percent_till_next_level(self, branch, guild_id, user_id):
+        if branch == 'honours':
+            pre = 'h'
+        else:
+            pre = 'p'
+
+        user_points = db.get_levels(f'{pre}p', guild_id, user_id)
+        user_level = db.get_levels(f'{pre}_level', guild_id, user_id)
+
+        if pre == 'p':
+            # points needed to gain next level from beginning of current level
+            pnu = (5 * (user_level ** 2) + 50 * user_level + 100)
+            # total points needed to gain next level from 0 points
+            tpu = 0
+            for j in range(int(user_level) + 1):
+                tpu += (5 * (j ** 2) + 50 * j + 100)
+
+            # point needed to gain next level
+            pun = tpu - user_points
+
+            percent = 100 - round((pun * 100)/pnu)
+
+        else:
+            pnu = 1000
+            tpu = 1000 * (user_level + 1)
+            pun = tpu - user_points
+
+            percent = 100 - round((pun * 100)/pnu)
+
+        return percent
 
 
 # How much pp is needed until level up
