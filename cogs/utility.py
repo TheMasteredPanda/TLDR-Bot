@@ -451,7 +451,7 @@ class Utility(commands.Cog):
         else:
             if self.bot.get_command(_cmd):
                 cmd = self.bot.get_command(_cmd)
-                if cmd.hidden:
+                if cmd.hidden or cmd.clearance not in clearance:
                     return
                 examples = f' | {prefix}'.join(cmd.examples)
                 cmd_help = f"""
