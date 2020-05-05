@@ -38,10 +38,8 @@ class Timer(commands.Cog):
         await self.call_timer_event(guild_id, timer)
 
     async def call_timer_event(self, guild_id, timer):
-        print('event')
         timer_doc = db.get_timer(guild_id, timer['id'])
         if timer_doc:
-            print('in if')
             db.timers.update_one({'guild_id': guild_id}, {'$pull': {'timers': {'id': timer['id']}}})
             self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
             db.get_timer.invalidate(guild_id, timer['id'])

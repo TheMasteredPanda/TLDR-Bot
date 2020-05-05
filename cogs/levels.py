@@ -317,7 +317,7 @@ class Levels(commands.Cog):
             return await self.level_up(ctx, member, 'honours', new_hp)
 
     @commands.command(help='Shows the leveling leaderboards (parliamentary(p)/honours(h)) on the server',
-                      usage='leaderboard (branch)',
+                      usage='leaderboard (branch)', aliases=['lb'],
                       examples=['leaderboard parliamentary', 'leaderboard honours'], clearance='User',
                       cls=command.Command)
     async def leaderboard(self, ctx, branch='parliamentary'):
@@ -336,7 +336,6 @@ class Levels(commands.Cog):
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted([(u, doc['users'][u]) for u in doc['users'] if doc['users'][u][f'{pre}p'] > 0], key=lambda x: x[1][f'{pre}p'], reverse=True)
-        print(sorted_users)
 
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
         if user:
@@ -589,7 +588,6 @@ class Levels(commands.Cog):
     async def at_me(self, ctx):
         settings = db.get_levels('settings', ctx.guild.id, ctx.author.id)
         enabled = settings['@_me']
-        print(enabled)
         if enabled:
             msg = 'Disabling @ when you level up'
             colour = 'orange'
@@ -619,7 +617,6 @@ class Levels(commands.Cog):
         if channel is None:
             channel = ctx.channel
 
-        print(enabled)
         if enabled:
             await channel.send(embed=embed, content=f'<@{member.id}>')
         else:

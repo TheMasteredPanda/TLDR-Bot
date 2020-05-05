@@ -30,7 +30,7 @@ class Utility(commands.Cog):
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
 
         if cmd is None:
-            cmd_usage_data = [(c, sum(data[c].values())) for c in data]
+            cmd_usage_data = sorted([(c, sum(data[c].values())) for c in data], key=lambda x: x[1], reverse=True)
             embed.set_author(name='Most Used Commands Today', icon_url=ctx.guild.icon_url)
             desc = ''
             for i, c in enumerate(cmd_usage_data):
@@ -115,7 +115,6 @@ class Utility(commands.Cog):
 
     @commands.Cog.listener()
     async def on_giveaway_timer_over(self, timer):
-        print('over')
         winner_count = timer['extras']['winner_count']
         message_id, channel_id, embed, _ = timer['extras']['args']
         embed = discord.Embed.from_dict(embed)
