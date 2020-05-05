@@ -87,12 +87,11 @@ class Dev(commands.Cog):
 	    external_ip = urllib.request.urlopen('https://api.ipify.org/').read().decode('utf8')
 	    disk_usage = psutil.disk_usage('/')
 	    resource_overview = discord.Embed(
-			    title = "Resource Usage Overview",
 			    colour = embed_colour, 
 			    timestamp = datetime.now()
 	    )
-	    resource_overview.set_footer(text=f'Updates whenever this command is invoked', icon_url=ctx.author.avatar_url)
-	    resource_overview.set_author(name=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+	    resource_overview.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
+	    resource_overview.set_author(name='Resource Usage Overview', icon_url=ctx.guild.icon_url)
 	    resource_overview.add_field(name='**CPU Usage**', value=(str(psutil.cpu_percent()) + '%'), inline=False)
 	    resource_overview.add_field(name='**Memory Usage**', value=(str(psutil.virtual_memory().percent) + '%'), inline=False)
 	    resource_overview.add_field(name='**External IP**', value=str(external_ip), inline=False)
