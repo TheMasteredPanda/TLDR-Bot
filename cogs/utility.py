@@ -22,6 +22,46 @@ class Utility(commands.Cog):
         ping = (time.monotonic() - before) * 1000
         await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping)}ms")
 
+    @commands.command(help='See command usage data', usage='command_usage (command)', examples=['command_usage', 'command_usage rank'], clearance='User', cls=command.Command)
+    async def command_usage(self, ctx, cmd=None):
+        data = db.get_data('command_usage', ctx.guild.id)
+
+        embed = discord.Embed(colour=config.DEFAULT_EMBED_COLOUR, timestamp=datetime.today())
+        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+
+        if cmd is None:
+            cmd_usage_data = [(c, sum(data[c].values())) for c in data]
+            embed.set_author(name='Most Used Commands Today', icon_url=ctx.guild.icon_url)
+            desc = ''
+            for i, c in enumerate(cmd_usage_data):
+                if i == 10:
+                    break
+                desc += f'`#{i + 1}` - {c[0]}: **{c[1]}** Uses\n'
+
+            embed.description = desc
+        else:
+            if cmd not in data:
+                embed = embed_maker.message(ctx, 'That command doesn\'t exist or hasn\'t been used yet')
+                return await ctx.send(embed=embed)
+            else:
+                embed.set_author(name=f'`{cmd}` - Most Used By Today', icon_url=ctx.guild.icon_url)
+                desc = ''
+                users = sorted(data[cmd], key=lambda x: x[1])
+                for i, user_id in enumerate(users):
+                    if i == 10:
+                        return
+
+                    calls = data[cmd][user_id]
+
+                    user = self.bot.get_user(int(user_id))
+                    if user is None:
+                        user = await self.bot.fetch_user(user_id)
+                    desc += f'`#{i + 1}` - {user.name}: **{calls}** Calls\n'
+
+                embed.description = desc
+
+        return await ctx.send(embed=embed)
+
     @commands.command(help='See someones profile picture', usage='pfp (@user)', examples=['pfp', 'pfp @Hattyot'], clearance='User', cls=command.Command)
     async def pfp(self, ctx, member=None):
         if member and ctx.message.mentions:

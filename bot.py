@@ -3,6 +3,7 @@ import os
 import aiohttp
 import re
 import traceback
+from datetime import datetime
 from modules import database
 from discord.ext import commands
 from config import BOT_TOKEN, DEFAULT_EMBED_COLOUR, DEFAULT_PREFIX as prefix
@@ -81,6 +82,17 @@ class TLDR(commands.Bot):
         ctx = await self.get_context(message)
         if not ctx.command:
             return
+
+        # command usage data
+        data_date = db.get_data('date', message.guild.id)
+        todays_date = datetime.today().day
+        if int(data_date) != int(todays_date):
+            db.data.update_one({'guild_id': message.guild.id}, {'$unset': {f'command_usage': ''}, '$set': {'date': int(todays_date)}})
+            db.get_data.invalidate('date', message.guild.id)
+
+        db.data.update_one({'guild_id': message.guild.id}, {'$inc': {f'command_usage.{ctx.command.name}.{message.author.id}': 1}})
+        db.get_data.invalidate('command_usage', message.guild.id)
+
         utils_cog = self.get_cog('Utils')
         clearance = await utils_cog.get_user_clearance(message.guild.id, message.author.id)
         if ctx.command.clearance not in clearance:

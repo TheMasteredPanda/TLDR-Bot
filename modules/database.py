@@ -12,6 +12,23 @@ class Connection:
         self.cases = self.db['cases']
         self.server_options = self.db['server_options']
         self.polls = self.db['polls']
+        self.data = self.db['data']
+
+    def _get_data(self, guild_id):
+        doc = self.data.find_one({'guild_id': guild_id})
+        if doc is None:
+            doc = {
+                'guild_id': guild_id,
+                'date': 0,
+                'command_usage': {}
+            }
+            self.data.insert_one(doc)
+        return doc
+
+    @cache.cache()
+    def get_data(self, value, guild_id):
+        doc = self._get_data(guild_id)
+        return doc[value] if value in doc else None
 
     def _get_server_options(self, guild_id):
         doc = self.server_options.find_one({'guild_id': guild_id})
