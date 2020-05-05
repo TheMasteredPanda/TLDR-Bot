@@ -22,6 +22,17 @@ class Utility(commands.Cog):
         ping = (time.monotonic() - before) * 1000
         await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping)}ms")
 
+    @commands.command(help='See someones profile picture', usage='pfp (@user)', examples=['pfp', 'pfp @Hattyot'], clearance='User', cls=command.Command)
+    async def pfp(self, ctx, member=None):
+        if member and ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        else:
+            member = ctx.author
+
+        embed = discord.Embed(description=f'**Profile Picture of {member}**')
+        embed.set_image(url=f'{member.avatar_url}?size=2048')
+
+        return await ctx.send(embed=embed)
 
     @commands.command(help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)', usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)]',
                       examples=['giveaway -i TLDR pin of choice -w 1 -t 7d', 'giveaway -i 1000xp -w 5 -t 24h'], clearance='Mod', cls=command.Command)
