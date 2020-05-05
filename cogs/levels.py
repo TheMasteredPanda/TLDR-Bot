@@ -404,10 +404,11 @@ class Levels(commands.Cog):
             user_role_name = u[1][f'{pre}_role']
             role_level = await self.user_role_level(ctx, branch, u_obj)
 
+            progress_percent = self.percent_till_next_level(branch, ctx.guild.id, u_obj.id)
             if u[0] == str(ctx.author.id):
-                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name} | **Level {role_level}** {user_role_name}*\n'
+                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%***\n'
             else:
-                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name} | **Level {role_level}** {user_role_name}\n'
+                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%**\n'
 
         lboard_embed.add_field(name='Your Position', value=your_pos_str)
 
