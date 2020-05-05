@@ -1,5 +1,5 @@
 import pymongo
-from config import MONGODB_URL
+from config import MONGODB_URL, DEV_IDS
 from modules import cache
 
 
@@ -12,6 +12,23 @@ class Connection:
         self.cases = self.db['cases']
         self.server_options = self.db['server_options']
         self.polls = self.db['polls']
+        self.data = self.db['data']
+
+    def _get_data(self, guild_id):
+        doc = self.data.find_one({'guild_id': guild_id})
+        if doc is None:
+            doc = {
+                'guild_id': guild_id,
+                'date': 0,
+                'command_usage': {}
+            }
+            self.data.insert_one(doc)
+        return doc
+
+    @cache.cache()
+    def get_data(self, value, guild_id):
+        doc = self._get_data(guild_id)
+        return doc[value] if value in doc else None
 
     def _get_server_options(self, guild_id):
         doc = self.server_options.find_one({'guild_id': guild_id})
@@ -38,17 +55,6 @@ class Connection:
                 'leveling_routes': {
                     'parliamentary': [
                         ('Citizen', 5),
-                        ('Party Member', 5),
-			('Party Campaigner', 5),
-                        ('Local Councillor', 5),
-                        ('Council Chair', 5),
-                        ('Mayor', 5),
-                        ('Candidate', 5),
-                        ('Opposition Backbencher', 5),
-                        ('Shadow Minister', 5),
-                        ('Opposition Whip', 5),
-                        ('Shadow Cabinet Minister', 5),
-                        ('Government Backbencher', 5)
                     ],
                     'honours': [
                         ('Public Servant', 5)
@@ -72,10 +78,28 @@ class Connection:
                 'hp': 0,
                 'h_level': 0,
                 'p_role': 'Citizen',
-                'h_role': ''
+                'h_role': '',
+                'settings': {
+                    '@_me': False
+                }
             }
             self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}': user}})
             doc['users'][user_id] = user
+
+        if value not in doc['users'][user_id]:
+            variable_vals = {
+                'settings': {
+                    '@_me': False
+                }
+            }
+
+            if value not in variable_vals:
+                val = ''
+            else:
+                val = variable_vals[value]
+
+            self.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{user_id}.{value}': val}})
+            return val
 
         return doc['users'][user_id][value]
 
@@ -104,7 +128,8 @@ class Connection:
     @cache.cache()
     def get_user_timer(self, guild_id, user_id, event):
         self._get_timers(guild_id)
-        match = self.timers.find_one({'guild_id': guild_id}, {'timers': {'$elemMatch': {'extras.member_id': user_id, 'event': event}}})
+        match = self.timers.find_one({'guild_id': guild_id},
+                                     {'timers': {'$elemMatch': {'extras.member_id': user_id, 'event': event}}})
         return match['timers'][0] if match and 'timers' in match else False
 
     def _get_cases(self, guild_id):
