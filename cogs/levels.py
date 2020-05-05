@@ -125,8 +125,8 @@ class Levels(commands.Cog):
         else:
             return await embed_maker.command_error(ctx, '[#channel]')
 
-    @commands.command(help='See the current list of channels where honours points can be earned', usage='honours_channel_list', examples=['honours_channel_list'], clearance='Mod', cls=command.Command)
-    async def honours_channel_list(self, ctx):
+    @commands.command(help='See the current list of channels where honours points can be earned', usage='honours_channels', examples=['honours_channels'], clearance='Mod', cls=command.Command)
+    async def honours_channels(self, ctx):
         channel_list = db.get_levels('honours_channels', ctx.guild.id)
         channel_list_str = '\n'.join(f'<#{i}>\n' for i in channel_list) if channel_list else 'None'
 
@@ -210,6 +210,8 @@ class Levels(commands.Cog):
             result[key] = value
 
         return result
+
+    # For displaying new leveling routes when they are edited
 
     async def display_new_leveling_routes(self, ctx, branch='parliamentary'):
         embed = discord.Embed(colour=embed_maker.get_colour('green'), timestamp=datetime.now())
@@ -380,6 +382,7 @@ class Levels(commands.Cog):
         lboard_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
         lboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
+        # Displays user position under leaderboard
         if user_index is None or user_index <= 9:
             return await ctx.send(embed=lboard_embed)
 
@@ -425,6 +428,7 @@ class Levels(commands.Cog):
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
         embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
 
+        # checks if honours section needs to be added
         member_hp = db.get_levels('hp', ctx.guild.id, member.id)
         if member_hp > 0:
             member_h_level = await self.user_role_level(ctx, 'honours', member)
@@ -457,10 +461,8 @@ class Levels(commands.Cog):
     def calculate_user_rank(self, branch, guild_id, user_id):
         doc = db.levels.find_one({'guild_id': guild_id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][branch], reverse=True)
-        for i, u in enumerate(sorted_users):
-            u_id, _ = u
-            if u_id == str(user_id):
-                return i + 1
+        user = [u for u in sorted_users if u[0] == str(user_id)]
+        return sorted_users.index(user[0])
 
     async def process_reaction(self, payload):
         guild = self.bot.get_guild(payload.guild_id)
@@ -489,6 +491,7 @@ class Levels(commands.Cog):
     def cooldown_expired(self, cooldown_dict, guild_id, member_id, cooldown_time):
         if guild_id not in cooldown_dict:
             cooldown_dict[guild_id] = {}
+
         if member_id in cooldown_dict[guild_id]:
             if round(time()) >= cooldown_dict[guild_id][member_id]:
                 del cooldown_dict[guild_id][member_id]
