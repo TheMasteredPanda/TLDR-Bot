@@ -332,10 +332,15 @@ class Levels(commands.Cog):
             return
 
         doc = db.levels.find_one({'guild_id': ctx.guild.id})
-        sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][f'{pre}p'], reverse=True)
+        # Sorts users and takes out people who's pp or hp is 0
+        sorted_users = sorted([(u, doc['users'][u]) for u in doc['users'] if doc['users'][u][f'{pre}p'] > 0], key=lambda x: x[1][f'{pre}p'], reverse=True)
+        print(sorted_users)
 
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
-        user_index = sorted_users.index(user[0])
+        if user:
+            user_index = sorted_users.index(user[0])
+        else:
+            user_index = None
 
         embed_colour = config.DEFAULT_EMBED_COLOUR
         lboard_str = ''
@@ -375,7 +380,7 @@ class Levels(commands.Cog):
         lboard_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
         lboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
-        if user_index <= 9:
+        if user_index is None or user_index <= 9:
             return await ctx.send(embed=lboard_embed)
 
         your_pos_str = ''
