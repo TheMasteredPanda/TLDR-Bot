@@ -1,9 +1,13 @@
 import discord
 import ast
+import config
 import logging
+import psutil
+import urllib.request
 from discord.ext import commands
 from config import DEV_IDS
 from modules import database, command
+from datetime import datetime
 
 db = database.Connection()
 logger = logging.getLogger(__name__)
@@ -75,6 +79,26 @@ class Dev(commands.Cog):
     async def kill_bot(self):
         await self.bot.close()
 
+    # adds anglorex resource usage monitor
+
+    @commands.command(hidden=True, help='monitors bot resource usage', usage='resrc_usage', examples=['resrc_usage'], clearance='Dev', cls=command.Command)
+    async def resrc_usage(self, ctx):
+	    prefix = config.DEFAULT_PREFIX
+	    embed_colour = config.DEFAULT_EMBED_COLOUR
+	    external_ip = urllib.request.urlopen('https://api.ipify.org/').read().decode('utf8')
+	    disk_usage = psutil.disk_usage('/')
+	    resource_overview = discord.Embed(
+			    title = "Resource Usage Overview",
+			    colour = embed_colour, 
+			    timestamp = datetime.now()
+	    )
+	    resource_overview.set_footer(text=f'Updates whenever this command is invoked', icon_url=ctx.author.avatar_url)
+	    resource_overview.set_author(name=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+	    resource_overview.add_field(name='**CPU Usage**', value=(str(psutil.cpu_percent()) + '%'), inline=False)
+	    resource_overview.add_field(name='**Memory Usage**', value=(str(psutil.virtual_memory().percent) + '%'), inline=False)
+	    resource_overview.add_field(name='**External IP**', value=str(external_ip), inline=False)
+	    resource_overview.add_field(name='**Disk Usage**', value=(str(disk_usage.percent) + '%'), inline=False)
+	    await ctx.send(embed=resource_overview)
 
 def setup(bot):
     bot.add_cog(Dev(bot))
