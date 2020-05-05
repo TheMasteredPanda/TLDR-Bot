@@ -461,7 +461,7 @@ class Levels(commands.Cog):
         doc = db.levels.find_one({'guild_id': guild_id})
         sorted_users = sorted(doc['users'].items(), key=lambda x: x[1][branch], reverse=True)
         user = [u for u in sorted_users if u[0] == str(user_id)]
-        return sorted_users.index(user[0])
+        return sorted_users.index(user[0]) + 1
 
     async def process_reaction(self, payload):
         guild = self.bot.get_guild(payload.guild_id)
