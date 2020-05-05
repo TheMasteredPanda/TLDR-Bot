@@ -30,7 +30,7 @@ class Utility(commands.Cog):
             member = ctx.author
 
         embed = discord.Embed(description=f'**Profile Picture of {member}**')
-        embed.set_image(url=f'{member.avatar_url}?size=2048')
+        embed.set_image(url=str(member.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
 
         return await ctx.send(embed=embed)
 
