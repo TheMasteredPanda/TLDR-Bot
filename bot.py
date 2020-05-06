@@ -118,12 +118,6 @@ class TLDR(commands.Bot):
         timer_cog = self.get_cog('Timer')
         await timer_cog.run_old_timers()
 
-    async def on_member_join(self, member):
-        if member.bot:
-            return
-        # just adds the member to the database
-        db.get_levels('pp', member.guild.id, member.id)
-
     async def close(self):
         await super().close()
         await self.session.close()
