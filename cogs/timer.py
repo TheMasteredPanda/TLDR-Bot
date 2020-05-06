@@ -26,7 +26,14 @@ class Timer(commands.Cog):
         now = round(time.time())
 
         if timer['expires'] > now:
-            await asyncio.sleep(timer['expires'] - now)
+            if 'timer_cog' in timer['extras'] and 'timer_function' in timer['extras']:
+                cog = self.bot.get_cog(timer['extras']['timer_cog'])
+                timer_function = getattr(cog, timer['extras']['timer_function'])
+                args = timer['extras']['args']
+                task = asyncio.create_task(timer_function(args))
+                await task
+            else:
+                await asyncio.sleep(timer['expires'] - now)
 
         await self.call_timer_event(guild_id, timer)
 

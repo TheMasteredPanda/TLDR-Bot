@@ -3,16 +3,16 @@ import os
 import aiohttp
 import re
 import traceback
-from modules import database, context
+from datetime import datetime
+from modules import database
 from discord.ext import commands
-from config import BOT_TOKEN, DEFAULT_PREFIX, DEFAULT_EMBED_COLOUR
+from config import BOT_TOKEN, DEFAULT_EMBED_COLOUR, DEFAULT_PREFIX as prefix
 
 db = database.Connection()
 paused = False
 
 
 async def get_prefix(bot, message):
-    prefix = DEFAULT_PREFIX
     return commands.when_mentioned_or(prefix)(bot, message)
 
 
@@ -21,7 +21,6 @@ class TLDR(commands.Bot):
         super().__init__(command_prefix=get_prefix, case_insensitive=True, help_command=None)
 
         self.session = aiohttp.ClientSession(loop=self.loop)
-        self.paused = False
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
@@ -50,60 +49,54 @@ class TLDR(commands.Bot):
             embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
             return await channel.send(embed=embed)
 
-    async def on_raw_reaction_add(self, payload):
-        channel = self.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
-        author = message.author
-        user = self.get_user(payload.user_id)
-        emote = payload.emoji
-
-        # skip if user gave reaction to themselves
-        if author.id == payload.user_id:
-            return
-        elif author.bot or user.bot:
-            return
-        elif emote.name not in ('👍', '👎'):
-            return
-
-        levels_cog = self.get_cog('Levels')
-        return await levels_cog.process_reaction(payload)
-
     async def on_message(self, message):
-        ctx = await self.get_context(message, cls=context.Context)
-        if ctx.message.author.bot:
-            return
-
-        if self.paused and ctx.command.name != 'unpause':
+        if message.author.bot:
             return
 
         # just checks if message was sent in pms
-        if ctx.guild is None:
-            if (ctx.command is None and ctx.message.content.startswith(DEFAULT_PREFIX)) or (ctx.command and ctx.command.name == 'help'):
-                pm_cog = self.get_cog('PrivateMessages')
-                return await pm_cog.process_pm(ctx)
+        if message.guild is None:
+            pm_cog = self.get_cog('PrivateMessages')
+            return await pm_cog.process_pm(message)
 
-            return await self.invoke(ctx) if hasattr(ctx.command, 'dm_only') else None
-
+        # checks if bot was mentioned, if was invoke help command
         regex = re.compile(rf'<@!?{self.user.id}>')
         match = re.findall(regex, message.content)
+
         if match:
-            general_cog = self.get_cog('General')
-            return await ctx.invoke(general_cog.help)
+            ctx = await self.get_context(message)
+            utility_cog = self.get_cog('Utility')
+            return await utility_cog.help(ctx)
 
-        await self.process_commands(ctx)
+        if message.content.startswith(prefix):
+            return await self.process_commands(message)
 
+        # Starts leveling process
         levels_cog = self.get_cog('Levels')
-        honours_channels = db.get_levels('honours_channels', ctx.guild.id)
+        await levels_cog.process_message(message)
 
+        honours_channels = db.get_levels('honours_channels', message.guild.id)
         if message.channel.id in honours_channels:
-            await levels_cog.process_hp_message(ctx)
+            await levels_cog.process_hp_message(message)
 
-        return await levels_cog.process_message(ctx)
-
-    async def process_commands(self, ctx):
-        if ctx.command is None:
+    async def process_commands(self, message):
+        ctx = await self.get_context(message)
+        if not ctx.command:
             return
-        if ctx.command.clearance not in ctx.author_clearance:
+
+        # command usage data
+        data_date = db.get_data('date', message.guild.id)
+        todays_date = datetime.today().day
+        if int(data_date) != int(todays_date):
+            db.data.update_one({'guild_id': message.guild.id}, {'$unset': {f'command_usage': ''}, '$set': {'date': int(todays_date)}})
+            db.get_data.invalidate('date', message.guild.id)
+
+        if ctx.command.clearance == 'User':
+            db.data.update_one({'guild_id': message.guild.id}, {'$inc': {f'command_usage.{ctx.command.name}.{message.author.id}': 1}})
+            db.get_data.invalidate('command_usage', message.guild.id)
+
+        utils_cog = self.get_cog('Utils')
+        clearance = await utils_cog.get_user_clearance(message.guild.id, message.author.id)
+        if ctx.command.clearance not in clearance:
             return
 
         await self.invoke(ctx)
@@ -117,6 +110,15 @@ class TLDR(commands.Bot):
         # Run old timers
         timer_cog = self.get_cog('Timer')
         await timer_cog.run_old_timers()
+
+    async def on_member_update(self, before, after):
+        # Invalidates clearance cache if user roles changed
+        if before.roles != after.roles:
+            utils_cog = self.get_cog('Utils')
+            utils_cog.get_user_clearance.invalidate(after.guild.id, after.id)
+
+    async def on_member_remove(self, member):
+        db.levels.update_one({'guild_id': member.guild.id}, {'$unset': {f'users.{member.id}': ''}})
 
     async def close(self):
         await super().close()

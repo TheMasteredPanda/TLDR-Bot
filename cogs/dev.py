@@ -6,7 +6,7 @@ import psutil
 import urllib.request
 from discord.ext import commands
 from config import DEV_IDS
-from modules import database, command
+from modules import database, command, embed_maker
 from datetime import datetime
 
 db = database.Connection()
@@ -33,7 +33,18 @@ def insert_returns(body):
 class Dev(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        
+
+    @commands.command(hidden=True, help='Reload an extension, so you dont have to restart the bot', usage='reload_extension [ext]', examples=['reload_extension cogs.levels'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def reload_extension(self, ctx, ext):
+        if ext in self.bot.extensions.keys():
+            self.bot.reload_extension(ext)
+            embed = embed_maker.message(ctx, f'{ext} has been reloaded', colour='green')
+            return await ctx.send(embed=embed)
+        else:
+            embed = embed_maker.message(ctx, 'That is not a valid extension', colour='red')
+            return await ctx.send(embed=embed)
+
     @commands.command(hidden=True, help='Evaluate code', usage='eval [code]', examples=['eval ctx.author.id'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def eval(self, ctx, *, cmd):
@@ -62,18 +73,6 @@ class Dev(commands.Cog):
         result = (await eval(f"{fn_name}()", env))
         await ctx.send(result)
 
-    @commands.command(hidden=True, help='Pause the bot until further notice', usage='pause', examples=['pause'], clearance='Dev', cls=command.Command)
-    @commands.check(is_dev)
-    async def pause(self, ctx):
-        self.bot.paused = True
-        return await ctx.send('bot has been paused and it wont accept commands anymore')
-
-    @commands.command(hidden=True, help='Unpause the bot', usage='unpause', examples=['unpause'], clearance='Dev', cls=command.Command)
-    @commands.check(is_dev)
-    async def unpause(self, ctx):
-        self.bot.paused = False
-        return await ctx.send('bot has been unpaused and will continue accepting commands')
-
     @commands.command(hidden=True, help='Kill the bot', usage='kill_bot', examples=['kill_bot'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def kill_bot(self):
@@ -88,12 +87,11 @@ class Dev(commands.Cog):
 	    external_ip = urllib.request.urlopen('https://api.ipify.org/').read().decode('utf8')
 	    disk_usage = psutil.disk_usage('/')
 	    resource_overview = discord.Embed(
-			    title = "Resource Usage Overview",
 			    colour = embed_colour, 
 			    timestamp = datetime.now()
 	    )
-	    resource_overview.set_footer(text=f'Updates whenever this command is invoked', icon_url=ctx.author.avatar_url)
-	    resource_overview.set_author(name=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+	    resource_overview.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
+	    resource_overview.set_author(name='Resource Usage Overview', icon_url=ctx.guild.icon_url)
 	    resource_overview.add_field(name='**CPU Usage**', value=(str(psutil.cpu_percent()) + '%'), inline=False)
 	    resource_overview.add_field(name='**Memory Usage**', value=(str(psutil.virtual_memory().percent) + '%'), inline=False)
 	    resource_overview.add_field(name='**External IP**', value=str(external_ip), inline=False)
