@@ -353,9 +353,14 @@ class Levels(commands.Cog):
 
             user_id, user_values = u
             user_role_name = user_values[f'{pre}_role']
+            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+
             if user_role_name == '':
                 i -= 1
                 continue
+
+            if user_role is None:
+                user_role = await ctx.guild.create_role(name=user_role_name)
 
             member = ctx.guild.get_member(int(user_id))
             if member is None:
@@ -370,9 +375,9 @@ class Levels(commands.Cog):
             progress_percent = self.percent_till_next_level(branch, ctx.guild.id, member.id)
 
             if user_id == str(ctx.author.id):
-                lboard_str += f'***`#{i + 1}`*** - *{member.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%***\n'
+                lboard_str += f'***`#{i + 1}`*** - *{member.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%***\n'
             else:
-                lboard_str += f'`#{i + 1}` - {member.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%**\n'
+                lboard_str += f'`#{i + 1}` - {member.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
 
         if lboard_str == '':
             description = 'Damn, this place is empty'
@@ -403,13 +408,22 @@ class Levels(commands.Cog):
                     continue
 
             user_role_name = u[1][f'{pre}_role']
+            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+
+            if user_role_name == '':
+                i -= 1
+                continue
+
+            if user_role is None:
+                user_role = await ctx.guild.create_role(name=user_role_name)
+
             role_level = await self.user_role_level(ctx, branch, u_obj)
 
             progress_percent = self.percent_till_next_level(branch, ctx.guild.id, u_obj.id)
             if u[0] == str(ctx.author.id):
-                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%***\n'
+                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%***\n'
             else:
-                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%**\n'
+                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
 
         lboard_embed.add_field(name='Your Position', value=your_pos_str)
 
