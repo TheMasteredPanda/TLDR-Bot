@@ -528,6 +528,12 @@ class Levels(commands.Cog):
             db.levels.update_one({'guild_id': message.guild.id}, {'$set': {f'users.{message.author.id}.pp': new_pp}})
             db.get_levels.invalidate('pp', message.guild.id, message.author.id)
 
+            # Check role
+            user_role_name = db.get_levels('p_role', message.guild.id, message.author.id)
+            user_role = discord.utils.find(lambda r: r.name == user_role_name, message.guild.roles)
+            if user_role and user_role not in message.author.roles:
+                await message.author.add_roles(user_role)
+
             await self.level_up(message, message.author, 'parliamentary', new_pp)
 
     async def level_up(self, ctx, member, branch, new_value):
