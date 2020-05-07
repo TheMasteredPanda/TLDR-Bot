@@ -40,7 +40,6 @@ class Menu(commands.Cog):
         if user is None:
             user = await self.bot.fetch_user(payload.user_id)
 
-        menu = None
         if message_id in self.menus:
             menu = self.menus
         elif message_id in self.no_expire_menus:

@@ -1,5 +1,6 @@
 import inspect
 import asyncio
+import cachetools
 from functools import wraps
 
 
@@ -21,7 +22,7 @@ def create_coroutine(value):
 
 def cache():
     def decorator(func):
-        _cache = {}
+        _cache = cachetools.LFUCache(maxsize=1024)
 
         def _create_key(args, kwargs):
             def fixed_repr(o):

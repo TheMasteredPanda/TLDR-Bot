@@ -1,5 +1,6 @@
 import discord
 import config
+import re
 from datetime import datetime
 from time import time
 from random import randint
@@ -352,9 +353,14 @@ class Levels(commands.Cog):
 
             user_id, user_values = u
             user_role_name = user_values[f'{pre}_role']
+            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+
             if user_role_name == '':
                 i -= 1
                 continue
+
+            if user_role is None:
+                user_role = await ctx.guild.create_role(name=user_role_name)
 
             member = ctx.guild.get_member(int(user_id))
             if member is None:
@@ -369,9 +375,9 @@ class Levels(commands.Cog):
             progress_percent = self.percent_till_next_level(branch, ctx.guild.id, member.id)
 
             if user_id == str(ctx.author.id):
-                lboard_str += f'***`#{i + 1}`*** - *{member.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%***\n'
+                lboard_str += f'***`#{i + 1}`*** - *{member.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%***\n'
             else:
-                lboard_str += f'`#{i + 1}` - {member.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%**\n'
+                lboard_str += f'`#{i + 1}` - {member.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
 
         if lboard_str == '':
             description = 'Damn, this place is empty'
@@ -402,60 +408,75 @@ class Levels(commands.Cog):
                     continue
 
             user_role_name = u[1][f'{pre}_role']
+            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+
+            if user_role_name == '':
+                i -= 1
+                continue
+
+            if user_role is None:
+                user_role = await ctx.guild.create_role(name=user_role_name)
+
             role_level = await self.user_role_level(ctx, branch, u_obj)
 
             progress_percent = self.percent_till_next_level(branch, ctx.guild.id, u_obj.id)
             if u[0] == str(ctx.author.id):
-                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%***\n'
+                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%***\n'
             else:
-                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name} | **Level {role_level}** {user_role_name} | Progress: **{progress_percent}%**\n'
+                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name} | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
 
         lboard_embed.add_field(name='Your Position', value=your_pos_str)
 
         await ctx.send(embed=lboard_embed)
 
-    @commands.command(help='Shows your (or someone else\'s) rank and level', usage='rank (@member)', examples=['rank', 'rank @Hattyot'], clearance='User', cls=command.Command)
+    @commands.command(help='Shows your (or someone else\'s) rank and level', usage='rank (member)', examples=['rank', 'rank @Hattyot', 'rank Hattyot'], clearance='User', cls=command.Command)
     async def rank(self, ctx, member=None):
         if member and ctx.message.mentions:
-            member = ctx.message.mentions[0]
+            mem = ctx.message.mentions[0]
+        elif member:
+            regex = re.compile(fr'({member.lower()})')
+            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()), ctx.guild.members)
+            if mem is None:
+                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name')
+                return await ctx.send(embed=embed)
         else:
-            member = ctx.author
+            mem = ctx.author
 
-        if member.bot:
+        if mem.bot:
             return
 
         embed_colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
-        embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
-        embed.set_author(name=f'{member.name} - Rank', icon_url=ctx.guild.icon_url)
+        embed.set_footer(text=f'{mem}', icon_url=mem.avatar_url)
+        embed.set_author(name=f'{mem.name} - Rank', icon_url=ctx.guild.icon_url)
 
         # checks if honours section needs to be added
-        member_hp = db.get_levels('hp', ctx.guild.id, member.id)
+        member_hp = db.get_levels('hp', ctx.guild.id, mem.id)
         if member_hp > 0:
-            member_h_level = await self.user_role_level(ctx, 'honours', member)
-            h_role_name = db.get_levels('h_role', ctx.guild.id, member.id)
+            member_h_level = await self.user_role_level(ctx, 'honours', mem)
+            h_role_name = db.get_levels('h_role', ctx.guild.id, mem.id)
             member_h_role = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
-            h_rank = self.calculate_user_rank('hp', ctx.guild.id, member.id)
+            h_rank = self.calculate_user_rank('hp', ctx.guild.id, mem.id)
 
             if h_role_name != '':
                 if member_h_role is None:
                     member_h_role = await ctx.guild.create_role(name=h_role_name)
-                    await member.add_roles(member_h_role)
+                    await mem.add_roles(member_h_role)
 
-                hp_progress = self.percent_till_next_level('honours', ctx.guild.id, member.id)
+                hp_progress = self.percent_till_next_level('honours', ctx.guild.id, mem.id)
                 hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{member_h_role.id}> | Progress: **{hp_progress}%**'
                 embed.add_field(name='>Honours', value=hp_value, inline=False)
 
-        member_p_level = await self.user_role_level(ctx, 'parliamentary', member)
-        p_role_name = db.get_levels('p_role', ctx.guild.id, member.id)
+        member_p_level = await self.user_role_level(ctx, 'parliamentary', mem)
+        p_role_name = db.get_levels('p_role', ctx.guild.id, mem.id)
         member_p_role = discord.utils.find(lambda r: r.name == p_role_name, ctx.guild.roles)
-        p_rank = self.calculate_user_rank('pp', ctx.guild.id, member.id)
+        p_rank = self.calculate_user_rank('pp', ctx.guild.id, mem.id)
 
         if member_p_role is None:
             member_p_role = await ctx.guild.create_role(name=p_role_name)
-            await member.add_roles(member_p_role)
+            await mem.add_roles(member_p_role)
 
-        pp_progress = self.percent_till_next_level('parliamentary', ctx.guild.id, member.id)
+        pp_progress = self.percent_till_next_level('parliamentary', ctx.guild.id, mem.id)
         pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{member_p_role.id}> | Progress: **{pp_progress}%**'
         embed.add_field(name='>Parliamentary', value=pp_value, inline=False)
 
@@ -487,7 +508,7 @@ class Levels(commands.Cog):
         new_pp = db.get_levels('pp', ctx.guild.id, user.id) + pp_add
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{user.id}.pp': new_pp}})
-        db.get_levels.invalidate('pp', ctx.guild.id, user.id)
+        db.get_levels.update('pp', ctx.guild.id, user.id, new_value=new_pp)
 
         await self.level_up(ctx, user, 'parliamentary', new_pp)
 
@@ -512,7 +533,7 @@ class Levels(commands.Cog):
             new_hp = user_hp + hp_add
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.hp': new_hp}})
-            db.get_levels.invalidate('hp', ctx.guild.id, ctx.author.id)
+            db.get_levels.update('hp', ctx.guild.id, ctx.author.id, new_value=new_hp)
 
             if user_hp == 0:
                 return await self.hp_init(ctx, ctx.author, new_hp)
@@ -526,7 +547,7 @@ class Levels(commands.Cog):
             new_pp = author_pp + pp_add
 
             db.levels.update_one({'guild_id': message.guild.id}, {'$set': {f'users.{message.author.id}.pp': new_pp}})
-            db.get_levels.invalidate('pp', message.guild.id, message.author.id)
+            db.get_levels.update('pp', message.guild.id, message.author.id, new_value=new_pp)
 
             # Check role
             user_role_name = db.get_levels('p_role', message.guild.id, message.author.id)
@@ -705,14 +726,14 @@ class Levels(commands.Cog):
             # point needed to gain next level
             pun = tpu - user_points
 
-            percent = 100 - round((pun * 100)/pnu)
+            percent = 100 - int((pun * 100)/pnu)
 
         else:
             pnu = 1000
             tpu = 1000 * (user_level + 1)
             pun = tpu - user_points
 
-            percent = 100 - round((pun * 100)/pnu)
+            percent = 100 - int((pun * 100)/pnu)
 
         return percent
 

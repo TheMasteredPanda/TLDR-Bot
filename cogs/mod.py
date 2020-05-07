@@ -23,7 +23,7 @@ class Mod(commands.Cog):
         self.bot = bot
 
     @commands.command(help='see what roles are whitelisted for an emote', usage='emote_roles [emote]', examples=['emote_roles :TldrNewsUK:'], clearance='Mod', cls=command.Command)
-    async def emote_roles(self, ctx, emote):
+    async def emote_roles(self, ctx, emote=None):
         if emote is None:
             return await embed_maker.command_error(ctx)
 

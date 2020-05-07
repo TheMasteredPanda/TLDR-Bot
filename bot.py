@@ -117,9 +117,6 @@ class TLDR(commands.Bot):
             utils_cog = self.get_cog('Utils')
             utils_cog.get_user_clearance.invalidate(after.guild.id, after.id)
 
-    async def on_member_remove(self, member):
-        db.levels.update_one({'guild_id': member.guild.id}, {'$unset': {f'users.{member.id}': ''}})
-
     async def close(self):
         await super().close()
         await self.session.close()
