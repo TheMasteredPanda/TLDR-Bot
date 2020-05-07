@@ -73,7 +73,9 @@ class Fun(commands.Cog):
             return
 
         if mem:
-            url = str(mem.avatar_url).replace('.webp?size=1024', '.png')
+            url = str(mem.avatar_url).replace('?size=1024', '')
+            if url.endswith('.webp'):
+                url = url.replace('.webp', '.png')
 
         response = requests.get(url)
         _img = BytesIO(response.content)
