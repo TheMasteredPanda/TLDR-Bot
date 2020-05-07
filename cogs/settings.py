@@ -39,6 +39,7 @@ class Settings(commands.Cog):
                 embed = embed_maker.message(ctx, f'Mute role is already set to <@&{role_id}>', colour='red')
                 return await ctx.send(embed=embed)
             db.server_options.update_one({'guild_id': ctx.guild.id}, {'$set': {f'mute_role': role_id}})
+            db.get_server_options.invalidate('mute_role', ctx.guild.id)
 
             embed = embed_maker.message(ctx, f'Mute role has been set to <@&{role_id}>', colour='green')
             return await ctx.send(embed=embed)
@@ -68,6 +69,7 @@ class Settings(commands.Cog):
                 embed = embed_maker.message(ctx, f'Level up channel is already set to <#{channel.id}>', colour='red')
                 return await ctx.send(embed=embed)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'level_up_channel': channel.id}})
+            db.get_levels.invalidate('level_up_channel', ctx.guild.id)
 
             embed = embed_maker.message(ctx, f'Level up channel has been set to <#{channel.id}>', colour='green')
             await ctx.send(embed=embed)

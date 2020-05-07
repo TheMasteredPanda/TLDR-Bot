@@ -42,6 +42,7 @@ class Timer(commands.Cog):
         if timer_doc:
             db.timers.update_one({'guild_id': guild_id}, {'$pull': {'timers': {'id': timer['id']}}})
             self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
+            db.get_timer.invalidate(guild_id, timer['id'])
 
     async def create_timer(self, **kwargs):
         timer_id = str(uuid.uuid4())
