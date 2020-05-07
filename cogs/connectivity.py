@@ -43,7 +43,6 @@ class Connectivity(commands.Cog):
         subscriber.listen()
 
     async def on_patreon_link(self, data):
-        print('called')
         patreon_id = data['patreon_id']
         discord_id = data['discord_id']
         pledges = data['pledges']
@@ -54,6 +53,7 @@ class Connectivity(commands.Cog):
 
         guild_id = doc['guild_id']
         guild = await self.bot.fetch_guild(int(guild_id))
+        db.get_data.invalidate('patreons', guild_id)
 
         member = guild.get_member(int(discord_id))
         if member is None:
