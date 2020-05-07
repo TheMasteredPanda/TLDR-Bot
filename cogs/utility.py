@@ -75,9 +75,8 @@ class Utility(commands.Cog):
         else:
             mem = ctx.author
 
-
         embed = discord.Embed(description=f'**Profile Picture of {mem}**')
-        embed.set_image(url=str(member.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
+        embed.set_image(url=str(mem.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
 
         return await ctx.send(embed=embed)
 
