@@ -508,7 +508,7 @@ class Levels(commands.Cog):
         new_pp = db.get_levels('pp', ctx.guild.id, user.id) + pp_add
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{user.id}.pp': new_pp}})
-        db.get_levels.invalidate('pp', ctx.guild.id, user.id)
+        db.get_levels.update('pp', ctx.guild.id, user.id, new_value=new_pp)
 
         await self.level_up(ctx, user, 'parliamentary', new_pp)
 
@@ -533,7 +533,7 @@ class Levels(commands.Cog):
             new_hp = user_hp + hp_add
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.hp': new_hp}})
-            db.get_levels.invalidate('hp', ctx.guild.id, ctx.author.id)
+            db.get_levels.update('hp', ctx.guild.id, ctx.author.id, new_value=new_hp)
 
             if user_hp == 0:
                 return await self.hp_init(ctx, ctx.author, new_hp)
@@ -547,7 +547,7 @@ class Levels(commands.Cog):
             new_pp = author_pp + pp_add
 
             db.levels.update_one({'guild_id': message.guild.id}, {'$set': {f'users.{message.author.id}.pp': new_pp}})
-            db.get_levels.invalidate('pp', message.guild.id, message.author.id)
+            db.get_levels.update('pp', message.guild.id, message.author.id, new_value=new_pp)
 
             # Check role
             user_role_name = db.get_levels('p_role', message.guild.id, message.author.id)
