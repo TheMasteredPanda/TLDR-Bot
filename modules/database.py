@@ -26,7 +26,7 @@ class Connection:
                 'command_usage': {},
                 'patreons': {
                     # 'user_id': {
-                    #     'account': 'str',
+                    #     'pledges': [] # Shows which accounts user has pledges to
                     # }
                 }
             }
