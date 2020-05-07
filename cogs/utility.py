@@ -433,8 +433,18 @@ class Utility(commands.Cog):
                 continue
 
             if cmd.cog_name not in help_object:
+                # Check if cog is levels and if cmd requires mod perms
+                if cmd.cog_name == 'Levels' and cmd.clearance == 'Mod':
+                    help_object['Levels - Staff'] = cmd
+                    continue
+
                 help_object[cmd.cog_name] = [cmd]
             else:
+                # Check if cog is levels and if cmd requires mod perms
+                if cmd.cog_name == 'Levels' and cmd.clearance == 'Mod':
+                    help_object['Levels - Staff'].append(cmd)
+                    continue
+
                 help_object[cmd.cog_name].append(cmd)
 
         utils = self.bot.get_cog('Utils')
