@@ -49,10 +49,12 @@ class Fun(commands.Cog):
                     embed = embed_maker.message(ctx, 'Image exceeds maximum resolution `3000x3000`', colour='red')
                     return await ctx.send(embed=embed)
 
-                img.transform(resize='800x800>')
+                img.transform(resize='800x800')
                 for i in range(layers):
                     img.liquid_rescale(width=int(img.width * 0.5), height=int(img.height * 0.5), delta_x=1)
                     img.liquid_rescale(width=int(img.width * 1.5), height=int(img.height * 1.5), delta_x=2)
+
+                img.transform(resize='800x800')
 
                 magikd_buffer = BytesIO()
                 img.save(magikd_buffer)
