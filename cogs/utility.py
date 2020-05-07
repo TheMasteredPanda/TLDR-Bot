@@ -62,14 +62,21 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
-    @commands.command(help='See someones profile picture', usage='pfp (@user)', examples=['pfp', 'pfp @Hattyot'], clearance='User', cls=command.Command)
+    @commands.command(help='See someones profile picture', usage='pfp (user)', examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'], clearance='User', cls=command.Command)
     async def pfp(self, ctx, member=None):
         if member and ctx.message.mentions:
-            member = ctx.message.mentions[0]
+            mem = ctx.message.mentions[0]
+        elif member:
+            regex = re.compile(fr'({member.lower()})')
+            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == member, ctx.guild.members)
+            if mem is None:
+                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name', colour='red')
+                return await ctx.send(embed=embed)
         else:
-            member = ctx.author
+            mem = ctx.author
 
-        embed = discord.Embed(description=f'**Profile Picture of {member}**')
+
+        embed = discord.Embed(description=f'**Profile Picture of {mem}**')
         embed.set_image(url=str(member.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
 
         return await ctx.send(embed=embed)

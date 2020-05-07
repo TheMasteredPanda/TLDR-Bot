@@ -435,9 +435,9 @@ class Levels(commands.Cog):
             mem = ctx.message.mentions[0]
         elif member:
             regex = re.compile(fr'({member.lower()})')
-            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()), ctx.guild.members)
+            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == member, ctx.guild.members)
             if mem is None:
-                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name')
+                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name', colour='red')
                 return await ctx.send(embed=embed)
         else:
             mem = ctx.author

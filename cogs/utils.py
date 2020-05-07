@@ -1,6 +1,6 @@
 from discord.ext import commands
 from modules import cache
-from config import DEV_IDS
+import config
 
 
 class Utils(commands.Cog):
@@ -17,7 +17,7 @@ class Utils(commands.Cog):
         permissions = member.guild_permissions
         clearance = []
 
-        if member_id in DEV_IDS:
+        if member_id in config.DEV_IDS:
             clearance.append('Dev')
         if permissions.administrator:
             clearance.append('Admin')
