@@ -21,7 +21,7 @@ class Fun(commands.Cog):
             mem = ctx.message.mentions[0]
         elif source:
             regex = re.compile(fr'({source.lower()})')
-            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == member, ctx.guild.members)
+            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
             if mem is None:
                 # Check if source is image link
                 mimetype, encoding = mimetypes.guess_type(source)
