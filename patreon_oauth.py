@@ -1,25 +1,102 @@
 import flask
-from cogs.utils import Oauth
-from modules import database
+import patreon
+import config
+from modules import database, pubsub
 
 db = database.Connection()
 flask_app = flask.Flask(__name__)
 
 
-@flask_app.route('/', methods=['get'])
-def index():
-    return flask.redirect(Oauth.discord_login_url)
+@flask_app.route('/link_patreon_uk', methods=['get'])
+def index_uk():
+    return flask.redirect(config.Oauth_uk.patreon_login_url)
+
+@flask_app.route('/link_patreon_us', methods=['get'])
+def index_us():
+    return flask.redirect(config.Oauth_us.patreon_login_url)
+
+@flask_app.route('/link_patreon_eu', methods=['get'])
+def index_eu():
+    return flask.redirect(config.Oauth_eu.patreon_login_url)
 
 
-@flask_app.route('/login', methods=['get'])
-def login():
-    # Get user data
-    code = flask.request.args.get('code')
-    access_token = Oauth.get_access_token(code)
-    user_json = Oauth.get_user_json(access_token)
+def get_data(account):
+    get_oauth = {
+        'UK': config.Oauth_uk,
+        'US': config.Oauth_us,
+        'EU': config.Oauth_eu
+    }
+    Oauth = get_oauth[account]
 
-    # Store email
+    oauth_client = patreon.OAuth(Oauth.client_id, Oauth.client_secret)
+    tokens = oauth_client.get_tokens(flask.request.args.get('code'), Oauth.redirect_uri)
+    access_token = tokens['access_token']
+
+    api_client = patreon.API(access_token)
+    user_response = api_client.fetch_user()
+    user = user_response.data()
+    patreon_id = user.id()
+    discord_id = user.attribute('discord_id')
+
+    if discord_id is None:
+        return 'It seems that you havent connected your patreon account with discord, please do so at https://www.patreon.com/settings/apps and try again in a few minutes.\n' \
+               'If it doesn\'t work in 10 minutes, please contact Hattyot or one of the moderators', None, None
+    else:
+        # Get guild id
+        doc = db.pubsub.find_one({'discord_id': discord_id})
+        guild_id = doc['guild_id']
+
+        db.data.update_one({'guild_id': guild_id}, {'$set': {f'patreons.{discord_id}': access_token}})
+
+    pledges = user.relationship('pledges')
+    pledge = pledges[0] if pledges and len(pledges) > 0 else None
+
+    if pledge is None or pledge['attributes']['declined_since'] is not None:
+        return f'It seems like you don\'t have any active patreon pledges to TLDR {account} on this account, if you believe this is a mistake, please contact Hattyot or one of the moderators', None, None
+
+    return patreon_id, discord_id, pledge
 
 
+@flask_app.route('/patreon_uk', methods=['get'])
+def login_uk():
+    patreon_id, discord_id, pledges = get_data('UK')
 
-flask_app.run(debug=True, host='0.0.0.0')
+    # Returns the error message from get_data if there is one
+    if pledges is None:
+        return patreon_id
+
+    publisher = pubsub.Publisher(db.pubsub, 'patreon_link')
+    publisher.push({'patreon_id': patreon_id, 'user_id': discord_id, 'pledges': pledges, 'account': 'UK'})
+
+    return flask.redirect(f'https://discord.com/channels/{config.MAIN_SERVER}')
+
+
+@flask_app.route('/patreon_us', methods=['get'])
+def login_us():
+    patreon_id, discord_id, pledges = get_data('US')
+
+    # Returns the error message from get_data if there is one
+    if pledges is None:
+        return patreon_id
+
+    publisher = pubsub.Publisher(db.pubsub, 'patreon_link')
+    publisher.push({'patreon_id': patreon_id, 'user_id': discord_id, 'pledges': pledges, 'account': 'US'})
+
+    return flask.redirect(f'https://discord.com/channels/{config.MAIN_SERVER}')
+
+
+@flask_app.route('/patreon_eu', methods=['get'])
+def login_eu():
+    patreon_id, discord_id, pledges = get_data('EU')
+
+    # Returns the error message from get_data if there is one
+    if pledges is None:
+        return patreon_id
+
+    publisher = pubsub.Publisher(db.pubsub, 'patreon_link')
+    publisher.push({'patreon_id': patreon_id, 'discord_id': discord_id, 'pledges': pledges, 'account': 'EU'})
+
+    return flask.redirect(f'https://discord.com/channels/{config.MAIN_SERVER}')
+
+
+flask_app.run(host='0.0.0.0')

@@ -14,13 +14,21 @@ class Connection:
         self.polls = self.db['polls']
         self.data = self.db['data']
 
+        # For patreon pub/sub functionality
+        self.pubsub = self.db['pubsub']
+
     def _get_data(self, guild_id):
         doc = self.data.find_one({'guild_id': guild_id})
         if doc is None:
             doc = {
                 'guild_id': guild_id,
                 'date': 0,
-                'command_usage': {}
+                'command_usage': {},
+                'patreons': {
+                    # 'user_id': {
+                    #     'account': 'str',
+                    # }
+                }
             }
             self.data.insert_one(doc)
         return doc
