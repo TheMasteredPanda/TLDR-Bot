@@ -48,7 +48,7 @@ class Fun(commands.Cog):
             return discord.File(fp=magikd_buffer, filename=f'distorted.{ext}'), embed
 
     @commands.command(help='Distort images or peoples profile pictures', usage='distort [image link | @Member] (layers)',
-                      examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot 3'], clearance='User', cls=command.Command)
+                      examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot 3'], clearance='Dev', cls=command.Command)
     async def distort(self, ctx, source=None, layers=1):
         # check if source is member
         url = None
