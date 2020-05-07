@@ -16,7 +16,8 @@ class Fun(commands.Cog):
                       examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot'], clearance='User', cls=command.Command)
     async def distort(self, ctx, source=None):
         # check if source is member
-        url = ''
+        url = None
+        mem = None
         if source and ctx.message.mentions:
             mem = ctx.message.mentions[0]
         elif source:
@@ -28,10 +29,12 @@ class Fun(commands.Cog):
                 if mimetype and mimetype.startswith('image'):
                     # source is image url
                     url = source
-                else:
-                    mem = ctx.author
-        else:
+
+        if source is None:
             mem = ctx.author
+
+        if source and mem is None and url is None:
+            return
 
         if mem:
             url = str(mem.avatar_url).replace('.webp?size=1024', '.png?size=1024')
