@@ -250,6 +250,7 @@ class Mod(commands.Cog):
             mute_role = discord.utils.find(lambda r: re.match(regex, r.name.lower()), ctx.guild.roles)
             if mute_role:
                 db.server_options.update_one({'guild_id': ctx.guild.id}, {'$set': {'mute_role': mute_role.id}})
+                db.get_server_options.invalidate(ctx.guild.id, 'mute_role')
             else:
                 embed = embed_maker.message(ctx, f'You don\'t have a mute role set and i couldn\'t find one.\nPlease make one and set it with `{config.DEFAULT_PREFIX}mute_role [role id]`', colour='red ')
                 return await ctx.send(embed=embed)
@@ -268,6 +269,8 @@ class Mod(commands.Cog):
         self.new_case(ctx, member, reason=reason, length=parsed_length, time=round(time.time()))
         await timer_cog.create_timer(guild_id=ctx.guild.id, expires=end_time, event='mute', extras={'member_id': member.id, 'by': ctx.author.id})
         await member.add_roles(mute_role, reason=reason)
+
+        db.get_user_timer.invalidate(ctx.guild.id, member.id, 'mute')
 
     @commands.Cog.listener()
     async def on_mute_timer_over(self, timer):
@@ -299,6 +302,7 @@ class Mod(commands.Cog):
         mute_role = ctx.guild.get_role(mute_role_id)
 
         await member.remove_roles(mute_role, reason=reason)
+        db.get_user_timer.invalidate(ctx.guild.id, member.id, 'mute')
         db.timers.update_one({'guild_id': ctx.guild.id}, {'$pull': {'timers': {'event': 'mute', 'extras.member_id': member.id}}})
 
         embed = embed_maker.message(ctx, 'user has been unmuted', colour='green')
@@ -312,6 +316,7 @@ class Mod(commands.Cog):
             case_doc[k] = v
 
         db.cases.update_one({'guild_id': ctx.guild.id}, {'$push': {f'users.{member.id}.{ctx.command.name}': case_doc}})
+        db.get_cases.invalidate(ctx.command.name, ctx.guild.id, member.id)
 
 
 def setup(bot):

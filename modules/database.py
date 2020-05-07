@@ -25,6 +25,7 @@ class Connection:
             self.data.insert_one(doc)
         return doc
 
+    @cache.cache()
     def get_data(self, value, guild_id):
         doc = self._get_data(guild_id)
         return doc[value] if value in doc else None
@@ -39,6 +40,7 @@ class Connection:
             self.server_options.insert_one(doc)
         return doc
 
+    @cache.cache()
     def get_server_options(self, guild_id, value):
         doc = self._get_server_options(guild_id)
         return doc[value] if value in doc else None
@@ -63,6 +65,7 @@ class Connection:
             self.levels.insert_one(doc)
         return doc
 
+    @cache.cache()
     def get_levels(self, value, guild_id, user_id=None):
         doc = self._get_levels(guild_id)
         if user_id is None:
@@ -115,12 +118,14 @@ class Connection:
             self.timers.insert_one(doc)
         return doc
 
+    @cache.cache()
     def get_timer(self, guild_id, timer_id):
         doc = self._get_timers(guild_id)
         timers = doc['timers']
         timer = [t for t in timers if t['id'] == timer_id]
         return timer[0] if timer else None
 
+    @cache.cache()
     def get_user_timer(self, guild_id, user_id, event):
         self._get_timers(guild_id)
         match = self.timers.find_one({'guild_id': guild_id},
@@ -154,6 +159,7 @@ class Connection:
             self.cases.insert_one(doc)
         return doc
 
+    @cache.cache()
     def get_cases(self, value, guild_id, user_id=None):
         doc = self._get_cases(guild_id)
         if user_id is None:
@@ -185,6 +191,7 @@ class Connection:
             self.polls.insert_one(doc)
         return doc
 
+    @cache.cache()
     def get_polls(self, guild_id, message_id=None):
         doc = self._get_polls(guild_id)
         if message_id is None:
