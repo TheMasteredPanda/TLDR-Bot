@@ -88,11 +88,9 @@ class TLDR(commands.Bot):
         todays_date = datetime.today().day
         if int(data_date) != int(todays_date):
             db.data.update_one({'guild_id': message.guild.id}, {'$unset': {f'command_usage': ''}, '$set': {'date': int(todays_date)}})
-            db.get_data.invalidate('date', message.guild.id)
 
         if ctx.command.clearance == 'User':
             db.data.update_one({'guild_id': message.guild.id}, {'$inc': {f'command_usage.{ctx.command.name}.{message.author.id}': 1}})
-            db.get_data.invalidate('command_usage', message.guild.id)
 
         utils_cog = self.get_cog('Utils')
         clearance = await utils_cog.get_user_clearance(message.guild.id, message.author.id)
@@ -116,9 +114,6 @@ class TLDR(commands.Bot):
         if before.roles != after.roles:
             utils_cog = self.get_cog('Utils')
             utils_cog.get_user_clearance.invalidate(after.guild.id, after.id)
-
-    async def on_member_remove(self, member):
-        db.levels.update_one({'guild_id': member.guild.id}, {'$unset': {f'users.{member.id}': ''}})
 
     async def close(self):
         await super().close()

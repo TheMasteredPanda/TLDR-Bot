@@ -300,7 +300,6 @@ class Utility(commands.Cog):
             return
 
         db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ""}})
-        db.get_polls.invalidate(guild_id, message_id)
 
         question = timer['extras']['question']
         emote_count = poll
