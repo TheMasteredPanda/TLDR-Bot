@@ -59,15 +59,6 @@ class TLDR(commands.Bot):
             pm_cog = self.get_cog('PrivateMessages')
             return await pm_cog.process_pm(message)
 
-        # checks if bot was mentioned, if was invoke help command
-        regex = re.compile(rf'<@!?{self.user.id}>')
-        match = re.findall(regex, message.content)
-
-        if match:
-            ctx = await self.get_context(message)
-            utility_cog = self.get_cog('Utility')
-            return await utility_cog.help(ctx)
-
         if message.content.startswith(config.DEFAULT_PREFIX):
             return await self.process_commands(message)
 
@@ -78,6 +69,15 @@ class TLDR(commands.Bot):
         honours_channels = db.get_levels('honours_channels', message.guild.id)
         if message.channel.id in honours_channels:
             await levels_cog.process_hp_message(message)
+
+        # checks if bot was mentioned, if was invoke help command
+        regex = re.compile(rf'<@!?{self.user.id}>')
+        match = re.findall(regex, message.content)
+
+        if match:
+            ctx = await self.get_context(message)
+            utility_cog = self.get_cog('Utility')
+            return await utility_cog.help(ctx)
 
     async def process_commands(self, message):
         ctx = await self.get_context(message)
