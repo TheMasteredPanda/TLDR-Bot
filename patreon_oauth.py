@@ -41,12 +41,6 @@ def get_data(account):
     if discord_id is None:
         return 'It seems that you havent connected your patreon account with discord, please do so at https://www.patreon.com/settings/apps and try again in a few minutes.\n' \
                'If it doesn\'t work in 10 minutes, please contact Hattyot or one of the moderators', None, None
-    else:
-        # Get guild id
-        doc = db.pubsub.find_one({'discord_id': discord_id})
-        guild_id = doc['guild_id']
-
-        db.data.update_one({'guild_id': guild_id}, {'$set': {f'patreons.{discord_id}': access_token}})
 
     pledges = user.relationship('pledges')
     pledge = pledges[0] if pledges and len(pledges) > 0 else None
@@ -68,7 +62,11 @@ def login_uk():
     publisher = pubsub.Publisher(db.pubsub, 'patreon_link')
     publisher.push({'patreon_id': patreon_id, 'user_id': discord_id, 'pledges': pledges, 'account': 'UK'})
 
-    return flask.redirect(f'https://discord.com/channels/{config.MAIN_SERVER}')
+    # Gets guild id
+    doc = db.pubsub.find_one({'discord_id': int(discord_id)})
+    guild_id = doc['guild_id']
+
+    return flask.redirect(f'https://discord.com/channels/{guild_id}')
 
 
 @flask_app.route('/patreon_us', methods=['get'])
@@ -82,7 +80,11 @@ def login_us():
     publisher = pubsub.Publisher(db.pubsub, 'patreon_link')
     publisher.push({'patreon_id': patreon_id, 'user_id': discord_id, 'pledges': pledges, 'account': 'US'})
 
-    return flask.redirect(f'https://discord.com/channels/{config.MAIN_SERVER}')
+    # Gets guild id
+    doc = db.pubsub.find_one({'discord_id': int(discord_id)})
+    guild_id = doc['guild_id']
+
+    return flask.redirect(f'https://discord.com/channels/{guild_id}')
 
 
 @flask_app.route('/patreon_eu', methods=['get'])
@@ -96,7 +98,11 @@ def login_eu():
     publisher = pubsub.Publisher(db.pubsub, 'patreon_link')
     publisher.push({'patreon_id': patreon_id, 'discord_id': discord_id, 'pledges': pledges, 'account': 'EU'})
 
-    return flask.redirect(f'https://discord.com/channels/{config.MAIN_SERVER}')
+    # Gets guild id
+    doc = db.pubsub.find_one({'discord_id': int(discord_id)})
+    guild_id = doc['guild_id']
+
+    return flask.redirect(f'https://discord.com/channels/{guild_id}')
 
 
 flask_app.run(host='0.0.0.0')
