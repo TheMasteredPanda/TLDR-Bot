@@ -51,7 +51,6 @@ class Levels(commands.Cog):
         new_role_route_list.insert(len(leveling_routes[branch]), (new_role.name, round(int(role_level))))
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
-        db.get_levels.invalidate('leveling_routes', ctx.guild.id)
 
         await ctx.send(f'added {new_role.name} to {branch} route')
         await self.display_new_leveling_routes(ctx, branch.lower())
@@ -79,7 +78,6 @@ class Levels(commands.Cog):
 
                 await m.add_roles(role)
                 db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{m.id}.{pre}_role': role.name}})
-                db.get_levels.invalidate(f'{pre}_role', ctx.guild.id, m.id)
 
                 user_role_level = await self.user_role_level(ctx, branch, m, 0)
                 reward_text = f'Congrats **{m.name}** you\'ve advanced to a level **{user_role_level}** <@&{role.id}>'
@@ -99,7 +97,6 @@ class Levels(commands.Cog):
                 embed = embed_maker.message(ctx, f'That channel is already on the list', colour='red')
                 return await ctx.send(embed=embed)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'honours_channels': channel.id}})
-            db.get_levels.invalidate('honours_channels', ctx.guild.id)
 
             embed = embed_maker.message(ctx, f'<#{channel.id}> has been added to the list', colour='green')
             await ctx.send(embed=embed)
@@ -119,7 +116,6 @@ class Levels(commands.Cog):
                 embed = embed_maker.message(ctx, f'That channel is not on the list', colour='red')
                 return await ctx.send(embed=embed)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'honours_channels': channel.id}})
-            db.get_levels.invalidate('honours_channels', ctx.guild.id)
 
             embed = embed_maker.message(ctx, f'<#{channel.id}> has been removed from the list', colour='green')
             await ctx.send(embed=embed)
@@ -186,7 +182,6 @@ class Levels(commands.Cog):
                 new_role_list[i] = (role_name, round(int(role_level)))
 
                 db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_list}})
-                db.get_levels.invalidate('leveling_routes', ctx.guild.id)
 
                 await ctx.send(f'Edited {role_name}')
                 return await self.display_new_leveling_routes(ctx, branch.lower())
@@ -197,7 +192,6 @@ class Levels(commands.Cog):
         pre = 'p_' if branch.lower() == 'parliamentary' else 'h_'
         for m in role.members:
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{m.id}.{pre}role': role.name}})
-            db.get_levels.invalidate(f'{pre}role', ctx.guild.id, m.id)
 
     def parse_role_args(self, args):
         result = dict.fromkeys(['b', 'r', 'l', 'nr', 'nl'], '')
@@ -287,7 +281,6 @@ class Levels(commands.Cog):
         new_hp = amount + user_hp
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.hp': new_hp}})
-        db.get_levels.invalidate('hp', ctx.guild.id, member.id)
 
         embed = embed_maker.message(ctx, f'**{member.name}** has been awarded **{amount} honours points**', colour='green')
         await ctx.send(embed=embed)
@@ -308,7 +301,6 @@ class Levels(commands.Cog):
 
         await member.add_roles(h_role)
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.h_role': h_role.name}})
-        db.get_levels.invalidate('h_role', ctx.guild.id, member.id)
 
         if new_hp < 1000:
             lvl = 0
@@ -508,7 +500,6 @@ class Levels(commands.Cog):
         new_pp = db.get_levels('pp', ctx.guild.id, user.id) + pp_add
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{user.id}.pp': new_pp}})
-        db.get_levels.invalidate('pp', ctx.guild.id, user.id)
 
         await self.level_up(ctx, user, 'parliamentary', new_pp)
 
@@ -533,7 +524,6 @@ class Levels(commands.Cog):
             new_hp = user_hp + hp_add
 
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.hp': new_hp}})
-            db.get_levels.invalidate('hp', ctx.guild.id, ctx.author.id)
 
             if user_hp == 0:
                 return await self.hp_init(ctx, ctx.author, new_hp)
@@ -547,7 +537,6 @@ class Levels(commands.Cog):
             new_pp = author_pp + pp_add
 
             db.levels.update_one({'guild_id': message.guild.id}, {'$set': {f'users.{message.author.id}.pp': new_pp}})
-            db.get_levels.invalidate('pp', message.guild.id, message.author.id)
 
             # Check role
             user_role_name = db.get_levels('p_role', message.guild.id, message.author.id)
@@ -591,7 +580,6 @@ class Levels(commands.Cog):
 
             await member.add_roles(new_role_obj)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.{pre}role': new_role_obj.name}})
-            db.get_levels.invalidate(f'{pre}role', ctx.guild.id, member.id)
 
             user_role_level = await self.user_role_level(ctx, branch, member, lvls_up)
             reward_text = f'Congrats **{member.name}** you\'ve advanced to a level **{user_role_level}** <@&{new_role_obj.id}>'
@@ -611,7 +599,6 @@ class Levels(commands.Cog):
             reward_text += '!'
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.{pre}level': lvls_up}})
-        db.get_levels.invalidate(f'{pre}level', ctx.guild.id, member.id)
 
         await self.level_up_message(ctx, member, reward_text)
 
@@ -629,7 +616,6 @@ class Levels(commands.Cog):
             boolean = True
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.settings.@_me': boolean}})
-        db.get_levels.invalidate('settings', ctx.guild.id, ctx.author.id)
         embed = embed_maker.message(ctx, msg, colour=colour)
         return await ctx.send(embed=embed)
 
