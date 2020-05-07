@@ -12,12 +12,13 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='Distort images or peoples profile pictures', usage='distort [image link | @Member]',
-                      examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot'], clearance='User', cls=command.Command)
-    async def distort(self, ctx, source=None):
+    @commands.command(help='Distort images or peoples profile pictures', usage='distort [image link | @Member] (layers)',
+                      examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot 3'], clearance='User', cls=command.Command)
+    async def distort(self, ctx, source=None, layers=1):
         # check if source is member
         url = None
         mem = None
+
         if source and ctx.message.mentions:
             mem = ctx.message.mentions[0]
         elif source:
@@ -44,14 +45,14 @@ class Fun(commands.Cog):
             _img = BytesIO(response.content)
             _img.seek(0)
             with wImage(file=_img) as img:
-                # img.alpha_channel = True
                 if img.size >= (3000, 3000):
                     embed = embed_maker.message(ctx, 'Image exceeds maximum resolution `3000x3000`', colour='red')
                     return await ctx.send(embed=embed)
 
                 img.transform(resize='800x800>')
-                img.liquid_rescale(width=int(img.width * 0.5), height=int(img.height * 0.5), delta_x=1)
-                img.liquid_rescale(width=int(img.width * 1.5), height=int(img.height * 1.5), delta_x=2)
+                for i in range(layers):
+                    img.liquid_rescale(width=int(img.width * 0.5), height=int(img.height * 0.5), delta_x=1)
+                    img.liquid_rescale(width=int(img.width * 1.5), height=int(img.height * 1.5), delta_x=2)
 
                 magikd_buffer = BytesIO()
                 img.save(magikd_buffer)
