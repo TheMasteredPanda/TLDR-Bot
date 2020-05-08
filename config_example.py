@@ -4,6 +4,8 @@ DEV_IDS = [0]
 DEFAULT_EMBED_COLOUR = 0x00a6ad
 DEFAULT_PREFIX = '>'
 MAIN_SERVER = 0
+WEB_API_URL = ''
+# my web api github: https://github.com/Hattyot/image_processor
 
 class Patreon(object):
     client_id = ''
