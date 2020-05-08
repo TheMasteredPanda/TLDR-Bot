@@ -735,6 +735,9 @@ class Levels(commands.Cog):
 
             percent = 100 - int((pun * 100)/pnu)
 
+        if percent == 100 and pun != 0:
+            return 99.9
+
         return percent
 
 
