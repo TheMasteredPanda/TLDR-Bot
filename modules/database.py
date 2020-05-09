@@ -62,10 +62,10 @@ class Connection:
                 'level_up_channel': 0,
                 'leveling_routes': {
                     'parliamentary': [
-                        ('Citizen', 5),
+                        ('Citizen', 5, []),  # 0: name of role 1: how many levels in role 2: rewards list sent to user
                     ],
                     'honours': [
-                        ('Public Servant', 5)
+                        ('Public Servant', 5, [])
                     ]
                 },
                 'honours_channels': []
