@@ -51,12 +51,12 @@ class Utility(commands.Cog):
 
             if mem:
                 embed.set_author(name=f'`{mem.name}` - Most Used Commands Today', icon_url=ctx.guild.icon_url)
-                user_data = {key: value for (key, value) in data.items() if str(mem.id) in value}
+                user_data = sorted([(key, value[str(mem.id)]) for (key, value) in data.items() if str(mem.id) in value], key=lambda x: x[1], reverse=True)
                 desc = ''
                 for i, c in enumerate(user_data):
                     if i == 10:
                         break
-                    desc += f'`#{i + 1}` - {c}: **{user_data[c][str(mem.id)]}** Uses\n'
+                    desc += f'`#{i + 1}` - {c[0]}: **{c[1]}** Uses\n'
 
                 if desc == '':
                     desc = f'{mem.name} hasn\'t used any commands'
@@ -66,6 +66,7 @@ class Utility(commands.Cog):
                 embed = embed_maker.message(ctx, 'Couldn\'t find a command or user with that', colour='red')
                 return await ctx.send(embed=embed)
 
+            # check if arg is command
             elif arg in data:
                 embed.set_author(name=f'`{arg}` - Most Used By Today', icon_url=ctx.guild.icon_url)
                 desc = ''
