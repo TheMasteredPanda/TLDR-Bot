@@ -22,15 +22,17 @@ class Utility(commands.Cog):
         ping = (time.monotonic() - before) * 1000
         await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping)}ms")
 
-    @commands.command(help='See command usage data', usage='command_usage (command)', examples=['command_usage', 'command_usage rank'], clearance='User', cls=command.Command)
-    async def command_usage(self, ctx, cmd=None):
+    @commands.command(help='See command usage data', usage='command_usage (command | user)',
+                      examples=['command_usage', 'command_usage rank', 'command_usage Hattyot'], clearance='User', cls=command.Command)
+    async def command_usage(self, ctx, arg=None):
         data = db.get_data('command_usage', ctx.guild.id)
 
         embed = discord.Embed(colour=config.DEFAULT_EMBED_COLOUR, timestamp=datetime.today())
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
 
-        if cmd is None:
+        if arg is None:
             cmd_usage_data = sorted([(c, sum(data[c].values())) for c in data], key=lambda x: x[1], reverse=True)
+            print(cmd_usage_data)
             embed.set_author(name='Most Used Commands Today', icon_url=ctx.guild.icon_url)
             desc = ''
             for i, c in enumerate(cmd_usage_data):
@@ -40,37 +42,67 @@ class Utility(commands.Cog):
 
             embed.description = desc
         else:
-            if cmd not in data:
-                embed = embed_maker.message(ctx, 'That command doesn\'t exist or hasn\'t been used yet')
-                return await ctx.send(embed=embed)
+            # check if arg is user
+            if arg and ctx.message.mentions:
+                mem = ctx.message.mentions[0]
             else:
-                embed.set_author(name=f'`{cmd}` - Most Used By Today', icon_url=ctx.guild.icon_url)
+                regex = re.compile(fr'({arg.lower()})')
+                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == arg, ctx.guild.members)
+
+            if mem:
+                embed.set_author(name=f'`{mem.name}` - Most Used Commands Today', icon_url=ctx.guild.icon_url)
+                user_data = sorted([(key, value[str(mem.id)]) for (key, value) in data.items() if str(mem.id) in value], key=lambda x: x[1], reverse=True)
                 desc = ''
-                users = sorted(data[cmd], key=lambda x: x[1])
+                for i, c in enumerate(user_data):
+                    if i == 10:
+                        break
+                    desc += f'`#{i + 1}` - {c[0]}: **{c[1]}** Uses\n'
+
+                if desc == '':
+                    desc = f'{mem.name} hasn\'t used any commands'
+                embed.description = desc
+
+            if mem is None and arg not in data:
+                embed = embed_maker.message(ctx, 'Couldn\'t find a command or user with that', colour='red')
+                return await ctx.send(embed=embed)
+
+            # check if arg is command
+            elif arg in data:
+                embed.set_author(name=f'`{arg}` - Most Used By Today', icon_url=ctx.guild.icon_url)
+                desc = ''
+                users = sorted(data[arg], key=lambda x: x[1])
                 for i, user_id in enumerate(users):
                     if i == 10:
                         return
 
-                    calls = data[cmd][user_id]
+                    calls = data[arg][user_id]
 
                     user = self.bot.get_user(int(user_id))
                     if user is None:
                         user = await self.bot.fetch_user(user_id)
                     desc += f'`#{i + 1}` - {user.name}: **{calls}** Calls\n'
 
+                if desc == '':
+                    desc = f'{mem.name} hasn\'t been used by anyone'
                 embed.description = desc
 
         return await ctx.send(embed=embed)
 
-    @commands.command(help='See someones profile picture', usage='pfp (@user)', examples=['pfp', 'pfp @Hattyot'], clearance='User', cls=command.Command)
+    @commands.command(help='See someones profile picture', usage='pfp (user)', examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'], clearance='User', cls=command.Command)
     async def pfp(self, ctx, member=None):
         if member and ctx.message.mentions:
-            member = ctx.message.mentions[0]
+            mem = ctx.message.mentions[0]
+        elif member:
+            regex = re.compile(fr'({member.lower()})')
+            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == member, ctx.guild.members)
+            if mem is None:
+                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name', colour='red')
+                return await ctx.send(embed=embed)
         else:
-            member = ctx.author
+            mem = ctx.author
 
-        embed = discord.Embed(description=f'**Profile Picture of {member}**')
-        embed.set_image(url=str(member.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
+        embed = discord.Embed(description=f'**Profile Picture of {mem}**')
+        embed.set_image(url=str(mem.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
 
         return await ctx.send(embed=embed)
 
@@ -424,6 +456,13 @@ class Utility(commands.Cog):
 
         for cmd in cmds:
             if hasattr(cmd, 'dm_only'):
+                continue
+
+            # Check if cog is levels and if cmd requires mod perms
+            if cmd.cog_name == 'Levels' and 'Levels - Staff' not in help_object:
+                help_object['Levels - Staff'] = []
+            if cmd.cog_name == 'Levels' and cmd.clearance != 'User':
+                help_object['Levels - Staff'].append(cmd)
                 continue
 
             if cmd.cog_name not in help_object:

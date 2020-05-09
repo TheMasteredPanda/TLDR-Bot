@@ -4,16 +4,16 @@ import aiohttp
 import re
 import traceback
 from datetime import datetime
-from modules import database
+from modules import database, pubsub
 from discord.ext import commands
-from config import BOT_TOKEN, DEFAULT_EMBED_COLOUR, DEFAULT_PREFIX as prefix
+import config
 
 db = database.Connection()
 paused = False
 
 
 async def get_prefix(bot, message):
-    return commands.when_mentioned_or(prefix)(bot, message)
+    return commands.when_mentioned_or(config.DEFAULT_PREFIX)(bot, message)
 
 
 class TLDR(commands.Bot):
@@ -27,6 +27,7 @@ class TLDR(commands.Bot):
             if filename.endswith('.py'):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
+
 
     async def on_command_error(self, ctx, exception):
         trace = exception.__traceback__
@@ -45,7 +46,7 @@ class TLDR(commands.Bot):
         guild = self.get_guild(669640013666975784)
         if guild is not None:
             channel = self.get_channel(671991712800964620)
-            embed_colour = DEFAULT_EMBED_COLOUR
+            embed_colour = config.DEFAULT_EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
             return await channel.send(embed=embed)
 
@@ -58,16 +59,7 @@ class TLDR(commands.Bot):
             pm_cog = self.get_cog('PrivateMessages')
             return await pm_cog.process_pm(message)
 
-        # checks if bot was mentioned, if was invoke help command
-        regex = re.compile(rf'<@!?{self.user.id}>')
-        match = re.findall(regex, message.content)
-
-        if match:
-            ctx = await self.get_context(message)
-            utility_cog = self.get_cog('Utility')
-            return await utility_cog.help(ctx)
-
-        if message.content.startswith(prefix):
+        if message.content.startswith(config.DEFAULT_PREFIX):
             return await self.process_commands(message)
 
         # Starts leveling process
@@ -77,6 +69,15 @@ class TLDR(commands.Bot):
         honours_channels = db.get_levels('honours_channels', message.guild.id)
         if message.channel.id in honours_channels:
             await levels_cog.process_hp_message(message)
+
+        # checks if bot was mentioned, if was invoke help command
+        regex = re.compile(rf'<@!?{self.user.id}>')
+        match = re.findall(regex, message.content)
+
+        if match:
+            ctx = await self.get_context(message)
+            utility_cog = self.get_cog('Utility')
+            return await utility_cog.help(ctx)
 
     async def process_commands(self, message):
         ctx = await self.get_context(message)
@@ -122,7 +123,7 @@ class TLDR(commands.Bot):
         await self.session.close()
 
     def run(self):
-        super().run(BOT_TOKEN, reconnect=False)
+        super().run(config.BOT_TOKEN, reconnect=False)
 
 
 def main():

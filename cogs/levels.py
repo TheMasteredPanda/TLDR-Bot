@@ -19,6 +19,124 @@ class Levels(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(help='Set or remove perks from parliamentary or honours roles which will be sent to user once they recieve that role',
+                      usage='perk [action] -r [role name] -p (perk 1) | (perk 2) | (perk 3)',
+                      examples=['perk set -r Party Member -p Access to party emotes | Access to the Ask TLDR channel', 'perk remove -r Party Member'],
+                      clearance='Mod', cls=command.Command)
+    async def perk(self, ctx, action=None, *, args=None):
+        if action is None:
+            return await embed_maker.command_error(ctx)
+
+        valid_actions = ['set', 'remove']
+        if action not in valid_actions:
+            return await embed_maker.command_error(ctx, '[action]')
+
+        if args is None:
+            embed = embed_maker.message(ctx, 'Missing args', colour='red')
+            return await ctx.send(embed=embed)
+
+        leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
+        honours_branch = leveling_routes['honours']
+        parliamentary_branch = leveling_routes['parliamentary']
+
+        parsed_args = self.parse_rewards_args(args)
+        role_name = parsed_args['r']
+        err = ''
+        if not role_name:
+            err = 'Invalid arg: role name'
+        else:
+            filtered_parliamentary = list(filter(lambda x: x[0].lower() == role_name.lower(), parliamentary_branch))
+            filtered_honours = list(filter(lambda x: x[0].lower() == role_name.lower(), honours_branch))
+            if filtered_parliamentary:
+                role_index = parliamentary_branch.index(filtered_parliamentary[0])
+                branch = 'parliamentary'
+            elif filtered_honours:
+                role_index = honours_branch.index(filtered_honours[0])
+                branch = 'honours'
+            else:
+                err = 'Invalid arg: role name'
+
+        perks = parsed_args['p']
+        if not perks:
+            err = 'Invalid arg: perks'
+
+        if err:
+            embed = embed_maker.message(ctx, err, colour='red')
+            return await ctx.send(embed=embed)
+
+        # edit role instance in leveling routes list by replacing it
+        new_role_tuple = (filtered_parliamentary[0][0], filtered_parliamentary[0][1], perks)
+        print(leveling_routes)
+        leveling_routes[branch][role_index] = new_role_tuple
+
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': leveling_routes[branch]}})
+        db.get_levels.invalidate('leveling_routes', ctx.guild.id)
+
+        perks_str = "\n • ".join(perks)
+        msg = f'Added perks to {role_name}:\n • {perks_str}'
+        embed = embed_maker.message(ctx, msg, colour='green')
+        await ctx.send(embed=embed)
+
+    @commands.command(help='See all the perks that a role has to offer',
+                      usage='perks [role name]',
+                      examples=['perks Party Member'],
+                      clearance='User', cls=command.Command)
+    async def perks(self, ctx, role_name=None):
+        if role_name is None:
+            return await embed_maker.command_error(ctx)
+
+        leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
+        honours_branch = leveling_routes['honours']
+        parliamentary_branch = leveling_routes['parliamentary']
+
+        filtered_parliamentary = list(filter(lambda x: x[0].lower() == role_name.lower(), parliamentary_branch))
+        filtered_honours = list(filter(lambda x: x[0].lower() == role_name.lower(), honours_branch))
+        if filtered_parliamentary:
+            role = filtered_parliamentary[0]
+        elif filtered_honours:
+            role = filtered_honours[0]
+        else:
+            embed = embed_maker.message(ctx, 'I couldn\'t find a role by that name', colour='red')
+            return await ctx.send(embed=embed)
+
+        # checks if perks list in role tuple
+        if len(role) < 3 or not role[2]:
+            msg = f'**{role[0]}** currently offers no perks'
+        else:
+            perks_str = "\n • ".join(role[2])
+            msg = f'Perks for {role[0]}:\n • {perks_str}'
+
+        embed = embed_maker.message(ctx, msg)
+        await ctx.send(embed=embed)
+
+    def parse_rewards_args(self, args):
+        result = {
+            'r': '',
+            'p': []
+        }
+
+        # Filters out empty strings
+        split_args = filter(None, args.split('-'))
+        for a in split_args:
+            # creates tuple of arg and it's value and removes whitespaces where necessary
+            match = tuple(map(str.strip, a.split(' ', 1)))
+
+            # returns if arg is missing value
+            if len(match) < 2:
+                return result
+
+            key, value = match
+
+            # Special case for p (perks)
+            if key == 'p':
+                perks = list(map(str.strip, value.split('|', 1)))
+                result['p'] = perks
+                continue
+
+            result[key] = value
+
+        return result
+
     @commands.command(help='Add a role to a leveling route (honours/parliamentary)',
                       usage='add_role -b [branch] -r [role name] -l [max level]',
                       examples=['add_role -b honours -r Lord -l 5'], clearance='Admin', cls=command.Command)
@@ -48,7 +166,8 @@ class Levels(commands.Cog):
                 return await ctx.send('failed to create role, missing permissions')
 
         new_role_route_list = leveling_routes[branch][:]
-        new_role_route_list.insert(len(leveling_routes[branch]), (new_role.name, round(int(role_level))))
+        new_role_tuple = (new_role.name, int(role_level), [])
+        new_role_route_list.insert(len(leveling_routes[branch]), new_role_tuple)
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'leveling_routes.{branch}': new_role_route_list}})
         db.get_levels.invalidate('leveling_routes', ctx.guild.id)
@@ -84,7 +203,7 @@ class Levels(commands.Cog):
                 user_role_level = await self.user_role_level(ctx, branch, m, 0)
                 reward_text = f'Congrats **{m.name}** you\'ve advanced to a level **{user_role_level}** <@&{role.id}>'
 
-                return await self.level_up_message(ctx, m, reward_text)
+                return await self.level_up_message(ctx, m, reward_text, new_role_tuple)
 
     @commands.command(help='Add a channel to the list of channels, in which honours points can be gained', usage='add_honours_channels [#channel]', examples=['add_honours_channels #court'], clearance='Admin', cls=command.Command)
     async def add_honours_channel(self, ctx, channel=None):
@@ -300,7 +419,8 @@ class Levels(commands.Cog):
     async def hp_init(self, ctx, member, new_hp):
         leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
         # gets the name of the first honours role
-        h_role_name = leveling_routes['honours'][0][0]
+        h_role_tuple = leveling_routes['honours'][0]
+        h_role_name = h_role_tuple[0]
         h_role = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
 
         if h_role is None:
@@ -313,7 +433,7 @@ class Levels(commands.Cog):
         if new_hp < 1000:
             lvl = 0
             reward_text = f'Congrats **{member.name}** you\'ve advanced to a level **{lvl}** <@&{h_role.id}> due to your contributions!'
-            return await self.level_up_message(ctx, member, reward_text)
+            return await self.level_up_message(ctx, member, reward_text, h_role_tuple)
         else:
             return await self.level_up(ctx, member, 'honours', new_hp)
 
@@ -435,9 +555,9 @@ class Levels(commands.Cog):
             mem = ctx.message.mentions[0]
         elif member:
             regex = re.compile(fr'({member.lower()})')
-            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()), ctx.guild.members)
+            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == member, ctx.guild.members)
             if mem is None:
-                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name')
+                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name', colour='red')
                 return await ctx.send(embed=embed)
         else:
             mem = ctx.author
@@ -577,17 +697,20 @@ class Levels(commands.Cog):
              await member.add_roles(role)
 
         user_role_level = await self.user_role_level(ctx, branch, member, lvls_up)
-
+        new_role = ''
         if user_role_level < 0:
             # Get next role
             leveling_routes = db.get_levels('leveling_routes', ctx.guild.id)
             roles = leveling_routes[branch]
             role_index = self.get_role_index(branch, ctx.guild.id, role.name)
-            new_role = roles[role_index + abs(user_role_level)][0]
+            if len(roles) - 1 < role_index + abs(user_role_level):
+                new_role = roles[-1]
+            else:
+                new_role = roles[role_index + abs(user_role_level)][0]
 
             new_role_obj = discord.utils.find(lambda r: r.name == new_role, ctx.guild.roles)
             if new_role_obj is None:
-                new_role_obj = await ctx.guild.create_role(name=new_role)
+                new_role_obj = await ctx.guild.create_role(name=new_role[0])
 
             await member.add_roles(new_role_obj)
             db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.{pre}role': new_role_obj.name}})
@@ -613,7 +736,7 @@ class Levels(commands.Cog):
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.{pre}level': lvls_up}})
         db.get_levels.invalidate(f'{pre}level', ctx.guild.id, member.id)
 
-        await self.level_up_message(ctx, member, reward_text)
+        await self.level_up_message(ctx, member, reward_text, new_role if new_role else ())
 
     @commands.command(name='@_me', help='Makes the bot @ you when you level up', usage='@_me', examples=['@_me', '@_me'], clearance='User', cls=command.Command)
     async def at_me(self, ctx):
@@ -633,7 +756,7 @@ class Levels(commands.Cog):
         embed = embed_maker.message(ctx, msg, colour=colour)
         return await ctx.send(embed=embed)
 
-    async def level_up_message(self, ctx, member, reward_text):
+    async def level_up_message(self, ctx, member, reward_text, role_tuple):
         embed_colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, description=reward_text, timestamp=datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
@@ -652,6 +775,25 @@ class Levels(commands.Cog):
             await channel.send(embed=embed, content=f'<@{member.id}>')
         else:
             await channel.send(embed=embed)
+
+        # Sends user info about perks if role has them
+        if len(role_tuple) < 3 or not role_tuple[2]:
+            return
+        else:
+            role = discord.utils.find(lambda r: r.name == role_tuple[0], ctx.guild.roles)
+            if role is None:
+                role = await ctx.guild.create_role(name=role_tuple[0])
+
+            perks_str = "\n • ".join(role_tuple[2])
+            msg = f'**Congrats** again on advancing to **{role.id}**!' \
+                  f'\nThis role also gives you new **perks:**' \
+                  f'\n • {perks_str}' \
+                  f'\n\nFor more info on these perks ask one of the TLDR server mods'
+            embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
+            embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
+            embed.set_author(name='New Perks!', icon_url=ctx.guild.icon_url)
+
+            return await member.send(embed=embed)
 
     # Returns the level of current role
     async def user_role_level(self, ctx, branch, member, lvl_add=0):
@@ -734,6 +876,9 @@ class Levels(commands.Cog):
             pun = tpu - user_points
 
             percent = 100 - int((pun * 100)/pnu)
+
+        if percent == 100 and pun != 0:
+            return 99.9
 
         return percent
 

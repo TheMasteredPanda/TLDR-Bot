@@ -14,13 +14,21 @@ class Connection:
         self.polls = self.db['polls']
         self.data = self.db['data']
 
+        # For patreon pub/sub functionality
+        self.pubsub = self.db['pubsub']
+
     def _get_data(self, guild_id):
         doc = self.data.find_one({'guild_id': guild_id})
         if doc is None:
             doc = {
                 'guild_id': guild_id,
                 'date': 0,
-                'command_usage': {}
+                'command_usage': {},
+                'patreons': {
+                    # 'user_id': {
+                    #     'pledges': [] # Shows which accounts user has pledges to
+                    # }
+                }
             }
             self.data.insert_one(doc)
         return doc
@@ -54,10 +62,10 @@ class Connection:
                 'level_up_channel': 0,
                 'leveling_routes': {
                     'parliamentary': [
-                        ('Citizen', 5),
+                        ('Citizen', 5, []),  # 0: name of role 1: how many levels in role 2: rewards list sent to user
                     ],
                     'honours': [
-                        ('Public Servant', 5)
+                        ('Public Servant', 5, [])
                     ]
                 },
                 'honours_channels': []
