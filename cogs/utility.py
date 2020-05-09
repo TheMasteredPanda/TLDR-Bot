@@ -106,8 +106,9 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
-    @commands.command(help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)', usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)]',
-                      examples=['giveaway -i TLDR pin of choice -w 1 -t 7d', 'giveaway -i 1000xp -w 5 -t 24h'], clearance='Mod', cls=command.Command)
+    @commands.command(help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)',
+                      usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)] -r (restrict giveaway to a certain role)',
+                      examples=['giveaway -i TLDR pin of choice -w 1 -t 7d', 'giveaway -i 1000xp -w 5 -t 24h -r Party Member'], clearance='Mod', cls=command.Command)
     async def giveaway(self, ctx, *, args=None):
         if args is None:
             return await embed_maker.command_error(ctx)
@@ -115,9 +116,9 @@ class Utility(commands.Cog):
         args = self.parse_giveaway_args(args)
         item = args['i']
         winners = str(args['w'])
+        restrict_to_role = args['r']
         giveaway_time = format_time.parse(args['t'])
         time_left = format_time.seconds(giveaway_time)
-
         expires = round(time.time()) + giveaway_time
 
         err = ''
@@ -127,12 +128,22 @@ class Utility(commands.Cog):
             err = 'invalid winner count'
         if giveaway_time is None:
             err = 'Invalid time arg'
+        if restrict_to_role:
+            role = discord.utils.find(lambda r: r.name.lower() == restrict_to_role.lower(), ctx.guild.roles)
+            if not role:
+                err = f'I couldn\'t find a role by the name {restrict_to_role}'
+        else:
+            role = ''
 
         if err:
             embed = embed_maker.message(ctx, err, colour='red')
             return await ctx.send(embed=embed)
 
-        description = f'React with :partying_face: to enter the giveaway!\nTime Left: **{time_left}**'
+        role_id = '' if not role else role.id
+
+        s = 's' if int(winners) > 1 else ''
+        winner_role_str = f'\nWinner{s} will be chosen from users who have the <@&{role.id}> role'
+        description = f'React with :partying_face: to enter the giveaway!{winner_role_str}\nTime Left: **{time_left}**'
         colour = config.DEFAULT_EMBED_COLOUR
         embed = discord.Embed(title=item, colour=colour, description=description, timestamp=datetime.now())
         embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
@@ -143,12 +154,12 @@ class Utility(commands.Cog):
 
         timer_cog = self.bot.get_cog('Timer')
         await timer_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='giveaway',
-                                     extras={'winner_count': winners, 'timer_cog': 'Utility', 'timer_function': 'giveaway_timer', 'args': (msg.id, msg.channel.id, embed.to_dict(), giveaway_time)})
+                                     extras={'timer_cog': 'Utility', 'timer_function': 'giveaway_timer',
+                                             'args': (msg.id, msg.channel.id, embed.to_dict(), giveaway_time, winners, role_id)})
 
     @commands.Cog.listener()
     async def on_giveaway_timer_over(self, timer):
-        winner_count = timer['extras']['winner_count']
-        message_id, channel_id, embed, _ = timer['extras']['args']
+        message_id, channel_id, embed, _, winner_count, role_id = timer['extras']['args']
         embed = discord.Embed.from_dict(embed)
         channel = self.bot.get_channel(channel_id)
         if channel is None:
@@ -162,8 +173,13 @@ class Utility(commands.Cog):
             if r.emoji != '🥳':
                 continue
             else:
-                eligible = await r.users().flatten()
-                eligible.pop(0)
+                if not role_id:
+                    eligible = await r.users().flatten()
+                    eligible.pop(0)
+                else:
+                    eligible = [user for user in await r.users().flatten() if role_id in [role.id for role in user.roles]]
+
+                # removes bot from list
 
         winners = []
         for i in range(int(winner_count)):
@@ -176,7 +192,10 @@ class Utility(commands.Cog):
         winners_str = ', '.join([f'<@{w}>' for w in winners])
         if winners_str == '':
             content = ''
-            winners_str = 'No one won, no one entered :('
+            if role_id:
+                winners_str = 'No one won, no one eligible entered :('
+            else:
+                winners_str = 'No one won, no one entered :('
         else:
             content = f'🎊 Congrats to {winners_str} 🎊'
 
@@ -189,7 +208,7 @@ class Utility(commands.Cog):
         await msg.edit(embed=embed, content=content)
 
     async def giveaway_timer(self, args):
-        message_id, channel_id, embed, sleep_duration = args
+        message_id, channel_id, embed, sleep_duration, winner_count, role_id = args
         embed = discord.Embed.from_dict(embed)
         channel = self.bot.get_channel(channel_id)
         if channel is None:
@@ -198,7 +217,9 @@ class Utility(commands.Cog):
         message = await channel.fetch_message(message_id)
 
         while sleep_duration > 0:
-            description = 'React with :partying_face: to enter the giveaway!'
+            s = 's' if int(winner_count) > 1 else ''
+            winner_role_str = f'\nWinner{s} will be chosen from users who have the <@&{role_id}> role'
+            description = f'React with :partying_face: to enter the giveaway!{winner_role_str}'
             await asyncio.sleep(10)
             sleep_duration -= 10
             if sleep_duration != 0:
@@ -218,6 +239,7 @@ class Utility(commands.Cog):
             'i': '',
             'w': 1,
             't': '24h',
+            'r': ''
         }
         split_args = filter(None, args.split('-'))
         for v in split_args:
