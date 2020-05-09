@@ -2,6 +2,7 @@ import discord
 import re
 import requests
 import config
+import random
 from io import BytesIO
 from modules import command, embed_maker
 from discord.ext import commands
@@ -40,6 +41,10 @@ class Fun(commands.Cog):
 
         if source is None:
             mem = ctx.author
+
+        # Choose a random member
+        if source == 'random':
+            mem = random.choice(ctx.guild.members)
 
         if mem and url is None:
             url = str(mem.avatar_url).replace('webp', 'png')
