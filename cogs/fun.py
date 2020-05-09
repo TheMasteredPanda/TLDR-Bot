@@ -25,10 +25,18 @@ class Fun(commands.Cog):
         if source and ctx.message.mentions:
             mem = ctx.message.mentions[0]
         elif source:
-            regex = re.compile(fr'({source.lower()})')
-            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
-            if mem is None:
-                url = source
+            # check if source is emote
+            emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
+            match = re.findall(emote_regex, source)
+            if match:
+                emote = [emote for emote in ctx.guild.emojis if str(emote.id) == match[0]][0]
+                url = str(emote.url)
+            else:
+                # Check if source is member
+                regex = re.compile(fr'({source.lower()})')
+                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
+                if mem is None:
+                    url = source
 
         if source is None:
             mem = ctx.author
