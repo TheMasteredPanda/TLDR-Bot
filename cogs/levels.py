@@ -647,8 +647,8 @@ class Levels(commands.Cog):
         return True
 
     async def process_hp_message(self, ctx):
-        if self.cooldown_expired(hp_cooldown, ctx.guild.id, ctx.author.id, 0):
-            hp_add = 900
+        if self.cooldown_expired(hp_cooldown, ctx.guild.id, ctx.author.id, 45):
+            hp_add = 10
             user_hp = db.get_levels('hp', ctx.guild.id, ctx.author.id)
             new_hp = user_hp + hp_add
 
