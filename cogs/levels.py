@@ -81,7 +81,7 @@ class Levels(commands.Cog):
                       usage='perks [role name]',
                       examples=['perks Party Member'],
                       clearance='User', cls=command.Command)
-    async def perks(self, ctx, role_name=None):
+    async def perks(self, ctx, *, role_name=None):
         if role_name is None:
             return await embed_maker.command_error(ctx)
 
@@ -661,7 +661,7 @@ class Levels(commands.Cog):
             await self.level_up(ctx, ctx.author, 'honours', new_hp)
 
     async def process_message(self, message):
-        if self.cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 45):
+        if self.cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 60):
             pp_add = randint(15, 25)
             author_pp = db.get_levels('pp', message.guild.id, message.author.id)
             new_pp = author_pp + pp_add
@@ -706,9 +706,9 @@ class Levels(commands.Cog):
             if len(roles) - 1 < role_index + abs(user_role_level):
                 new_role = roles[-1]
             else:
-                new_role = roles[role_index + abs(user_role_level)][0]
+                new_role = roles[role_index + abs(user_role_level)]
 
-            new_role_obj = discord.utils.find(lambda r: r.name == new_role, ctx.guild.roles)
+            new_role_obj = discord.utils.find(lambda r: r.name == new_role[0], ctx.guild.roles)
             if new_role_obj is None:
                 new_role_obj = await ctx.guild.create_role(name=new_role[0])
 
@@ -777,7 +777,7 @@ class Levels(commands.Cog):
             await channel.send(embed=embed)
 
         # Sends user info about perks if role has them
-        if len(role_tuple) < 3 or not role_tuple[2]:
+        if len(role_tuple) < 3 or not bool(role_tuple[2]):
             return
         else:
             role = discord.utils.find(lambda r: r.name == role_tuple[0], ctx.guild.roles)
@@ -785,7 +785,7 @@ class Levels(commands.Cog):
                 role = await ctx.guild.create_role(name=role_tuple[0])
 
             perks_str = "\n • ".join(role_tuple[2])
-            msg = f'**Congrats** again on advancing to **{role.id}**!' \
+            msg = f'**Congrats** again on advancing to **{role.name}**!' \
                   f'\nThis role also gives you new **perks:**' \
                   f'\n • {perks_str}' \
                   f'\n\nFor more info on these perks ask one of the TLDR server mods'
