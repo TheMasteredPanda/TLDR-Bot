@@ -770,7 +770,7 @@ class Leveling(commands.Cog):
             levels_user['hp'] += hp_add
             db.levels.update_one(
                 {'guild_id': message.guild.id},
-                {'$set': {f'users.{message.author.id}.pp': levels_user['hp']}}
+                {'$set': {f'users.{message.author.id}.hp': levels_user['hp']}}
             )
 
             # Check if user leveled up
