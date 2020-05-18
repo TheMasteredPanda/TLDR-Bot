@@ -13,7 +13,8 @@ class Fun(commands.Cog):
         self.bot = bot
 
     @commands.command(help='Distort images or peoples profile pictures', usage='distort [image link | @Member]',
-                      examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot'], clearance='User', cls=command.Command)
+                      examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot'],
+                      clearance='User', cls=command.Command)
     async def distort(self, ctx, source=None):
         url = None
         mem = None
@@ -33,7 +34,7 @@ class Fun(commands.Cog):
                 emote = [emote for emote in ctx.guild.emojis if str(emote.id) == match[0]][0]
                 url = str(emote.url)
             else:
-                # Check if source is member
+                # Check if source is member name or id
                 regex = re.compile(fr'({source.lower()})')
                 mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
                 if mem is None:
