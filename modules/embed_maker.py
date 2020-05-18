@@ -1,9 +1,6 @@
 import discord
 import config
 from datetime import datetime
-from modules import database
-
-db = database.Connection()
 
 
 def get_colour(colour):
@@ -14,20 +11,18 @@ def get_colour(colour):
     }.get(colour, 0x00a6ad)
 
 
-def message(ctx, msg, *, title=None, footer=None,colour=None):
-    if colour is None:
-        embed_colour = config.DEFAULT_EMBED_COLOUR
-    else:
-        embed_colour = get_colour(colour)
+async def message(ctx, msg, *, title=None, footer=None, colour=None):
+    embed_colour = config.EMBED_COLOUR if colour is None else get_colour(colour)
 
     embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
-    embed.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
+    embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+
     if title:
         embed.set_author(name=title, icon_url=ctx.guild.icon_url)
     if footer:
         embed.set_footer(text=footer)
 
-    return embed
+    return await ctx.send(embed=embed)
 
 
 async def command_error(ctx, bad_arg=None):
@@ -41,6 +36,6 @@ async def command_error(ctx, bad_arg=None):
         embed_colour = get_colour('red')
         description = f'**Invalid Argument:** {bad_arg}\n\n**Usage:** {command.usage}\n**Examples:** {examples}'
 
-    embed = discord.Embed(colour=embed_colour, description=description, title=f'>{command.name}')
+    embed = discord.Embed(colour=embed_colour, description=description, title=f'>{command.name}', timestamp=datetime.now())
     embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
-    await ctx.send(embed=embed)
+    return await ctx.send(embed=embed)

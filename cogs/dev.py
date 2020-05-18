@@ -34,7 +34,9 @@ class Dev(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(hidden=True, help='Reload an extension, so you dont have to restart the bot', usage='reload_extension [ext]', examples=['reload_extension cogs.levels'], clearance='Dev', cls=command.Command)
+    @commands.command(hidden=True, help='Reload an extension, so you dont have to restart the bot',
+                      usage='reload_extension [ext]', examples=['reload_extension cogs.levels'],
+                      clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def reload_extension(self, ctx, ext):
         if ext in self.bot.extensions.keys():
@@ -45,7 +47,8 @@ class Dev(commands.Cog):
             embed = embed_maker.message(ctx, 'That is not a valid extension', colour='red')
             return await ctx.send(embed=embed)
 
-    @commands.command(hidden=True, help='Evaluate code', usage='eval [code]', examples=['eval ctx.author.id'], clearance='Dev', cls=command.Command)
+    @commands.command(hidden=True, help='Evaluate code', usage='eval [code]',
+                      examples=['eval ctx.author.id'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def eval(self, ctx, *, cmd):
         fn_name = "_eval_expr"
@@ -73,30 +76,33 @@ class Dev(commands.Cog):
         result = (await eval(f"{fn_name}()", env))
         await ctx.send(result)
 
-    @commands.command(hidden=True, help='Kill the bot', usage='kill_bot', examples=['kill_bot'], clearance='Dev', cls=command.Command)
+    @commands.command(hidden=True, help='Kill the bot', usage='kill_bot',
+                      examples=['kill_bot'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def kill_bot(self):
         await self.bot.close()
 
     # adds anglorex resource usage monitor
+    @commands.command(hidden=True, help='monitors bot resource usage', usage='resrc_usage',
+                      examples=['resrc_usage'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def resource_usage(self, ctx):
+        prefix = config.PREFIX
+        embed_colour = config.EMBED_COLOUR
+        external_ip = urllib.request.urlopen('https://api.ipify.org/').read().decode('utf8')
+        disk_usage = psutil.disk_usage('/')
+        resource_overview = discord.Embed(
+                colour=embed_colour,
+                timestamp=datetime.now()
+        )
+        resource_overview.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
+        resource_overview.set_author(name='Resource Usage Overview', icon_url=ctx.guild.icon_url)
+        resource_overview.add_field(name='**CPU Usage**', value=(str(psutil.cpu_percent()) + '%'), inline=False)
+        resource_overview.add_field(name='**Memory Usage**', value=(str(psutil.virtual_memory().percent) + '%'), inline=False)
+        resource_overview.add_field(name='**External IP**', value=str(external_ip), inline=False)
+        resource_overview.add_field(name='**Disk Usage**', value=(str(disk_usage.percent) + '%'), inline=False)
+        await ctx.send(embed=resource_overview)
 
-    @commands.command(hidden=True, help='monitors bot resource usage', usage='resrc_usage', examples=['resrc_usage'], clearance='Dev', cls=command.Command)
-    async def resrc_usage(self, ctx):
-	    prefix = config.DEFAULT_PREFIX
-	    embed_colour = config.DEFAULT_EMBED_COLOUR
-	    external_ip = urllib.request.urlopen('https://api.ipify.org/').read().decode('utf8')
-	    disk_usage = psutil.disk_usage('/')
-	    resource_overview = discord.Embed(
-			    colour = embed_colour, 
-			    timestamp = datetime.now()
-	    )
-	    resource_overview.set_footer(text=f'{ctx.author.name}#{ctx.author.discriminator}', icon_url=ctx.author.avatar_url)
-	    resource_overview.set_author(name='Resource Usage Overview', icon_url=ctx.guild.icon_url)
-	    resource_overview.add_field(name='**CPU Usage**', value=(str(psutil.cpu_percent()) + '%'), inline=False)
-	    resource_overview.add_field(name='**Memory Usage**', value=(str(psutil.virtual_memory().percent) + '%'), inline=False)
-	    resource_overview.add_field(name='**External IP**', value=str(external_ip), inline=False)
-	    resource_overview.add_field(name='**Disk Usage**', value=(str(disk_usage.percent) + '%'), inline=False)
-	    await ctx.send(embed=resource_overview)
 
 def setup(bot):
     bot.add_cog(Dev(bot))

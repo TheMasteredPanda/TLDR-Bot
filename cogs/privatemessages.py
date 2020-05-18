@@ -1,16 +1,18 @@
+import config
 import discord
 import asyncio
-import config
 import re
-from datetime import date, datetime
+from modules import command, embed_maker, database
+from datetime import datetime, date
 from discord.ext import commands
-from modules import command, embed_maker
 
-open_tickets = {}
+db = database.Connection()
+
 
 class PrivateMessages(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        # when get __getattribute__ is called, instead of people needing to call pm_help, they can call help
         self.help = self.pm_help
         self.commands = ['help', 'report_user', 'report_issue']
 
@@ -20,25 +22,34 @@ class PrivateMessages(commands.Cog):
             called_cmd = self.__getattribute__(cmd)
             return await called_cmd(message, args)
         except AttributeError:
-            if message.content.startswith(config.DEFAULT_PREFIX):
+            if message.content.startswith(config.PREFIX):
                 return await self.pm_help(message, args)
 
-    def parse_msg(self, message):
+    @staticmethod
+    def parse_msg(message):
         content = message.content
         content_list = content.split(' ')
-        cmd = content_list[0].replace(config.DEFAULT_PREFIX, '')
+
+        cmd = content_list[0].replace(config.PREFIX, '')
         args = ' '.join(content_list[1:])
+
         return cmd, args
 
-    @commands.command(dm_only=True, help='get some pm help smh. Displays all pm commands or info about a specific pm command', usage='pm_help (command)', examples=['pm_help', 'pm_help report'], cls=command.Command)
+    @commands.command(dm_only=True,
+                      help='get some pm help smh. Displays all pm commands or info about a specific pm command',
+                      usage='pm_help (command)', examples=['pm_help', 'pm_help report'], cls=command.Command)
     async def pm_help(self, ctx, help_cmd=None):
-        embed_colour = config.DEFAULT_EMBED_COLOUR
+        embed_colour = config.EMBED_COLOUR
         all_commands = self.commands
 
         # Check if user wants to know about a specific command
         if not help_cmd:
             # Returns list of all pm commands
-            embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'**Prefix** : `{config.DEFAULT_PREFIX}`\nFor additional info on a command, type `{config.DEFAULT_PREFIX}help [command]`')
+            embed = discord.Embed(
+                colour=embed_colour, timestamp=datetime.now(),
+                description=f'**Prefix** : `{config.PREFIX}`\n'
+                            f'For additional info on a command, type `{config.PREFIX}help [command]`'
+            )
             embed.set_author(name=f'Help', icon_url=self.bot.user.avatar_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             embed.add_field(name=f'>Pm Commands', value=" \| ".join(f'`{cmd}`' for cmd in all_commands), inline=False)
@@ -61,9 +72,10 @@ class PrivateMessages(commands.Cog):
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'{help_cmd} is not a valid command')
                 return await ctx.author.send(embed=embed)
 
-    @commands.command(dm_only=True, help='Starts the process of reporting a user', usage='report_user', examples=['report_user'], cls=command.Command)
+    @commands.command(dm_only=True, help='Starts the process of reporting a user', usage='report_user',
+                      examples=['report_user'], cls=command.Command)
     async def report_user(self, ctx, _=''):
-        embed_colour = config.DEFAULT_EMBED_COLOUR
+        embed_colour = config.EMBED_COLOUR
 
         # Gets the user id's of users that person wants to report
         async def users():
@@ -153,7 +165,7 @@ class PrivateMessages(commands.Cog):
     @commands.command(dm_only=True, help='Starts the process of reporting an issue', usage='report_issue', examples=['report_issue'], cls=command.Command)
     async def report_issue(self, ctx, _=''):
         # Functions the same way as report_user, but doesnt need user ids
-        embed_colour = config.DEFAULT_EMBED_COLOUR
+        embed_colour = config.EMBED_COLOUR
 
         async def issues():
             def issues_check(m):
@@ -193,9 +205,12 @@ class PrivateMessages(commands.Cog):
         ticket_embed.add_field(name='>Reporter', value=f'<@{ctx.author.id}>', inline=False)
         ticket_embed.add_field(name='>Issue(s)', value=issues_str, inline=False)
 
+        print(ticket_embed.to_dict())
+
         return await self.send_ticket_embed(ctx, main_guild, ticket_embed)
 
-    async def send_ticket_embed(self, ctx, guild, embed):
+    @staticmethod
+    async def send_ticket_embed(ctx, guild, embed):
         ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', guild.categories)
 
         if ticket_category is None:
@@ -213,37 +228,44 @@ class PrivateMessages(commands.Cog):
         ticket_channel = await guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
         await ticket_channel.send(embed=embed)
 
-        open_tickets[ticket_channel.id] = ctx.author.id
-
         msg = 'This issue has been forwarded to the moderators'
         embed = discord.Embed(colour=discord.Colour.green(), timestamp=datetime.now(), description=msg)
         embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
-        return await ctx.author.send(embed=embed)
+        await ctx.author.send(embed=embed)
+
+        # adds to tickets document
+        db.tickets.update_one({'guild_id': ctx.guild.id}, {'$set': {f'tickets.{ticket_channel.id}': ctx.author.id}})
 
     @commands.command(help='Closes the current ticket', usage='close_ticket', examples=['close_ticket'], clearance='Mod', cls=command.Command)
-    @commands.has_permissions(manage_messages=True)
     async def close_ticket(self, ctx):
         regex = re.compile(r'(20\d*-\d*-\d*-.*?)')
         match = re.match(regex, ctx.message.channel.name)
         if match:
             await ctx.channel.delete()
+            db.tickets.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'tickets.{ctx.channel.id}': ''}})
         else:
-            embed = embed_maker.message(ctx, 'Invalid ticket channel')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, 'Invalid ticket channel')
 
     @commands.command(help='Closes the current ticket', usage='close_ticket', examples=['close_ticket'], clearance='Mod', cls=command.Command)
     async def get_reporter(self, ctx):
-        if ctx.channel.id not in open_tickets:
-            embed = embed_maker.message(ctx, 'Invalid ticket channel')
-            return await ctx.send(embed=embed)
+        regex = re.compile(r'(20\d*-\d*-\d*-.*?)')
+        match = re.match(regex, ctx.message.channel.name)
+        if not match:
+            return await embed_maker.message(ctx, 'Invalid ticket channel')
 
-        user_id = open_tickets[ctx.channel.id]
-        if user_id:
-            user = self.bot.get_user(int(user_id))
-            if user is None:
-                user = await self.bot.fetch_user(user_id)
-            await ctx.channel.set_permissions(user, read_messages=True, send_messages=True)
-            return await ctx.channel.send(f'<@{user.id}>')
+        data = db.tickets.find_one({'guild_id': ctx.guild.id})
+        if data is None:
+            data = self.bot.add_collections(ctx.guild.id, 'tickets')
+
+        tickets = data['tickets']
+
+        user_id = tickets[str(ctx.channel.id)]
+        user = self.bot.get_user(int(user_id))
+        if user is None:
+            user = await self.bot.fetch_user(user_id)
+
+        await ctx.channel.set_permissions(user, read_messages=True, send_messages=True)
+        return await ctx.channel.send(f'<@{user.id}>')
 
 
 def setup(bot):

@@ -1,33 +1,27 @@
 import discord
 import os
-import aiohttp
+import config
 import re
 import traceback
-from datetime import datetime
-from modules import database, pubsub
+from modules import database
 from discord.ext import commands
-import config
 
 db = database.Connection()
-paused = False
 
 
 async def get_prefix(bot, message):
-    return commands.when_mentioned_or(config.DEFAULT_PREFIX)(bot, message)
+    return commands.when_mentioned_or(config.PREFIX)(bot, message)
 
 
 class TLDR(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix=get_prefix, case_insensitive=True, help_command=None)
 
-        self.session = aiohttp.ClientSession(loop=self.loop)
-
         # Load Cogs
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
-
 
     async def on_command_error(self, ctx, exception):
         trace = exception.__traceback__
@@ -46,8 +40,11 @@ class TLDR(commands.Bot):
         guild = self.get_guild(669640013666975784)
         if guild is not None:
             channel = self.get_channel(671991712800964620)
-            embed_colour = config.DEFAULT_EMBED_COLOUR
+            embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
+            embed.add_field(name='Message', value=ctx.messsage.content)
+            embed.add_field(name='User', value=ctx.messsage.author)
+
             return await channel.send(embed=embed)
 
     async def on_message(self, message):
@@ -59,18 +56,23 @@ class TLDR(commands.Bot):
             pm_cog = self.get_cog('PrivateMessages')
             return await pm_cog.process_pm(message)
 
-        if message.content.startswith(config.DEFAULT_PREFIX):
+        if message.content.startswith(config.PREFIX):
             return await self.process_commands(message)
 
         # Starts leveling process
-        levels_cog = self.get_cog('Levels')
+        levels_cog = self.get_cog('Leveling')
         await levels_cog.process_message(message)
 
-        honours_channels = db.get_levels('honours_channels', message.guild.id)
+        # honours leveling
+        data = db.levels.find_one({'guild_id': message.guild.id})
+        if data is None:
+            data = self.bot.add_collections(message.guild.id, 'tickets')
+
+        honours_channels = data['honours_channels']
         if message.channel.id in honours_channels:
             await levels_cog.process_hp_message(message)
 
-        # checks if bot was mentioned, if was invoke help command
+        # checks if bot was mentioned, if it was invoke help command
         regex = re.compile(rf'<@!?{self.user.id}>')
         match = re.findall(regex, message.content)
 
@@ -81,26 +83,38 @@ class TLDR(commands.Bot):
 
     async def process_commands(self, message):
         ctx = await self.get_context(message)
-        if not ctx.command:
+
+        if ctx.command is None:
             return
 
-        # command usage data
-        data_date = db.get_data('date', message.guild.id)
-        todays_date = datetime.today().day
-        if int(data_date) != int(todays_date):
-            db.data.update_one({'guild_id': message.guild.id}, {'$unset': {f'command_usage': ''}, '$set': {'date': int(todays_date)}})
-            db.get_data.invalidate('date', message.guild.id)
-
-        if ctx.command.clearance == 'User':
-            db.data.update_one({'guild_id': message.guild.id}, {'$inc': {f'command_usage.{ctx.command.name}.{message.author.id}': 1}})
-            db.get_data.invalidate('command_usage', message.guild.id)
-
-        utils_cog = self.get_cog('Utils')
-        clearance = await utils_cog.get_user_clearance(message.guild.id, message.author.id)
-        if ctx.command.clearance not in clearance:
+        if ctx.guild is None:
             return
 
         await self.invoke(ctx)
+
+    async def on_guild_join(self, guild):
+        self.add_collections(guild.id)
+
+    @staticmethod
+    def add_collections(guild_id, col=None):
+        return_doc = None
+        collections = ['levels', 'timers', 'polls', 'tickets']
+        for c in collections:
+            collection = db.__getattribute__(c)
+            doc = collection.find_one({'guild_id': guild_id})
+
+            if not doc:
+                new_doc = database.schemas[c]
+                new_doc['guild_id'] = guild_id
+
+                # return doc if asked for
+                if col == c:
+                    return_doc = new_doc
+
+                # .copy() is there to prevent pymongo from creating duplicate "_id"'s
+                collection.insert_one(new_doc.copy())
+
+        return return_doc
 
     async def on_ready(self):
         bot_game = discord.Game(f'@me')
@@ -108,19 +122,12 @@ class TLDR(commands.Bot):
 
         print(f'{self.user} is ready')
 
-        # Run old timers
-        timer_cog = self.get_cog('Timer')
-        await timer_cog.run_old_timers()
-
-    async def on_member_update(self, before, after):
-        # Invalidates clearance cache if user roles changed
-        if before.roles != after.roles:
-            utils_cog = self.get_cog('Utils')
-            utils_cog.get_user_clearance.invalidate(after.guild.id, after.id)
+        # Check if guild documents in collections exist if not, it adds them
+        for g in self.guilds:
+            self.add_collections(g.id)
 
     async def close(self):
         await super().close()
-        await self.session.close()
 
     def run(self):
         super().run(config.BOT_TOKEN, reconnect=False)
