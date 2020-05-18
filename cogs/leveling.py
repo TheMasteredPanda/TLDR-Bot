@@ -281,7 +281,7 @@ class Leveling(commands.Cog):
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
         # Check if user in database, if not, add them
-        if member.id not in data['users']:
+        if str(member.id) not in data['users']:
             schema = database.schemas['levels_user']
             db.levels.update_one(
                 {'guild_id': ctx.guild.id},
@@ -520,7 +520,7 @@ class Leveling(commands.Cog):
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
         # Check if user in database, if not, add them
-        if mem.id not in data['users']:
+        if str(mem.id) not in data['users']:
             schema = database.schemas['levels_user']
             db.levels.update_one(
                 {'guild_id': ctx.guild.id},
@@ -738,7 +738,7 @@ class Leveling(commands.Cog):
                 data = self.bot.add_collections(message.guild.id, 'levels')
 
             # Check if user in database, if not, add them
-            if message.author.id not in data['users']:
+            if str(message.author.id) not in data['users']:
                 schema = database.schemas['levels_user']
                 db.levels.update_one(
                     {'guild_id': message.guild.id},
@@ -784,7 +784,7 @@ class Leveling(commands.Cog):
                 data = self.bot.add_collections(message.guild.id, 'levels')
 
             # Check if user in database, if not, add them
-            if message.author.id not in data['users']:
+            if str(message.author.id) not in data['users']:
                 schema = database.schemas['levels_user']
                 db.levels.update_one(
                     {'guild_id': message.guild.id},
