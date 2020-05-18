@@ -677,7 +677,7 @@ class Leveling(commands.Cog):
             pnu = (5 * (user_level ** 2) + 50 * user_level + 100)
             # total points needed to gain next level from 0 points
             tpu = 0
-            for j in range(int(user_level) + 1):
+            for j in range(int(user_level)):
                 tpu += (5 * (j ** 2) + 50 * j + 100)
 
             # point needed to gain next level
