@@ -473,7 +473,7 @@ class Leveling(commands.Cog):
         if data is None:
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
-        settings = data['settings']
+        settings = data['users'][str(ctx.author.id)]['settings']
         enabled = settings['@_me']
 
         if enabled:
