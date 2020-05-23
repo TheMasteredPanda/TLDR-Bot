@@ -17,6 +17,7 @@ class TTLItemCache(TTLCache):
             if link:
                 link.expire += ttl - self.ttl
 
+
 class Utils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

@@ -3,6 +3,7 @@ import os
 import config
 import re
 import traceback
+import time
 from modules import database
 from discord.ext import commands
 
@@ -125,6 +126,25 @@ class TLDR(commands.Bot):
         # Check if guild documents in collections exist if not, it adds them
         for g in self.guilds:
             self.add_collections(g.id)
+
+    async def on_member_remove(self, member):
+        if member.bot:
+            return
+
+        # Delete user data after 48h
+        utils_cog = self.get_cog('Utils')
+        expires = int(time.time()) + 172800  # 48h
+        await utils_cog.create_timer(
+            expires=expires, guild_id=member.guild.id, event='delete_user_data',
+            extras={'user_id': member.id}
+        )
+
+    @staticmethod
+    def on_delete_user_data_timer_over(timer):
+        guild_id = timer['guild_id']
+        user_id = timer['extras']['user_id']
+        # Delete user levels data
+        db.levels.update_one({'guild_id': guild_id}, {'$unset': {f'users.{user_id}'}})
 
     async def close(self):
         await super().close()

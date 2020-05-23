@@ -430,7 +430,6 @@ class Leveling(commands.Cog):
                     member = await ctx.guild.fetch_member(int(user_id))
                 except:
                     i -= 1
-                    db.levels.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'users.{user_id}': ''}})
                     continue
 
             role_level = self.user_role_level(branch, data, user_values)
@@ -467,7 +466,6 @@ class Leveling(commands.Cog):
                     u_obj = await ctx.guild.fetch_member(int(user_id))
                 except:
                     i -= 1
-                    db.levels.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'users.{user_id}': ''}})
                     continue
 
             user_role_name = user_values[f'{pre}_role']
