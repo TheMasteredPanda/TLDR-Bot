@@ -810,10 +810,10 @@ class Leveling(commands.Cog):
             pre = 'p_'
             levels_up = parliamentary_levels_up(levels_user)
 
-        if not levels_up:
-            return
-
         user_role = levels_user[f'{pre}role']
+
+        if user_role is None:
+            return
 
         # Checks if user has role
         role = discord.utils.find(lambda rl: rl.name == user_role, ctx.guild.roles)
@@ -823,14 +823,18 @@ class Leveling(commands.Cog):
             await member.add_roles(role)
 
         user_role_level = self.user_role_level(branch, data, levels_user, levels_up)
+
+        if not levels_up and user_role_level > 0:
+            return
+
         new_role = ()
         if user_role_level < 0:
             # Get next role and add it to user
             leveling_routes = data['leveling_routes']
             roles = leveling_routes[branch]
 
-            role_obj = [role for role in roles if role[0] == user_role]
-            role_index = roles.index(role_obj[0])
+            role = [role for role in roles if role[0] == user_role]
+            role_index = roles.index(role[0])
 
             # if goes up multiple roles, add previous roles to user
             if user_role_level < -1:
@@ -838,12 +842,15 @@ class Leveling(commands.Cog):
                 new_role = roles_up[-1]
                 new_role_obj = None
                 for r in roles_up:
-                    role_object = discord.utils.find(lambda rl: rl.name == rl[0], ctx.guild.roles)
+                    role_object = discord.utils.find(lambda rl: rl.name == r[0], ctx.guild.roles)
                     if role_object is None:
-                        new_role_obj = role_obj
                         role_object = await ctx.guild.create_role(name=r[0])
 
-                    await member.add_roles(role_object)
+                    if role_object not in member.roles:
+                        await member.add_roles(role_object)
+
+                    new_role_obj = role_object
+
             # get new role and add it to user
             else:
                 if len(roles) - 1 < role_index + abs(user_role_level):
