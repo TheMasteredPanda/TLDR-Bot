@@ -52,8 +52,7 @@ class Fun(commands.Cog):
 
         response = requests.get(f'{config.WEB_API_URL}/distort?img={url}')
         if not response:
-            embed = embed_maker.message(ctx, 'Error getting image', colour='red')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, 'Error getting image', colour='red')
 
         distorted_image = BytesIO(response.content)
         distorted_image.seek(0)
