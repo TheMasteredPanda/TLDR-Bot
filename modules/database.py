@@ -44,7 +44,11 @@ schemas = {
                 ('Public Servant', 5, [])
             ]
         },
-        'honours_channels': []
+        'honours_channels': [],
+        'boost': {
+            'users': {},
+            'roles': {}
+        }
     },
     'levels_user': {
         'pp': 0,  # Participation points or parliamentary points

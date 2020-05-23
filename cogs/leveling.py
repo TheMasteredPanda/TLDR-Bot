@@ -5,7 +5,7 @@ from datetime import datetime
 from time import time
 from discord.ext import commands
 from random import randint
-from modules import database, embed_maker, command
+from modules import database, embed_maker, command, format_time
 
 pp_cooldown = {}
 hp_cooldown = {}
@@ -32,6 +32,147 @@ class Leveling(commands.Cog):
         self.bot = bot
 
     # Staff Commands
+
+    @commands.command(help='remove latest boost from user or remove boost from role',
+                      usage='remove_boost [user/role/everyone]',
+                      examples=['remove_boost Hattyot', 'remove_boost Mayor', 'remove_boost everyone'],
+                      clearance='Mod', cls=command.Command)
+    async def remove_boost(self, ctx, source=None):
+        if source is None:
+            return await embed_maker.command_error(ctx)
+
+        # get user or role to remove boost from
+        if source is None:
+            return await embed_maker.command_error(ctx, '[user/role/everyone]')
+        else:
+            # check if source is member
+            boost_remove = self.get_member(ctx, source)
+            source_type = 'user'
+
+            # check if source is role or everyone
+            if boost_remove is None:
+                # role name of everyone is @everyone
+                if source == 'everyone':
+                    source = f'@{source}'
+
+                boost_remove = discord.utils.find(lambda rl: rl.name.lower() == source.lower(), ctx.guild.roles)
+                source_type = 'role'
+
+        if boost_remove is None:
+            return await embed_maker.command_error(ctx, '[user/role/everyone]')
+
+        data = db.levels.find_one({'guild_id': ctx.guild.id})
+        err = ''
+        suc = ''
+        if source_type == 'role' and 'roles' in data['boost']:
+            if str(boost_remove.id) in data['boost']['roles']:
+                db.levels.update_one(
+                    {'guild_id': ctx.guild.id},
+                    {'$unset': {f'boost.roles.{boost_remove.id}': ''}}
+                )
+                if source != '@everyone':
+                    suc = f'Removed <@&{boost_remove.id}>\'s boost'
+                else:
+                    suc = 'Removed boost given to everyone'
+            else:
+                if source != '@everyone':
+                    err = f'<@&{boost_remove.id}> has no active boosts'
+                else:
+                    err = 'No boost is active for everyone'
+
+        elif source_type == 'user' and 'users' in data['boost']:
+            if str(boost_remove.id) in data['boost']['users']:
+                latest_boost = data['boost']['users'][f'{boost_remove.id}'][-1]
+                db.levels.update_one(
+                    {'guild_id': ctx.guild.id},
+                    {'$pull': {f'boost.users.{boost_remove.id}': {'expires': latest_boost['expires']}}}
+                )
+                suc = f'Removed latest boost given to <@{boost_remove.id}>'
+            else:
+                err = f'User <@{boost_remove.id}> has no active boosts'
+
+        if err:
+            return await embed_maker.message(ctx, err, colour='red')
+        elif suc:
+            return await embed_maker.message(ctx, suc, colour='green')
+
+
+    @commands.command(help='Give a user, a role or everyone x% more parliamentary points gain',
+                      usage='boost [percent] [time] [user/role/everyone]',
+                      examples=['boost 50% 24h everyone', 'boost 20% 2d Mayor', 'boost 150% 60m Hattyot'],
+                      clearance='Mod', cls=command.Command)
+    async def boost(self, ctx, percent=None, length=None, source=None):
+        if percent is None:
+            return await embed_maker.command_error(ctx)
+
+        err = None
+        # percent how much to boost by
+        percent = percent.replace('%', '')
+        if not percent.isdigit():
+            err = 'invalid percent value'
+
+        # how long should be boosted for
+        if length is None:
+            return await embed_maker.command_error(ctx, '[time]')
+
+        length_in_seconds = format_time.parse(length)
+        if length_in_seconds is None:
+            err = 'invalid time value'
+
+        # get user or role to boost
+        if source is None:
+            return await embed_maker.command_error(ctx, '[user/role/everyone]')
+        else:
+            # check if source is member
+            to_boost = self.get_member(ctx, source)
+            source_type = 'user'
+
+            # check if source is role or everyone
+            if to_boost is None:
+                # role name of everyone is @everyone
+                if source == 'everyone':
+                    source = f'@{source}'
+
+                to_boost = discord.utils.find(lambda rl: rl.name.lower() == source.lower(), ctx.guild.roles)
+                source_type = 'role'
+
+        if to_boost is None:
+            err = f'I couldn\'t find a user or a role by `{source}`'
+
+        data = db.levels.find_one({'guild_id': ctx.guild.id})
+        # check if role already has boost
+        if source_type == 'role':
+            if str(to_boost.id) in data['boost']['roles']:
+                expires = data["boost"]["roles"][str(to_boost.id)]["expires"]
+                multiplier = data["boost"]["roles"][str(to_boost.id)]["multiplier"]
+                percent = round((multiplier - 1) * 100)
+                err = f'Role {source} already has an active boost\n' \
+                      f'Expires: {format_time.seconds(expires)}\n' \
+                      f'Boost: {percent}%'
+        if err:
+            return await embed_maker.message(ctx, err, colour='red')
+
+        multiplier = int(percent)/100
+        expires = round(time()) + int(length_in_seconds)
+        boost_object = {
+            'expires': expires,
+            'multiplier': multiplier
+        }
+        action = 'push' if source_type == 'user' else 'set'
+        db.levels.update_one(
+            {'guild_id': ctx.guild.id},
+            {f'${action}': {f'boost.{source_type}s.{to_boost.id}': boost_object}}
+        )
+
+        formatted_length = format_time.seconds(length_in_seconds)
+        if source_type == 'user':
+            msg = f'User {to_boost} will now receive a {percent}% boost to levels gain for {formatted_length}'
+        elif source_type == 'role' and source != '@everyone':
+            msg = f'Users with the role <@&{to_boost.id}> will now receive a {percent}% boost to their levels gain for {formatted_length}'
+        else:
+            msg = f'Everyone will now receive a {percent}% boost to their levels gain for {formatted_length}'
+
+        return await embed_maker.message(ctx, msg, colour='green')
 
     @commands.command(help='Set or remove perks from parliamentary or honours roles which will be sent to user once they recieve that role',
                       usage='perk [action] -r [role name] -p (perk 1) | (perk 2) | (perk 3)',
@@ -528,6 +669,12 @@ class Leveling(commands.Cog):
 
         levels_user = data['users'][str(mem.id)]
 
+        # inform user of boost, if they have it
+        boost_multiplier = self.user_boost(data, mem)
+        if boost_multiplier > 1:
+            boost_percent = round((boost_multiplier - 1) * 100)
+            embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
+
         # checks if honours section needs to be added
         member_hp = levels_user['hp']
         if member_hp > 0:
@@ -790,6 +937,11 @@ class Leveling(commands.Cog):
                 )
                 data['users'][str(message.author.id)] = schema
 
+            # check for active boost and add to pp_add if active
+            boost_multiplier = self.user_boost(data, message.author)
+            if boost_multiplier > 1:
+                pp_add = round(pp_add * boost_multiplier)
+
             levels_user = data['users'][str(message.author.id)]
             levels_user['pp'] += pp_add
             db.levels.update_one(
@@ -799,6 +951,40 @@ class Leveling(commands.Cog):
 
             # Check if user leveled up
             return await self.level_up(message, message.author, 'parliamentary', data)
+
+    @staticmethod
+    def user_boost(data, user):
+        multiplier = 1
+        if 'boost' in data:
+            if 'users' in data['boost'] and str(user.id) in data['boost']['users']:
+                for i, boost in enumerate(data['boost']['users'][str(user.id)]):
+                    expires = boost['expires']
+                    if round(time()) > expires:
+                        del data['boost']['users'][str(user.id)][i]
+
+                        # removes user from boost if user has no active boosts otherwise just removes expired boost
+                        if not data['boost']['users'][str(user.id)]:
+                            cmd = {'$unset': {f'boost.users.{str(user.id)}': ''}}
+                        else:
+                            cmd = {'$pull': {f'boost.users.{str(user.id)}': {'expires': expires}}}
+
+                        db.levels.update_one({'guild_id': data['guild_id']}, cmd)
+                    else:
+                        multiplier += boost['multiplier']
+
+            if 'roles' in data['boost']:
+                for r in user.roles:
+                    if str(r.id) in data['boost']['roles']:
+                        expires = data['boost']['roles'][str(r.id)]['expires']
+                        if round(time()) > expires:
+                            db.levels.update_one(
+                                {'guild_id': data['guild_id']},
+                                {'$unset': {f'boost.roles.{str(r.id)}': ''}}
+                            )
+                        else:
+                            multiplier += data['boost']['roles'][str(r.id)]['multiplier']
+
+        return multiplier
 
     async def level_up(self, ctx, member, branch, data):
         levels_user = data['users'][str(member.id)]
@@ -824,7 +1010,7 @@ class Leveling(commands.Cog):
 
         user_role_level = self.user_role_level(branch, data, levels_user, levels_up)
 
-        if not levels_up and user_role_level > 0:
+        if not levels_up and user_role_level >= 0:
             return
 
         new_role = ()
