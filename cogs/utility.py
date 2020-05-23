@@ -282,6 +282,7 @@ class Utility(commands.Cog):
     @commands.Cog.listener()
     async def on_anon_poll_timer_over(self, timer):
         message_id = timer['extras']['message_id']
+        channel_id = timer['extras']['channel_id']
         guild_id = timer['guild_id']
         options = timer['extras']['options']
         data = db.polls.find_one({'guild_id': guild_id})
@@ -291,24 +292,21 @@ class Utility(commands.Cog):
         if str(message_id) not in data['polls']:
             return
 
-        poll = data['polls'][str(message_id)]
-
         db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ''}})
 
         question = timer['extras']['question']
+        poll = data['polls'][str(message_id)]
         emote_count = poll
-
-        channel = self.bot.get_channel(timer['extras']['channel_id'])
+        channel = self.bot.get_channel(channel_id)
         message = await channel.fetch_message(message_id)
-
         sorted_emote_count = sorted(emote_count.items(), key=lambda x: x[1], reverse=True)
         total_emotes = sum(emote_count.values())
         description = f'**{question}**\n'
 
         if total_emotes == 0:
+            # just incase nobody participated
             description += '\n'.join(f'{emote} **- {emote_count}** | **0%**' for emote, emote_count in sorted_emote_count)
         else:
-            print(options)
             description += '\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in sorted_emote_count)
 
         embed = message.embeds[0]
@@ -321,7 +319,10 @@ class Utility(commands.Cog):
             del utils_cog.no_expire_menus[message_id]
 
         await message.edit(embed=embed)
-        return await message.clear_reactions()
+        await message.clear_reactions()
+
+        # send message about poll being completed
+        return await channel.send(f'Poll finished: https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}')
 
     @commands.command(help='Create a poll. with options adds numbers as reactions, without it just adds thumbs up and down.',
                       usage='poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...)',
