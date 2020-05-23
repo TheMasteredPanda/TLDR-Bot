@@ -45,6 +45,7 @@ class TLDR(commands.Bot):
             embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
             embed.add_field(name='Message', value=ctx.message.content)
             embed.add_field(name='User', value=ctx.message.author)
+            embed.add_field(name='Channel', value=f'{ctx.message.channel.name}')
 
             return await channel.send(embed=embed)
 
