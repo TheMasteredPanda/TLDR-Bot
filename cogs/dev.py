@@ -41,11 +41,9 @@ class Dev(commands.Cog):
     async def reload_extension(self, ctx, ext):
         if ext in self.bot.extensions.keys():
             self.bot.reload_extension(ext)
-            embed = embed_maker.message(ctx, f'{ext} has been reloaded', colour='green')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, f'{ext} has been reloaded', colour='green')
         else:
-            embed = embed_maker.message(ctx, 'That is not a valid extension', colour='red')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, 'That is not a valid extension', colour='red')
 
     @commands.command(hidden=True, help='Evaluate code', usage='eval [code]',
                       examples=['eval ctx.author.id'], clearance='Dev', cls=command.Command)
