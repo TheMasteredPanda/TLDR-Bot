@@ -33,14 +33,18 @@ class TLDR(commands.Bot):
         print(traceback_text)
         print(exception)
 
-        # Returns if bot isn't main bot
-        if self.user.id != 669877023753109524:
-            return
+        # send error message to certain channel in a guild if error happens during bot runtime
+        if config.ERROR_SERVER in [g.id for g in self.guilds]:
+            guild = self.get_guild(config.ERROR_SERVER)
+        else:
+            return print('Invalid error server id')
 
-        # send error message to certain channel in a guild if error happens during bot run
-        guild = self.get_guild(669640013666975784)
         if guild is not None:
-            channel = self.get_channel(671991712800964620)
+            if config.ERROR_CHANNEL in [c.id for c in guild.channels]:
+                channel = self.get_channel(config.ERROR_CHANNEL)
+            else:
+                return print('Invalid error channel id')
+
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, title=f'{ctx.command.name} - Command Error', description=f'```{exception}\n{traceback_text}```')
             embed.add_field(name='Message', value=ctx.message.content)

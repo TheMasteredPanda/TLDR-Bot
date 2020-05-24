@@ -48,7 +48,10 @@ class Dev(commands.Cog):
     @commands.command(hidden=True, help='Evaluate code', usage='eval [code]',
                       examples=['eval ctx.author.id'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
-    async def eval(self, ctx, *, cmd):
+    async def eval(self, ctx, *, cmd=None):
+        if cmd is None:
+            return await embed_maker.command_error(ctx)
+
         fn_name = "_eval_expr"
         cmd = cmd.strip("` ")
 

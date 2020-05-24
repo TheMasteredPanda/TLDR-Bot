@@ -3,6 +3,8 @@ import config
 
 
 class Connection:
+    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets']
+
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
         self.db = self.mongo_client['TLDR']
