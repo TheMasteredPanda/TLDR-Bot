@@ -41,7 +41,7 @@ class TLDR(commands.Bot):
 
         if guild is not None:
             if config.ERROR_CHANNEL in [c.id for c in guild.channels]:
-                channel = self.get_channel(671991712800964620)
+                channel = self.get_channel(config.ERROR_CHANNEL)
             else:
                 return print('Invalid error channel id')
 
