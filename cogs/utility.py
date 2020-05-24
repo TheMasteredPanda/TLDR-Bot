@@ -1,9 +1,9 @@
 import time
 import discord
-import re
 import config
-import asyncio
+import re
 import random
+import asyncio
 from datetime import datetime
 from discord.ext import commands
 from modules import database, command, embed_maker, format_time
@@ -22,93 +22,23 @@ class Utility(commands.Cog):
         ping = (time.monotonic() - before) * 1000
         await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping)}ms")
 
-    @commands.command(help='See command usage data', usage='command_usage (command | user)',
-                      examples=['command_usage', 'command_usage rank', 'command_usage Hattyot'], clearance='User', cls=command.Command)
-    async def command_usage(self, ctx, arg=None):
-        data = db.get_data('command_usage', ctx.guild.id)
-
-        embed = discord.Embed(colour=config.DEFAULT_EMBED_COLOUR, timestamp=datetime.today())
-        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-
-        if arg is None:
-            cmd_usage_data = sorted([(c, sum(data[c].values())) for c in data], key=lambda x: x[1], reverse=True)
-            print(cmd_usage_data)
-            embed.set_author(name='Most Used Commands Today', icon_url=ctx.guild.icon_url)
-            desc = ''
-            for i, c in enumerate(cmd_usage_data):
-                if i == 10:
-                    break
-                desc += f'`#{i + 1}` - {c[0]}: **{c[1]}** Uses\n'
-
-            embed.description = desc
-        else:
-            # check if arg is user
-            if arg and ctx.message.mentions:
-                mem = ctx.message.mentions[0]
-            else:
-                regex = re.compile(fr'({arg.lower()})')
-                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == arg, ctx.guild.members)
-
-            if mem:
-                embed.set_author(name=f'`{mem.name}` - Most Used Commands Today', icon_url=ctx.guild.icon_url)
-                user_data = sorted([(key, value[str(mem.id)]) for (key, value) in data.items() if str(mem.id) in value], key=lambda x: x[1], reverse=True)
-                desc = ''
-                for i, c in enumerate(user_data):
-                    if i == 10:
-                        break
-                    desc += f'`#{i + 1}` - {c[0]}: **{c[1]}** Uses\n'
-
-                if desc == '':
-                    desc = f'{mem.name} hasn\'t used any commands'
-                embed.description = desc
-
-            if mem is None and arg not in data:
-                embed = embed_maker.message(ctx, 'Couldn\'t find a command or user with that', colour='red')
-                return await ctx.send(embed=embed)
-
-            # check if arg is command
-            elif arg in data:
-                embed.set_author(name=f'`{arg}` - Most Used By Today', icon_url=ctx.guild.icon_url)
-                desc = ''
-                users = sorted(data[arg], key=lambda x: x[1])
-                for i, user_id in enumerate(users):
-                    if i == 10:
-                        return
-
-                    calls = data[arg][user_id]
-
-                    user = self.bot.get_user(int(user_id))
-                    if user is None:
-                        user = await self.bot.fetch_user(user_id)
-                    desc += f'`#{i + 1}` - {user.name}: **{calls}** Calls\n'
-
-                if desc == '':
-                    desc = f'{mem.name} hasn\'t been used by anyone'
-                embed.description = desc
-
-        return await ctx.send(embed=embed)
-
-    @commands.command(help='See someones profile picture', usage='pfp (user)', examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'], clearance='User', cls=command.Command)
+    @commands.command(help='See someones profile picture', usage='pfp (user)',
+                      examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'], clearance='User', cls=command.Command)
     async def pfp(self, ctx, member=None):
-        if member and ctx.message.mentions:
-            mem = ctx.message.mentions[0]
-        elif member:
-            regex = re.compile(fr'({member.lower()})')
-            mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == member, ctx.guild.members)
-            if mem is None:
-                embed = embed_maker.message(ctx, 'I couldn\'t find a user with that name', colour='red')
-                return await ctx.send(embed=embed)
-        else:
-            mem = ctx.author
+        member = self.get_member(ctx, member)
+        if member is None:
+            member = ctx.author
 
-        embed = discord.Embed(description=f'**Profile Picture of {mem}**')
-        embed.set_image(url=str(mem.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
+        embed = discord.Embed(description=f'**Profile Picture of {member}**')
+        embed.set_image(url=str(member.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
 
         return await ctx.send(embed=embed)
 
-    @commands.command(help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)',
-                      usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)] -r (restrict giveaway to a certain role)',
-                      examples=['giveaway -i TLDR pin of choice -w 1 -t 7d', 'giveaway -i 1000xp -w 5 -t 24h -r Party Member'], clearance='Mod', cls=command.Command)
+    @commands.command(
+        help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)',
+        usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)] -r (restrict giveaway to a certain role)',
+        examples=['giveaway -i TLDR pin of choice -w 1 -t 7d', 'giveaway -i 1000xp -w 5 -t 24h -r Party Member'],
+        clearance='Mod', cls=command.Command)
     async def giveaway(self, ctx, *, args=None):
         if args is None:
             return await embed_maker.command_error(ctx)
@@ -136,15 +66,14 @@ class Utility(commands.Cog):
             role = ''
 
         if err:
-            embed = embed_maker.message(ctx, err, colour='red')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, err, colour='red')
 
         role_id = '' if not role else role.id
 
         s = 's' if int(winners) > 1 else ''
-        winner_role_str = f'\nWinner{s} will be chosen from users who have the <@&{role.id}> role'
+        winner_role_str = f'\nWinner{s} will be chosen from users who have the <@&{role.id}> role' if role else ''
         description = f'React with :partying_face: to enter the giveaway!{winner_role_str}\nTime Left: **{time_left}**'
-        colour = config.DEFAULT_EMBED_COLOUR
+        colour = config.EMBED_COLOUR
         embed = discord.Embed(title=item, colour=colour, description=description, timestamp=datetime.now())
         embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
 
@@ -152,10 +81,14 @@ class Utility(commands.Cog):
         await msg.add_reaction('🥳')
         await ctx.message.delete(delay=3)
 
-        timer_cog = self.bot.get_cog('Timer')
-        await timer_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='giveaway',
-                                     extras={'timer_cog': 'Utility', 'timer_function': 'giveaway_timer',
-                                             'args': (msg.id, msg.channel.id, embed.to_dict(), giveaway_time, winners, role_id)})
+        utils_cog = self.bot.get_cog('Utils')
+        await utils_cog.create_timer(
+            expires=expires, guild_id=ctx.guild.id, event='giveaway',
+            extras={
+                'timer_cog': 'Utility', 'timer_function': 'giveaway_timer',
+                'args': (msg.id, msg.channel.id, embed.to_dict(), giveaway_time, winners, role_id)
+            }
+        )
 
     @commands.Cog.listener()
     async def on_giveaway_timer_over(self, timer):
@@ -175,11 +108,10 @@ class Utility(commands.Cog):
             else:
                 if not role_id:
                     eligible = await r.users().flatten()
+                    # removes bot from list
                     eligible.pop(0)
                 else:
                     eligible = [user for user in await r.users().flatten() if role_id in [role.id for role in user.roles]]
-
-                # removes bot from list
 
         winners = []
         for i in range(int(winner_count)):
@@ -218,7 +150,7 @@ class Utility(commands.Cog):
 
         while sleep_duration > 0:
             s = 's' if int(winner_count) > 1 else ''
-            winner_role_str = f'\nWinner{s} will be chosen from users who have the <@&{role_id}> role'
+            winner_role_str = f'\nWinner{s} will be chosen from users who have the <@&{role_id}> role' if role_id else ''
             description = f'React with :partying_face: to enter the giveaway!{winner_role_str}'
             await asyncio.sleep(10)
             sleep_duration -= 10
@@ -234,7 +166,8 @@ class Utility(commands.Cog):
 
         return
 
-    def parse_giveaway_args(self, args):
+    @staticmethod
+    def parse_giveaway_args(args):
         result = {
             'i': '',
             'w': 1,
@@ -279,11 +212,10 @@ class Utility(commands.Cog):
             err = 'Too many options'
 
         if err:
-            embed = embed_maker.message(ctx, err, colour='red')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, err, colour='red')
 
         description = f'**"{question}"**\n\n'
-        colour = config.DEFAULT_EMBED_COLOUR
+        colour = config.EMBED_COLOUR
         embed = discord.Embed(title='Anonymous Poll', colour=colour, description=description, timestamp=datetime.now())
         embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
 
@@ -317,8 +249,9 @@ class Utility(commands.Cog):
                     return await user.send(f'Your vote has been already counted towards: {emote}')
 
                 db.polls.update_one({'guild_id': ctx.guild.id},
-                                    {'$inc': {f'polls.{msg.id}.{emote}': 1,
-                                              f'polls.{msg.id}.{previous_emote}': -1}})
+                                    {'$inc': {
+                                        f'polls.{msg.id}.{emote}': 1,
+                                        f'polls.{msg.id}.{previous_emote}': -1}})
 
                 voted_users[user.id]['emote'] = emote
 
@@ -333,12 +266,14 @@ class Utility(commands.Cog):
         poll = dict.fromkeys(emotes, 0)
         buttons = dict.fromkeys(emotes, count)
 
-        menu_cog = self.bot.get_cog('Menu')
-        timer_cog = self.bot.get_cog('Timer')
-
+        utils_cog = self.bot.get_cog('Utils')
         expires = round(time.time()) + round(poll_time)
-        await timer_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='anon_poll', extras={'message_id': poll_msg.id, 'channel_id': poll_msg.channel.id, 'question': question, 'options': option_emotes})
-        await menu_cog.new_no_expire_menu(poll_msg, buttons)
+        await utils_cog.create_timer(
+            expires=expires, guild_id=ctx.guild.id, event='anon_poll',
+            extras={'message_id': poll_msg.id, 'channel_id': poll_msg.channel.id,
+                    'question': question, 'options': dict(zip(emotes, options))}
+        )
+        await utils_cog.new_no_expire_menu(poll_msg, buttons)
 
         db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{poll_msg.id}': poll}})
 
@@ -347,44 +282,47 @@ class Utility(commands.Cog):
     @commands.Cog.listener()
     async def on_anon_poll_timer_over(self, timer):
         message_id = timer['extras']['message_id']
+        channel_id = timer['extras']['channel_id']
         guild_id = timer['guild_id']
         options = timer['extras']['options']
-        poll = db.get_polls(guild_id, message_id)
-        if not poll:
+        data = db.polls.find_one({'guild_id': guild_id})
+        if data is None:
+            data = self.bot.add_collections(guild_id, 'polls')
+
+        if str(message_id) not in data['polls']:
             return
 
-        db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ""}})
-        db.get_polls.invalidate(guild_id, message_id)
+        db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ''}})
 
         question = timer['extras']['question']
+        poll = data['polls'][str(message_id)]
         emote_count = poll
-
-        channel = self.bot.get_channel(timer['extras']['channel_id'])
+        channel = self.bot.get_channel(channel_id)
         message = await channel.fetch_message(message_id)
-
         sorted_emote_count = sorted(emote_count.items(), key=lambda x: x[1], reverse=True)
         total_emotes = sum(emote_count.values())
         description = f'**{question}**\n'
 
         if total_emotes == 0:
+            # just incase nobody participated
             description += '\n'.join(f'{emote} **- {emote_count}** | **0%**' for emote, emote_count in sorted_emote_count)
         else:
-            if options:
-                description += '\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in sorted_emote_count)
-            else:
-                description += '\n'.join(f'{emote} - **{emote_count}** | **{round((emote_count * 100)/total_emotes)}%**' for emote, emote_count in sorted_emote_count)
+            description += '\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in sorted_emote_count)
 
         embed = message.embeds[0]
         embed.description = description
         embed.timestamp = datetime.now()
         embed.set_footer(text='Ended at')
 
-        menu_cog = self.bot.get_cog('Menu')
-        if message_id in menu_cog.no_expire_menus:
-            del menu_cog.no_expire_menus[message_id]
+        utils_cog = self.bot.get_cog('Utils')
+        if message_id in utils_cog.no_expire_menus:
+            del utils_cog.no_expire_menus[message_id]
 
         await message.edit(embed=embed)
-        return await message.clear_reactions()
+        await message.clear_reactions()
+
+        # send message about poll being completed
+        return await channel.send(f'Poll finished: https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}')
 
     @commands.command(help='Create a poll. with options adds numbers as reactions, without it just adds thumbs up and down.',
                       usage='poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...)',
@@ -407,12 +345,12 @@ class Utility(commands.Cog):
             err = 'Too many options'
 
         if err:
-            embed = embed_maker.message(ctx, err, colour='red')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, err, colour='red')
 
-        description = f'**"{question}"**\n\n'
-        colour = config.DEFAULT_EMBED_COLOUR
-        embed = discord.Embed(title='Poll', colour=colour, description=description, timestamp=datetime.now())
+        description = f'**"{question}"**\n'
+        colour = config.EMBED_COLOUR
+        embed = discord.Embed(colour=colour, description=description, timestamp=datetime.now())
+        embed.set_author(name='Poll')
         embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
 
         if not options:
@@ -434,7 +372,8 @@ class Utility(commands.Cog):
 
         return await ctx.message.delete(delay=5)
 
-    def parse_poll_args(self, args):
+    @staticmethod
+    def parse_poll_args( args):
         result = {
             'q': '',
             'o': [],
@@ -469,22 +408,23 @@ class Utility(commands.Cog):
 
         return result
 
-    @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'], clearance='User', cls=command.Command)
+    @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'],
+                      clearance='User', cls=command.Command)
     async def help(self, ctx, _cmd=None):
-        embed_colour = config.DEFAULT_EMBED_COLOUR
-        prefix = config.DEFAULT_PREFIX
-        cmds = self.bot.commands
+        embed_colour = config.EMBED_COLOUR
+        prefix = config.PREFIX
+        all_commands = self.bot.commands
         help_object = {}
 
-        for cmd in cmds:
+        for cmd in all_commands:
             if hasattr(cmd, 'dm_only'):
                 continue
 
             # Check if cog is levels and if cmd requires mod perms
-            if cmd.cog_name == 'Levels' and 'Levels - Staff' not in help_object:
-                help_object['Levels - Staff'] = []
-            if cmd.cog_name == 'Levels' and cmd.clearance != 'User':
-                help_object['Levels - Staff'].append(cmd)
+            if cmd.cog_name == 'Leveling' and 'Leveling - Staff' not in help_object:
+                help_object['Leveling - Staff'] = []
+            if cmd.cog_name == 'Leveling' and cmd.clearance != 'User':
+                help_object['Leveling - Staff'].append(cmd)
                 continue
 
             if cmd.cog_name not in help_object:
@@ -494,9 +434,12 @@ class Utility(commands.Cog):
 
         utils = self.bot.get_cog('Utils')
         clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
+
         if _cmd is None:
-            embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(),
-                                  description=f'**Prefix** : `{prefix}`\nFor additional info on a command, type `{prefix}help [command]`')
+            embed = discord.Embed(
+                colour=embed_colour, timestamp=datetime.now(),
+                description=f'**Prefix** : `{prefix}`\nFor additional info on a command, type `{prefix}help [command]`'
+            )
             embed.set_author(name=f'Help - {clearance[0]}', icon_url=ctx.guild.icon_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             for cat in help_object:
@@ -525,8 +468,25 @@ class Utility(commands.Cog):
                 embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
                 return await ctx.send(embed=embed)
             else:
-                embed = embed_maker.message(ctx, f'{_cmd} is not a valid command')
-                return await ctx.send(embed=embed)
+                return await embed_maker.message(ctx, f'{_cmd} is not a valid command')
+
+    @staticmethod
+    def get_member(ctx, source):
+        # check if source is member mention
+        if ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        # Check if source is user id
+        elif source.isdigit():
+            member = discord.utils.find(lambda m: m.id == source, ctx.guild.members)
+        # Check if source is member's name
+        else:
+            regex = re.compile(fr'({source.lower()})')
+            member = discord.utils.find(
+                lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()),
+                ctx.guild.members
+            )
+
+        return member
 
 
 def setup(bot):
