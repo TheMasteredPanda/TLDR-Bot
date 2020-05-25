@@ -72,17 +72,17 @@ class TLDR(commands.Bot):
         # honours leveling
         data = db.levels.find_one({'guild_id': message.guild.id})
         if data is None:
-            data = self.bot.add_collections(message.guild.id, 'tickets')
+            data = self.add_collections(message.guild.id, 'tickets')
 
         honours_channels = data['honours_channels']
         if message.channel.id in honours_channels:
             await levels_cog.process_hp_message(message)
 
         # checks if bot was mentioned, if it was invoke help command
-        regex = re.compile(rf'<@!?{self.user.id}>')
-        match = re.findall(regex, message.content)
+        bot_mention = f'<@{self.user.id}>'
+        bot_mention_nickname = f'<@!{self.user.id}>'
 
-        if match:
+        if message.content == bot_mention or message.content == bot_mention_nickname:
             ctx = await self.get_context(message)
             utility_cog = self.get_cog('Utility')
             return await utility_cog.help(ctx)
