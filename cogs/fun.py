@@ -13,21 +13,41 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='Gets a random cat image', usage='cat', examples=['cat'],
-                      clearance='User', cls=command.Command)
-    async def cat(self, ctx):
-        url = 'http://aws.random.cat/meow'
+    def get_random_image(self, url, json_key):
         response = requests.get(url)
         json_text = response.text.encode("ascii", "ignore").decode('ascii')
 
-        img_url = json.loads(json_text)['file']
+        img_url = json.loads(json_text)[json_key]
         # get image extension
         split = img_url.split('.')
         extension = split[-1]
 
+        allowed_extensions = ['jpg', 'jpeg', 'png', 'gif']
+        while extension not in allowed_extensions:
+            return self.get_random_image(url, json_key)
+
         image_response = requests.get(img_url)
         image = BytesIO(image_response.content)
         image.seek(0)
+
+        return image, extension
+
+    @commands.command(help='Gets a random dog image', usage='dog', examples=['dog'],
+                      clearance='User', cls=command.Command)
+    async def dog(self, ctx):
+        url = 'https://random.dog/woof.json'
+        image, extension = self.get_random_image(url, 'url')
+
+        embed = discord.Embed()
+        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+        embed.set_image(url=f'attachment://cat.{extension}')
+        return await ctx.send(file=discord.File(fp=image, filename=f'cat.{extension}'), embed=embed)
+
+    @commands.command(help='Gets a random cat image', usage='cat', examples=['cat'],
+                      clearance='User', cls=command.Command)
+    async def cat(self, ctx):
+        url = 'http://aws.random.cat/meow'
+        image, extension = self.get_random_image(url, 'file')
 
         embed = discord.Embed()
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
