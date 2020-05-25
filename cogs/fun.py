@@ -19,17 +19,20 @@ class Fun(commands.Cog):
         url = 'http://aws.random.cat/meow'
         response = requests.get(url)
         json_text = response.text.encode("ascii", "ignore").decode('ascii')
-        print(json_text)
 
         img_url = json.loads(json_text)['file']
+        # get image extension
+        split = img_url.split('.')
+        extension = split[-1]
+
         image_response = requests.get(img_url)
         image = BytesIO(image_response.content)
         image.seek(0)
 
         embed = discord.Embed()
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        embed.set_image(url='attachment://cat.png')
-        return await ctx.send(file=discord.File(fp=image, filename='cat.png'), embed=embed)
+        embed.set_image(url=f'attachment://cat.{extension}')
+        return await ctx.send(file=discord.File(fp=image, filename=f'cat.{extension}'), embed=embed)
 
     @commands.command(help='Gets a random dad joke', usage='dadjoke', examples=['dadjoke'],
                       clearance='User', cls=command.Command)
