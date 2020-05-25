@@ -12,6 +12,15 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(help='Gets a random dad joke', usage='dadjoke', examples=['dadjoke'],
+                      clearance='User', cls=command.Command)
+    async def dadjoke(self, ctx):
+        url = "https://icanhazdadjoke.com/"
+        response = requests.get(url, headers={"Accept": "text/plain"})
+        joke = response.text.encode("ascii", "ignore").decode("ascii")
+
+        return await embed_maker.message(ctx, joke)
+
     @commands.command(help='Distort images or peoples profile pictures', usage='distort [image link | @Member]',
                       examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot'],
                       clearance='User', cls=command.Command)
