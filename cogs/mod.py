@@ -3,7 +3,6 @@ import re
 import dateparser
 import datetime
 import time
-import pytz
 import asyncio
 from modules import command, database, embed_maker, format_time
 from discord.ext import commands
@@ -17,7 +16,7 @@ class Mod(commands.Cog):
 
     @commands.command(help='Set up reaction based reminder',
                       usage='react_remind [time before event] [message id of event announcement] [time to event]',
-                      examples=['react_remind 30min 8pm sunday'], clearance='Mod', cls=command.Command)
+                      examples=['react_remind 30min 716017189093769237 8pm sunday'], clearance='Mod', cls=command.Command)
     async def react_remind(self, ctx, remind_time=None, announcement_id=None, *, to_event=None):
         if remind_time is None:
             return await embed_maker.command_error(ctx)
