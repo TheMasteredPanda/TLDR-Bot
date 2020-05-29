@@ -96,6 +96,11 @@ class TLDR(commands.Bot):
         if ctx.guild is None:
             return
 
+        utils = self.get_cog('Utils')
+        clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
+        if ctx.command.clearance not in clearance:
+            return
+
         await self.invoke(ctx)
 
     async def on_guild_join(self, guild):
