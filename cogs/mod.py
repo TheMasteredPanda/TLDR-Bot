@@ -85,7 +85,7 @@ class Mod(commands.Cog):
             msg = f'In {format_time.seconds(remind_time)}: ' \
                   f'https://discordapp.com/channels/{guild_id}/{channel_id}/{announcement_id}'
             await user.send(msg)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.3)
 
 
     @commands.command(help='see what roles are whitelisted for an emote', usage='emote_roles [emote]',
