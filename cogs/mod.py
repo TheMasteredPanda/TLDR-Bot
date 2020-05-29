@@ -15,8 +15,8 @@ class Mod(commands.Cog):
         self.bot = bot
 
     @commands.command(help='Set up reaction based reminder',
-                      usage='react_remind [time before event] [message id of event announcement] [time to event]',
-                      examples=['react_remind 30min 716017189093769237 8pm sunday'], clearance='Mod', cls=command.Command)
+                      usage='react_remind [time before event] [message id of event announcement] [time to event and timzone]',
+                      examples=['react_remind 30min 716017189093769237 8pm sunday GMT+1'], clearance='Mod', cls=command.Command)
     async def react_remind(self, ctx, remind_time=None, announcement_id=None, *, to_event=None):
         if remind_time is None:
             return await embed_maker.command_error(ctx)
