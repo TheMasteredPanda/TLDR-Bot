@@ -64,6 +64,9 @@ class Mod(commands.Cog):
         channel = guild.get_channel(int(channel_id))
         message = await channel.fetch_message(int(message_id))
 
+        if message is None:
+            return
+
         reactions = message.reactions
         users = []
         for r in reactions:
@@ -73,7 +76,8 @@ class Mod(commands.Cog):
                 users.pop(0)
                 break
 
-        asyncio.create_task(self.notify_users(users, remind_time, guild_id, channel_id, announcement_id))
+        if users:
+            asyncio.create_task(self.notify_users(users, remind_time, guild_id, channel_id, announcement_id))
 
     @staticmethod
     async def notify_users(users, remind_time, guild_id, channel_id, announcement_id):
