@@ -1,6 +1,11 @@
 import discord
 import re
-from modules import command, embed_maker, database
+import dateparser
+import datetime
+import time
+import pytz
+import asyncio
+from modules import command, database, embed_maker, format_time
 from discord.ext import commands
 
 db = database.Connection()
@@ -9,6 +14,76 @@ db = database.Connection()
 class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(help='Set up reaction based reminder',
+                      usage='react_remind [time before event] [message id of event announcement] [time to event]',
+                      examples=['react_remind 30min 8pm sunday'], clearance='Mod', cls=command.Command)
+    async def react_remind(self, ctx, remind_time=None, announcement_id=None, *, to_event=None):
+        if remind_time is None:
+            return await embed_maker.command_error(ctx)
+
+        parsed_remind_time = format_time.parse(remind_time)
+        if parsed_remind_time is None:
+            return await embed_maker.command_error(ctx, '[time before event]')
+
+        if announcement_id is None or not announcement_id.isdigit():
+            return await embed_maker.command_error(ctx, '[message id of event announcement]')
+
+        announcement_msg = await ctx.channel.fetch_message(int(announcement_id))
+        if announcement_msg is None:
+            return await embed_maker.command_error(ctx, '[message id of event announcement]')
+
+        if to_event is None:
+            return await embed_maker.command_error(ctx, '[time to event]')
+
+        parsed_to_event = dateparser.parse(to_event, settings={'PREFER_DATES_FROM': 'future',
+                                                               'RETURN_AS_TIMEZONE_AWARE': True})
+        if parsed_to_event is None:
+            return await embed_maker.command_error(ctx, '[time to event]')
+
+        time_diff = parsed_to_event - datetime.datetime.now(parsed_to_event.tzinfo)
+        time_diff_seconds = round(time_diff.total_seconds())
+
+        msg = f'React with :bell: to get a dm {format_time.seconds(parsed_remind_time)} before the event'
+        remind_msg = await embed_maker.message(ctx, msg)
+        await remind_msg.add_reaction('🔔')
+
+        utils_cog = self.bot.get_cog('Utils')
+        expires = round(time.time()) + time_diff_seconds - parsed_remind_time
+        await utils_cog.create_timer(
+            expires=expires, guild_id=ctx.guild.id, event='react_remind',
+            extras={'message_id': remind_msg.id, 'channel_id': remind_msg.channel.id,
+                    'announcement_id': announcement_id, 'remind_time': parsed_remind_time}
+        )
+
+    @commands.Cog.listener()
+    async def on_react_remind_timer_over(self, timer):
+        message_id, channel_id, announcement_id, remind_time = timer['extras'].values()
+        guild_id = timer['guild_id']
+
+        guild = self.bot.get_guild(int(guild_id))
+        channel = guild.get_channel(int(channel_id))
+        message = await channel.fetch_message(int(message_id))
+
+        reactions = message.reactions
+        users = []
+        for r in reactions:
+            if r.emoji == '🔔':
+                users = await r.users().flatten()
+                # removes bot from list
+                users.pop(0)
+                break
+
+        asyncio.create_task(self.notify_users(users, remind_time, guild_id, channel_id, announcement_id))
+
+    @staticmethod
+    async def notify_users(users, remind_time, guild_id, channel_id, announcement_id):
+        for user in users:
+            msg = f'In {format_time.seconds(remind_time)}: ' \
+                  f'https://discordapp.com/channels/{guild_id}/{channel_id}/{announcement_id}'
+            await user.send(msg)
+            await asyncio.sleep(0.1)
+
 
     @commands.command(help='see what roles are whitelisted for an emote', usage='emote_roles [emote]',
                       examples=['emote_roles :TldrNewsUK:'], clearance='Mod', cls=command.Command)
