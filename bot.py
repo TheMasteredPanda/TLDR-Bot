@@ -160,7 +160,7 @@ class TLDR(commands.Bot):
 
             if levels_user['h_role']:
                 user_h_role = [role for role in honours_route if role[0] == levels_user['h_role']]
-                user_h_role_index = honours_route.index(user_p_role[0])
+                user_h_role_index = honours_route.index(user_h_role[0])
 
                 # add old honours roles to user
                 up_to_current_role = honours_route[0:user_h_role_index + 1]
