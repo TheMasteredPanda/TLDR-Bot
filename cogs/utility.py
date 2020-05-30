@@ -472,6 +472,8 @@ class Utility(commands.Cog):
 
     @staticmethod
     def get_member(ctx, source):
+        if source is None:
+            return None
         # check if source is member mention
         if ctx.message.mentions:
             member = ctx.message.mentions[0]
