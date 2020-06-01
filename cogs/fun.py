@@ -77,7 +77,7 @@ class Fun(commands.Cog):
                 with Wand(filename='images/pride.png') as pride_image:
                     avatar.resize(width=800, height=800)
                     pride_image.resize(width=800, height=800)
-                    pride_image.transparentize(0.5)
+                    pride_image.transparentize(0.6)
                     avatar.composite(pride_image)
                     blended_image.sequence.append(avatar.sequence[0])
 
