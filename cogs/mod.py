@@ -82,6 +82,8 @@ class Mod(commands.Cog):
     @staticmethod
     async def notify_users(users, remind_time, guild_id, channel_id, announcement_id):
         for user in users:
+            if user.bot:
+                continue
             msg = f'In {format_time.seconds(remind_time)}: ' \
                   f'https://discordapp.com/channels/{guild_id}/{channel_id}/{announcement_id}'
             await user.send(msg)
