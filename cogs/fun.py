@@ -16,10 +16,39 @@ class Fun(commands.Cog):
 
     @commands.command(help='put they gay pride flag on your profile picture', usage='pride', examples=['pride'],
                       clearance='User', cls=command.Command)
-    async def pride(self, ctx):
-        user_avatar_url = str(ctx.author.avatar_url).replace('webp', 'png')
+    async def pride(self, ctx, source=None):
+        url = None
+        mem = None
+
+        # check for attachments
+        if ctx.message.attachments:
+            url = ctx.message.attachments[0].url
+
+        # check if source is member
+        if source and ctx.message.mentions:
+            mem = ctx.message.mentions[0]
+        elif source:
+            # check if source is emote
+            emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
+            match = re.findall(emote_regex, source)
+            if match:
+                emote = [emote for emote in ctx.guild.emojis if str(emote.id) == match[0]][0]
+                url = str(emote.url)
+            else:
+                # Check if source is member name or id
+                regex = re.compile(fr'({source.lower()})')
+                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
+                if mem is None:
+                    url = source
+
+        if source is None:
+            mem = ctx.author
+
+        if mem and url is None:
+            url = str(mem.avatar_url).replace('webp', 'png')
+
         if config.WEB_API_URL:
-            response = requests.get(f'{config.WEB_API_URL}/pride?img={user_avatar_url}')
+            response = requests.get(f'{config.WEB_API_URL}/pride?img={url}')
             print(response)
             if not response:
                 return await embed_maker.message(ctx, 'Error getting image', colour='red')
@@ -28,7 +57,7 @@ class Fun(commands.Cog):
             image.seek(0)
 
         else:
-            image = await self.do_pride(ctx, user_avatar_url)
+            image = await self.do_pride(ctx, url)
 
         embed = discord.Embed()
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
