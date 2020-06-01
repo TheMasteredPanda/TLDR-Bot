@@ -4,6 +4,7 @@ import requests
 import config
 import random
 import json
+from wand.image import Image as Wand
 from io import BytesIO
 from modules import command, embed_maker
 from discord.ext import commands
@@ -12,6 +13,50 @@ from discord.ext import commands
 class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(help='put they gay pride flag on your profile picture', usage='pride', examples=['pride'],
+                      clearance='User', cls=command.Command)
+    async def pride(self, ctx):
+        user_avatar_url = str(ctx.author.avatar_url).replace('webp', 'png')
+        if config.WEB_API_URL:
+            response = requests.get(f'{config.WEB_API_URL}/pride?img={user_avatar_url}')
+            print(response)
+            if not response:
+                return await embed_maker.message(ctx, 'Error getting image', colour='red')
+
+            image = BytesIO(response.content)
+            image.seek(0)
+
+        else:
+            image = await self.do_pride(ctx, user_avatar_url)
+
+        embed = discord.Embed()
+        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+        embed.set_image(url='attachment://pride.png')
+        return await ctx.send(file=discord.File(fp=image, filename='pride.png'), embed=embed)
+
+    async def do_pride(self, ctx, url):
+        response = requests.get(url)
+        if not response:
+            return await embed_maker.message(ctx, 'Error getting image', colour='red')
+
+        image = BytesIO(response.content)
+        image.seek(0)
+
+        with Wand() as blended_image:
+            with Wand(file=image) as avatar:
+                with Wand(filename='images/pride.png') as pride_image:
+                    avatar.resize(width=800, height=800)
+                    pride_image.resize(width=800, height=800)
+                    pride_image.transparentize(0.5)
+                    avatar.composite(pride_image)
+                    blended_image.sequence.append(avatar.sequence[0])
+
+            buffer = BytesIO()
+            blended_image.save(buffer)
+            buffer.seek(0)
+
+        return buffer
 
     def get_random_image(self, url, json_key):
         response = requests.get(url)
@@ -101,18 +146,50 @@ class Fun(commands.Cog):
         if mem and url is None:
             url = str(mem.avatar_url).replace('webp', 'png')
 
-        response = requests.get(f'{config.WEB_API_URL}/distort?img={url}')
-        if not response:
-            return await embed_maker.message(ctx, 'Error getting image', colour='red')
+        if config.WEB_API_URL:
+            response = requests.get(f'{config.WEB_API_URL}/distort?img={url}')
+            if not response:
+                return await embed_maker.message(ctx, 'Error getting image', colour='red')
 
-        distorted_image = BytesIO(response.content)
-        distorted_image.seek(0)
+            image = BytesIO(response.content)
+            image.seek(0)
+
+        else:
+            image = await self.do_distort(ctx, url)
 
         embed = discord.Embed()
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
         embed.set_image(url='attachment://distorted.png')
-        return await ctx.send(file=discord.File(fp=distorted_image, filename='distorted.png'), embed=embed)
+        return await ctx.send(file=discord.File(fp=image, filename='distorted.png'), embed=embed)
 
+    async def do_distort(self, ctx, url):
+        response = requests.get(url)
+        if not response:
+            return await embed_maker.message(ctx, 'Error getting image', colour='red')
+
+        _img = BytesIO(response.content)
+        _img.seek(0)
+
+        with Wand() as new_image:
+            with Wand(file=_img) as img:
+                def transform_image(img):
+                    img.transform(resize='500x500>')
+                    img.liquid_rescale(width=int(img.width * 0.5), height=int(img.height * 0.5), delta_x=1)
+                    img.liquid_rescale(width=int(img.width * 1.5), height=int(img.height * 1.5), delta_x=2)
+                    img.transform(resize='500x500')
+
+                if len(img.sequence) > 1:
+                    transform_image(img.sequence[0])
+                    new_image.sequence.append(img.sequence[0])
+                else:
+                    transform_image(img)
+                    new_image.sequence.append(img)
+
+            magikd_buffer = BytesIO()
+            new_image.save(magikd_buffer)
+            magikd_buffer.seek(0)
+
+        return magikd_buffer
 
 def setup(bot):
     bot.add_cog(Fun(bot))
