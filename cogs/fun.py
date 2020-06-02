@@ -251,9 +251,10 @@ class Fun(commands.Cog):
                     return 'Gif has too many frames'
 
                 def transform_image(img):
-                    img.resize(width=800, height=800)
-                    img.liquid_rescale(width=int(img.width * 0.5), height=int(img.height * 0.5), delta_x=1)
-                    img.liquid_rescale(width=int(img.width * 1.5), height=int(img.height * 1.5), delta_x=2)
+                    img.resize(width=500, height=500)
+                    img.liquid_rescale(width=int(img.width * 0.3), height=int(img.height * 0.3), delta_x=1)
+                    img.liquid_rescale(width=int(img.width * 3), height=int(img.height * 3), delta_x=2)
+                    img.implode(0.25)
 
                 if len(img.sequence) > 1:
                     for frame in img.sequence:
