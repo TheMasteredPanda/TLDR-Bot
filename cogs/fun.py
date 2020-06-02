@@ -4,6 +4,8 @@ import requests
 import config
 import random
 import json
+import aiohttp
+import asyncio
 from wand.image import Image as Wand
 from io import BytesIO
 from modules import command, embed_maker
@@ -48,38 +50,67 @@ class Fun(commands.Cog):
             url = str(mem.avatar_url).replace('webp', 'png')
 
         if config.WEB_API_URL:
-            response = requests.get(f'{config.WEB_API_URL}/pride?img={url}')
-            print(response)
-            if not response:
+            async with aiohttp.ClientSession() as session:
+                image_task = asyncio.create_task(self.fetch_image(session, f'{config.WEB_API_URL}/pride?img={url}'))
+                content = await image_task
+
+            if not content:
                 return await embed_maker.message(ctx, 'Error getting image', colour='red')
 
-            image = BytesIO(response.content)
+            image = BytesIO(content)
             image.seek(0)
 
         else:
             image = await self.do_pride(ctx, url)
+            # checks if do_pride returned message
+            if isinstance(image, discord.Message):
+                return
+
+        # get file extension
+        split = url.split('.')
+        extension = split[-1]
+
+        # check if it has arguments after extension
+        split = extension.split('?')
+        if len(split) > 1:
+            extension = split[0]
 
         embed = discord.Embed()
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        embed.set_image(url='attachment://pride.png')
-        return await ctx.send(file=discord.File(fp=image, filename='pride.png'), embed=embed)
+        embed.set_image(url=f'attachment://pride.{extension}')
+        return await ctx.send(file=discord.File(fp=image, filename=f'pride.{extension}'), embed=embed)
 
     async def do_pride(self, ctx, url):
-        response = requests.get(url)
-        if not response:
+        async with aiohttp.ClientSession() as session:
+            image_task = asyncio.create_task(self.fetch_image(session, f'{config.WEB_API_URL}/pride?img={url}'))
+            content = await image_task
+
+        if not content:
             return await embed_maker.message(ctx, 'Error getting image', colour='red')
 
-        image = BytesIO(response.content)
+        image = BytesIO(content)
         image.seek(0)
 
         with Wand() as blended_image:
             with Wand(file=image) as avatar:
+                if len(avatar.sequence) > 60:
+                    return await embed_maker.message(ctx, 'Too many frames in gif', colour='red')
+
                 with Wand(filename='images/pride.png') as pride_image:
-                    avatar.resize(width=800, height=800)
                     pride_image.resize(width=800, height=800)
                     pride_image.transparentize(0.6)
-                    avatar.composite(pride_image)
-                    blended_image.sequence.append(avatar.sequence[0])
+
+                    def apply_pride(img):
+                        img.resize(width=800, height=800)
+                        img.composite(pride_image)
+
+                    if len(avatar.sequence) > 1:
+                        for frame in avatar.sequence:
+                            apply_pride(frame)
+                            blended_image.sequence.append(frame)
+                    else:
+                        apply_pride(avatar)
+                        blended_image.sequence.append(avatar)
 
             buffer = BytesIO()
             blended_image.save(buffer)
@@ -176,40 +207,58 @@ class Fun(commands.Cog):
             url = str(mem.avatar_url).replace('webp', 'png')
 
         if config.WEB_API_URL:
-            response = requests.get(f'{config.WEB_API_URL}/distort?img={url}')
-            if not response:
+            async with aiohttp.ClientSession() as session:
+                image_task = asyncio.create_task(self.fetch_image(session, f'{config.WEB_API_URL}/distort?img={url}'))
+                content = await image_task
+
+            if not content:
                 return await embed_maker.message(ctx, 'Error getting image', colour='red')
 
-            image = BytesIO(response.content)
+            image = BytesIO(content)
             image.seek(0)
 
         else:
             image = await self.do_distort(ctx, url)
 
+        # get file extension
+        split = url.split('.')
+        extension = split[-1]
+
+        # check if it has arguments after extension
+        split = extension.split('?')
+        if len(split) > 1:
+            extension = split[0]
+
         embed = discord.Embed()
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        embed.set_image(url='attachment://distorted.png')
-        return await ctx.send(file=discord.File(fp=image, filename='distorted.png'), embed=embed)
+        embed.set_image(url=f'attachment://distorted.{extension}')
+        return await ctx.send(file=discord.File(fp=image, filename=f'distorted.{extension}'), embed=embed)
 
     async def do_distort(self, ctx, url):
-        response = requests.get(url)
-        if not response:
+        async with aiohttp.ClientSession() as session:
+            image_task = asyncio.create_task(self.fetch_image(session, url))
+            content = await image_task
+
+        if not content:
             return await embed_maker.message(ctx, 'Error getting image', colour='red')
 
-        _img = BytesIO(response.content)
+        _img = BytesIO(content)
         _img.seek(0)
 
         with Wand() as new_image:
             with Wand(file=_img) as img:
+                if len(img.sequence) > 60:
+                    return 'Gif has too many frames'
+
                 def transform_image(img):
-                    img.transform(resize='500x500>')
+                    img.resize(width=800, height=800)
                     img.liquid_rescale(width=int(img.width * 0.5), height=int(img.height * 0.5), delta_x=1)
                     img.liquid_rescale(width=int(img.width * 1.5), height=int(img.height * 1.5), delta_x=2)
-                    img.transform(resize='500x500')
 
                 if len(img.sequence) > 1:
-                    transform_image(img.sequence[0])
-                    new_image.sequence.append(img.sequence[0])
+                    for frame in img.sequence:
+                        transform_image(frame)
+                        new_image.sequence.append(frame)
                 else:
                     transform_image(img)
                     new_image.sequence.append(img)
@@ -219,6 +268,12 @@ class Fun(commands.Cog):
             magikd_buffer.seek(0)
 
         return magikd_buffer
+
+    @staticmethod
+    async def fetch_image(session, url):
+        async with session.get(url) as response:
+            return await response.read()
+
 
 def setup(bot):
     bot.add_cog(Fun(bot))
