@@ -25,6 +25,9 @@ class Mod(commands.Cog):
         if 'daily_debates' not in data:
             data = self.bot.add_collections(ctx.guild.id, 'server_data')
 
+        if arg is None:
+            return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
+
         if action == 'set_time':
             parsed_arg_time = dateparser.parse(
                 arg, settings={'RETURN_AS_TIMEZONE_AWARE': True}
@@ -37,7 +40,7 @@ class Mod(commands.Cog):
             time_diff_seconds = round(time_diff.total_seconds())
 
             if time_diff_seconds < 0:
-                return embed_maker.message(ctx, 'Invalid time', colour='red')
+                return await embed_maker.message(ctx, 'Invalid time', colour='red')
 
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.time': arg}})
             await embed_maker.message(ctx, f'Daily debates will now be announced every day at {arg}')
@@ -117,9 +120,6 @@ class Mod(commands.Cog):
 
         if action not in ['add', 'remove']:
             return await embed_maker.command_error(ctx, '(action)')
-
-        if arg is None:
-            return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
 
         if action == 'add':
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': arg}})
