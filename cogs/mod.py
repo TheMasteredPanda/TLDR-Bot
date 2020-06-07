@@ -72,8 +72,6 @@ class Mod(commands.Cog):
         for r in reactions:
             if r.emoji == '🔔':
                 users = await r.users().flatten()
-                # removes bot from list
-                users.pop(0)
                 break
 
         if users:
