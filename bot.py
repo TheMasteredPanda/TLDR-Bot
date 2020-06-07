@@ -1,9 +1,10 @@
 import discord
 import os
 import config
-import re
+import dateparser
 import traceback
 import time
+from datetime import datetime
 from modules import database
 from discord.ext import commands
 
@@ -113,7 +114,7 @@ class TLDR(commands.Bot):
     @staticmethod
     def add_collections(guild_id, col=None):
         return_doc = None
-        collections = ['levels', 'timers', 'polls', 'tickets']
+        collections = ['levels', 'timers', 'polls', 'tickets', 'server_data']
         for c in collections:
             collection = db.__getattribute__(c)
             doc = collection.find_one({'guild_id': guild_id})
@@ -137,9 +138,24 @@ class TLDR(commands.Bot):
 
         print(f'{self.user} is ready')
 
-        # Check if guild documents in collections exist if not, it adds them
         for g in self.guilds:
+            # Check if guild documents in collections exist if not, it adds them
             self.add_collections(g.id)
+
+            # start daily debate timer if it doesnt exist
+            timer_data = db.timers.find_one({'guild_id': g.id})
+            daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
+            if not daily_debate_timer:
+                # calculates time until next debate -1 hour
+                daily_debate_data = db.server_data.find_one({'guild_id': g.id})
+
+                dd_time = daily_debate_data['daily_debates']['time']
+                dd_channel = daily_debate_data['daily_debates']['channel']
+                if not dd_time or not dd_channel:
+                    return
+
+                mod_cog = self.get_cog('Mod')
+                await mod_cog.start_daily_debate_timer(g.id, dd_time)
 
     @staticmethod
     async def on_member_join(member):

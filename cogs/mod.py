@@ -4,6 +4,7 @@ import dateparser
 import datetime
 import time
 import asyncio
+import config
 from modules import command, database, embed_maker, format_time
 from discord.ext import commands
 
@@ -13,6 +14,196 @@ db = database.Connection()
 class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (topic/time/channel/notification role)',
+                      clearance='Mod', cls=command.Command,
+                      examples=['dailydebates', 'dailydebates add is TLDR ross mega cool?',
+                                'dailydebates remove is TldR roos mega cool?', 'dailydebates set_time 2pm GMT',
+                                'dailydebates set_channel #daily-debates', 'dailydebates set_role Debaters'])
+    async def dailydebates(self, ctx, action=None, *, arg=None):
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'daily_debates' not in data:
+            data = self.bot.add_collections(ctx.guild.id, 'server_data')
+
+        if action == 'set_time':
+            parsed_arg_time = dateparser.parse(
+                arg, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True}
+            )
+            if not parsed_arg_time:
+                return await embed_maker.message(ctx, 'Invalid time', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.time': arg}})
+            await embed_maker.message(ctx, f'Daily debates will now be announced every day at {arg}')
+
+            # cancel old timer if active
+            timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
+            daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
+            if daily_debate_timer:
+                db.timers.update_one({'guild_id': ctx.guild.id}, {'$pull': {'timers': {'id': daily_debate_timer[0]['id']}}})
+                return await self.start_daily_debate_timer(ctx.guild.id, arg)
+            else:
+                return
+
+        if action == 'set_channel':
+            if not ctx.message.channel_mentions:
+                return await embed_maker.message(ctx, 'Invalid channel mention', colour='red')
+
+            channel_id = ctx.message.channel_mentions[0].id
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.channel': channel_id}})
+            return await embed_maker.message(ctx, f'Daily debates will now be announced every day at <#{channel_id}>')
+
+        if action == 'set_role':
+            role = discord.utils.find(lambda r: r.name.lower() == arg.lower(), ctx.guild.roles)
+            if not role:
+                return await embed_maker.message(ctx, 'Invalid role name', colour='red')
+
+            role_id = role.id
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.role': role_id}})
+            return await embed_maker.message(ctx, f'Daily debates will now be announced every day to <@&{role_id}>')
+
+        missing = False
+        # check if time has been set up, if not, inform user
+        if not data['daily_debates']['time']:
+            missing = True
+            err = f'Time has not been set yet, i dont know when to send the message\n' \
+                  f'Set time with `{config.PREFIX}dailydebates set_time [time]` e.g. `{config.PREFIX}dailydebates set_time 2pm GMT+1`'
+            return await embed_maker.message(ctx, err, colour='red')
+
+        # check if channel has been set up, if not, inform user
+        if not data['daily_debates']['channel']:
+            missing = True
+            err = f'Channel has not been set yet, i dont know where to send the message\n' \
+                  f'Set time with `{config.PREFIX}dailydebates set_channel [#channel]` e.g. `{config.PREFIX}dailydebates set_channel #daily-debates`'
+            return await embed_maker.message(ctx, err, colour='red')
+
+        if not missing:
+            # check for active timer
+            timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
+            daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
+            if not daily_debate_timer:
+                await self.start_daily_debate_timer(ctx.guild.id, data['daily_debates']['time'])
+
+        if action is None:
+            # List currently set up daily debate topics
+            topics = data['daily_debates']['topics']
+            if not topics:
+                topics_str = f'Currently there are no debate topics set up\n\nNext one in: {format_time.seconds()}'
+            else:
+                topics_str = '**Topics:**\n' + '\n'.join(f'**{i + 1}:** {topic}' for i, topic in enumerate(topics))
+
+            # calculate when next daily debate starts
+            timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
+            daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
+
+            if not daily_debate_timer:
+                return
+
+            dd_time = daily_debate_timer[0]['extras']['time']
+            parsed_dd_time = dateparser.parse(dd_time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
+            parsed_dd_time = dateparser.parse(dd_time, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_dd_time.tzinfo)})
+            time_diff = parsed_dd_time - datetime.datetime.now(parsed_dd_time.tzinfo)
+            time_diff_seconds = round(time_diff.total_seconds())
+
+            topics_str += f'\n\nNext one in: **{format_time.seconds(time_diff_seconds)}**'
+
+            return await embed_maker.message(ctx, msg=topics_str)
+
+        if action not in ['add', 'remove']:
+            return await embed_maker.command_error(ctx, '(action)')
+
+        if arg is None:
+            return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
+
+        if action == 'add':
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': arg}})
+            return await embed_maker.message(
+                ctx, f'`{arg}` has been added to the list of daily debate topics'
+                f'\nThere are now **{len(data["daily_debates"]["topics"]) + 1}** topics on the list'
+            )
+        if action == 'remove':
+            if arg not in data['daily_debates']['topics']:
+                return await embed_maker.message(ctx, f'`{arg}` is not on the list of daily debate topics')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'daily_debates.topics': arg}})
+            return await embed_maker.message(
+                ctx, f'`{arg}` has been removed from the list of daily debate topics'
+                f'\nThere are now **{len(data["daily_debates"]["topics"]) - 1}** topics on the list'
+            )
+
+    async def start_daily_debate_timer(self, guild_id, dd_time):
+        # creating first parsed_dd_time to grab timezone info
+        parsed_dd_time = dateparser.parse(dd_time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
+
+        # second one for actual use
+        parsed_dd_time = dateparser.parse(dd_time, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_dd_time.tzinfo)})
+
+        time_diff = parsed_dd_time - datetime.datetime.now(parsed_dd_time.tzinfo)
+        time_diff_seconds = round(time_diff.total_seconds())
+
+        # if time_diff is negative try again but add tomorrows
+
+        timer_expires = round(time.time()) + time_diff_seconds - 3600  # one hour
+        utils_cog = self.bot.get_cog('Utils')
+        await utils_cog.create_timer(expires=timer_expires, guild_id=guild_id, event='daily_debate', extras={'time': dd_time})
+
+    @commands.Cog.listener()
+    async def on_daily_debate_timer_over(self, timer):
+        guild_id = timer['guild_id']
+        guild = self.bot.get_guild(int(guild_id))
+
+        dd_time = timer['extras']['time']
+        parsed_dd_time = dateparser.parse(dd_time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
+        parsed_dd_time = dateparser.parse(dd_time, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_dd_time.tzinfo)})
+        time_diff = parsed_dd_time - datetime.datetime.now(parsed_dd_time.tzinfo)
+        time_diff_seconds = round(time_diff.total_seconds())
+
+        data = db.server_data.find_one({'guild_id': guild.id})
+        # check if there are debate topics set up
+        topics = data['daily_debates']['topics']
+        if not topics:
+            # remind mods that a topic needs to be set up
+            msg = f'Daily debate starts in {format_time.seconds(time_diff_seconds)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
+            channel = guild.get_channel(data['daily_debates']['channel'])
+
+            if channel is None:
+                return
+
+            return await channel.send(msg)
+        else:
+            # start final timer which sends daily debate topic
+            timer_expires = round(time.time()) + time_diff_seconds  # one hour
+            utils_cog = self.bot.get_cog('Utils')
+            await utils_cog.create_timer(expires=timer_expires, guild_id=guild.id, event='daily_debate_final',
+                                         extras={'topic': topics[0], 'channel': data['daily_debates']['channel'],
+                                                 'role': data['daily_debates']['role'], 'time': data['daily_debates']['time']})
+
+    @commands.Cog.listener()
+    async def on_daily_debate_final_timer_over(self, timer):
+        guild_id = timer['guild_id']
+        guild = self.bot.get_guild(int(guild_id))
+
+        topic = timer['extras']['topic']
+        dd_time = timer['extras']['time']
+        dd_channel_id = timer['extras']['channel']
+        dd_role_id = timer['extras']['role']
+
+        dd_channel = discord.utils.find(lambda c: c.id == int(dd_channel_id), guild.channels)
+        dd_role = discord.utils.find(lambda r: r.id == int(dd_role_id), guild.roles)
+
+        if dd_channel is None:
+            return
+
+        message = f'Today\'s debate: **“{topic}”**'
+        if dd_role:
+            message += '\n\n<@{dd_role.id}>'
+
+        await dd_channel.send(message)
+
+        # delete used topic
+        db.server_data.update_one({'guild_id': guild.id}, {'$pull': {'daily_debates.topics': topic}})
+
+        # start daily_debate timer over
+        return await self.start_daily_debate_timer(guild.id, dd_time)
 
     @commands.command(help='Set up reaction based reminder',
                       usage='react_remind [time before event] [message id of event announcement] [time to event and timzone]',
@@ -35,8 +226,15 @@ class Mod(commands.Cog):
         if to_event is None:
             return await embed_maker.command_error(ctx, '[time to event]')
 
-        parsed_to_event = dateparser.parse(to_event, settings={'PREFER_DATES_FROM': 'future',
-                                                               'RETURN_AS_TIMEZONE_AWARE': True})
+        tz = dateparser.parse(to_event, settings={'RETURN_AS_TIMEZONE_AWARE': True})
+
+        if tz is None:
+            return await embed_maker.command_error(ctx, '[time to event]')
+
+        parsed_to_event = dateparser.parse(to_event, settings={'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(tz.tzinfo)})
+        if parsed_to_event < datetime.datetime.now(tz.tzinfo):
+            parsed_to_event = dateparser.parse(to_event, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(tz.tzinfo)})
+
         if parsed_to_event is None:
             return await embed_maker.command_error(ctx, '[time to event]')
 
