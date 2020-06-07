@@ -187,10 +187,20 @@ class TLDR(commands.Bot):
             extras={'user_id': member.id}
         )
 
-    @staticmethod
-    def on_delete_user_data_timer_over(timer):
+    def on_delete_user_data_timer_over(self, timer):
         guild_id = timer['guild_id']
         user_id = timer['extras']['user_id']
+
+        guild = self.get_guild(int(guild_id))
+
+        # check if member joined back
+        mem = guild.get_member(int(user_id))
+        if mem is None:
+            mem = await guild.fetch_member(int(user_id))
+
+        if mem is None:
+            return
+
         # Delete user levels data
         db.levels.update_one({'guild_id': guild_id}, {'$unset': {f'users.{user_id}': ''}})
 
