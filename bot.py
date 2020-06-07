@@ -187,7 +187,7 @@ class TLDR(commands.Bot):
             extras={'user_id': member.id}
         )
 
-    def on_delete_user_data_timer_over(self, timer):
+    async def on_delete_user_data_timer_over(self, timer):
         guild_id = timer['guild_id']
         user_id = timer['extras']['user_id']
 
