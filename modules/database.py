@@ -69,7 +69,8 @@ schemas = {
             'topics': [],
             'time': '',
             'channel': 0,
-            'role': 0
+            'role': 0,
+            'old_message_id': 0
         }
     }
 }
