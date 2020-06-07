@@ -31,7 +31,11 @@ class TLDR(commands.Bot):
         traceback_text = ''.join(lines)
 
         print(traceback_text)
-        print(exception)
+        print(exception == discord.ext.commands.MissingPermissions)
+
+        # send special message to user if bot lacks perms to send message in channel
+        if isinstance(exception.original, discord.errors.Forbidden):
+            await ctx.author.send('It appears that I am not allowed to send messages in that channel')
 
         # send error message to certain channel in a guild if error happens during bot runtime
         if config.ERROR_SERVER in [g.id for g in self.guilds]:
