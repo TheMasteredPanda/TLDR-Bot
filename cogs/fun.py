@@ -34,8 +34,8 @@ class Fun(commands.Cog):
             emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
             match = re.findall(emote_regex, source)
             if match:
-                emote = [emote for emote in ctx.guild.emojis if str(emote.id) == match[0]][0]
-                url = str(emote.url)
+                emote_id = match[0]
+                url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
             else:
                 # Check if source is member name or id
                 regex = re.compile(fr'({source.lower()})')
@@ -187,8 +187,8 @@ class Fun(commands.Cog):
             emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
             match = re.findall(emote_regex, source)
             if match:
-                emote = [emote for emote in ctx.guild.emojis if str(emote.id) == match[0]][0]
-                url = str(emote.url)
+                emote_id = match[0]
+                url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
             else:
                 # Check if source is member name or id
                 regex = re.compile(fr'({source.lower()})')
