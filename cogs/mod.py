@@ -27,10 +27,17 @@ class Mod(commands.Cog):
 
         if action == 'set_time':
             parsed_arg_time = dateparser.parse(
-                arg, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True}
+                arg, settings={'RETURN_AS_TIMEZONE_AWARE': True}
             )
             if not parsed_arg_time:
                 return await embed_maker.message(ctx, 'Invalid time', colour='red')
+
+            parsed_dd_time = dateparser.parse(arg, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_arg_time.tzinfo)})
+            time_diff = parsed_dd_time - datetime.datetime.now(parsed_arg_time.tzinfo)
+            time_diff_seconds = round(time_diff.total_seconds())
+
+            if time_diff_seconds < 0:
+                return embed_maker.message(ctx, 'Invalid time', colour='red')
 
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.time': arg}})
             await embed_maker.message(ctx, f'Daily debates will now be announced every day at {arg}')
