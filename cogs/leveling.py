@@ -473,6 +473,10 @@ class Leveling(commands.Cog):
         if data is None:
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
+        if 'settings' not in data['users'][str(ctx.author.id)]:
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.settings': {'@_me': False}}})
+            data['users'][str(ctx.author.id)]['settings'] = {'@_me': False}
+
         settings = data['users'][str(ctx.author.id)]['settings']
         enabled = settings['@_me']
 
@@ -1081,6 +1085,10 @@ class Leveling(commands.Cog):
 
         if channel is None:
             channel = ctx.channel
+
+        if 'settings' not in data['users'][str(member.id)]:
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.settings': {'@_me': False}}})
+            data['users'][str(member.id)]['settings'] = {'@_me': False}
 
         settings = data['users'][str(member.id)]['settings']
         enabled = settings['@_me']
