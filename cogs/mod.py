@@ -207,7 +207,7 @@ class Mod(commands.Cog):
 
         message = f'Today\'s debate: **“{topic}”**'
         if dd_role:
-            message += '\n\n<@{dd_role.id}>'
+            message += f'\n\n<@&{dd_role.id}>'
 
         msg = await dd_channel.send(message)
 
