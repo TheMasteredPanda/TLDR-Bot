@@ -138,6 +138,10 @@ class TLDR(commands.Bot):
 
         print(f'{self.user} is ready')
 
+        # run old timers
+        utils_cog = self.get_cog('Utils')
+        await utils_cog.run_old_timers()
+
         for g in self.guilds:
             # Check if guild documents in collections exist if not, it adds them
             self.add_collections(g.id)
@@ -208,14 +212,14 @@ class TLDR(commands.Bot):
         user_id = timer['extras']['user_id']
 
         guild = self.get_guild(int(guild_id))
+        if guild:
+            # check if member joined back
+            mem = guild.get_member(int(user_id))
+            if mem is None:
+                mem = await guild.fetch_member(int(user_id))
 
-        # check if member joined back
-        mem = guild.get_member(int(user_id))
-        if mem is None:
-            mem = await guild.fetch_member(int(user_id))
-
-        if mem is None:
-            return
+            if mem is None:
+                return
 
         # Delete user levels data
         db.levels.update_one({'guild_id': guild_id}, {'$unset': {f'users.{user_id}': ''}})
