@@ -310,6 +310,62 @@ class Mod(commands.Cog):
             await user.send(msg)
             await asyncio.sleep(0.3)
 
+    @commands.command(help='Grant users access to commands that aren\'t available to users',
+                      usage='command_access [member] [action] [command]', clearance='Admin', cls=command.Command,
+                      examples=['command_access @Hattyot add poll', 'command_access Hattyot remove anon_poll'])
+    async def command_access(self, ctx, member=None, action=None, cmd=None):
+        if member is None:
+            return await embed_maker.command_error(ctx)
+
+        member = self.get_member(ctx, member)
+        if member is None:
+            return await embed_maker.command_error(ctx, '[member]')
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'users' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
+            data['users'] = {}
+
+        if str(member.id) not in data['users']:
+            data['users'][str(member.id)] = []
+
+        if action is None and cmd is None:
+            special_access = data['users'][str(member.id)]
+            if not special_access:
+                special_access_str = f'{member} has not special access to commmands'
+            else:
+                special_access_str = f'{member} has special access to: ' + ' '.join([f'|`{cmd}`|' for cmd in special_access])
+
+            return await embed_maker.message(ctx, special_access_str)
+
+        if action not in ['add', 'remove']:
+            return await embed_maker.command_error(ctx, '[action]')
+
+        if cmd is None or self.bot.get_command(cmd) is None:
+            return await embed_maker.command_error(ctx, '[cmd]')
+
+        cmd_obj = self.bot.get_command(cmd)
+
+        if action == 'add':
+            if cmd in data['users'][str(member.id)]:
+                return await embed_maker.message(ctx, f'{member.id} already has been given access to that command', colour='red')
+
+            if cmd_obj.clearance == 'Dev':
+                return await embed_maker.message(ctx, 'You can not give people access to dev commands', colour='red')
+            elif cmd_obj.clearance == 'Admin':
+                return await embed_maker.message(ctx, 'You can not give people access to admin commands', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'users.{member.id}': cmd}})
+
+            return await embed_maker.message(ctx, f'{member} has been granted access to: `{cmd}`')
+
+        if action == 'remove':
+            if cmd not in data['users'][str(member.id)]:
+                return await embed_maker.message(ctx, f'{member.id} does not have access to that command', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'users.{member.id}': cmd}})
+
+            return await embed_maker.message(ctx, f'{member} no longer has access to: `{cmd}`')
 
     @commands.command(help='see what roles are whitelisted for an emote', usage='emote_roles [emote]',
                       examples=['emote_roles :TldrNewsUK:'], clearance='Mod', cls=command.Command)
@@ -381,6 +437,24 @@ class Mod(commands.Cog):
                 return await ctx.send(embed=embed)
         else:
             return await embed_maker.command_error(ctx, '[action]')
+
+    @staticmethod
+    def get_member(ctx, source):
+        # check if source is member mention
+        if ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        # Check if source is user id
+        elif source.isdigit():
+            member = discord.utils.find(lambda m: m.id == source, ctx.guild.members)
+        # Check if source is member's name
+        else:
+            regex = re.compile(fr'({source.lower()})')
+            member = discord.utils.find(
+                lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()),
+                ctx.guild.members
+            )
+
+        return member
 
 
 def setup(bot):

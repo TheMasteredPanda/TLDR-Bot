@@ -435,6 +435,15 @@ class Utility(commands.Cog):
         utils = self.bot.get_cog('Utils')
         clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
 
+        # check if user has special access
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'users' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
+            data['users'] = {}
+
+        if str(ctx.author.id) not in data['users']:
+            data['users'][str(ctx.author.id)] = []
+
         if _cmd is None:
             embed = discord.Embed(
                 colour=embed_colour, timestamp=datetime.now(),
@@ -442,6 +451,7 @@ class Utility(commands.Cog):
             )
             embed.set_author(name=f'Help - {clearance[0]}', icon_url=ctx.guild.icon_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+
             for cat in help_object:
                 cat_commands = []
                 for cmd in help_object[cat]:
@@ -451,12 +461,20 @@ class Utility(commands.Cog):
                 if cat_commands:
                     embed.add_field(name=f'>{cat}', value=" \| ".join(cat_commands), inline=False)
 
+            # add special access field
+            if data['users'][str(ctx.author.id)]:
+                embed.add_field(name=f'>Special Access', value=" \| ".join(data['users'][str(ctx.author.id)]), inline=False)
+
             return await ctx.send(embed=embed)
         else:
             if self.bot.get_command(_cmd):
                 cmd = self.bot.get_command(_cmd)
-                if cmd.hidden or cmd.clearance not in clearance:
+                if cmd.hidden:
                     return
+
+                if cmd.clearance not in clearance and cmd.name not in data['users'][str(ctx.author.id)]:
+                    return
+
                 examples = f' | {prefix}'.join(cmd.examples)
                 cmd_help = f"""
                 **Description:** {cmd.help}

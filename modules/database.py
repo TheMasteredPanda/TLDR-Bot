@@ -71,6 +71,11 @@ schemas = {
             'channel': 0,
             'role': 0,
             'old_message_id': 0
+        },
+        'users': {
+            # 'id': {
+            #     'special_access': []
+            # }
         }
     }
 }

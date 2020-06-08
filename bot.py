@@ -103,7 +103,16 @@ class TLDR(commands.Bot):
 
         utils = self.get_cog('Utils')
         clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
-        if ctx.command.clearance not in clearance:
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'users' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
+            data['users'] = {}
+
+        if str(message.author.id) not in data['users']:
+            data['users'][str(message.author.id)] = []
+
+        if ctx.command.clearance not in clearance and ctx.command.name not in data['users'][str(message.author.id)]:
             return
 
         await self.invoke(ctx)
