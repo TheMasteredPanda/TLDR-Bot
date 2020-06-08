@@ -463,7 +463,7 @@ class Utility(commands.Cog):
 
             # add special access field
             if data['users'][str(ctx.author.id)]:
-                embed.add_field(name=f'>Special Access', value=" \| ".join(data['users'][str(ctx.author.id)]), inline=False)
+                embed.add_field(name=f'>Special Access', value=" \| ".join([f'`{c}`' for c in data['users'][str(ctx.author.id)]]), inline=False)
 
             return await ctx.send(embed=embed)
         else:
