@@ -312,7 +312,7 @@ class Mod(commands.Cog):
 
     @commands.command(help='Grant users access to commands that aren\'t available to users',
                       usage='command_access [member/role] [action] [command]', clearance='Admin', cls=command.Command,
-                      examples=['command_access @Hattyot add poll', 'command_access Hattyot remove anon_poll'])
+                      examples=['command_access @Hattyot add poll', 'command_access Mayor remove anon_poll'])
     async def command_access(self, ctx, src=None, action=None, cmd=None):
         if src is None:
             return await embed_maker.command_error(ctx)
