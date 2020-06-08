@@ -76,6 +76,11 @@ schemas = {
             # 'id': {
             #     'special_access': []
             # }
+        },
+        'roles': {
+            # 'id': {
+            #     'special_access': []
+            # }
         }
     }
 }

@@ -108,11 +108,16 @@ class TLDR(commands.Bot):
         if 'users' not in data:
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
             data['users'] = {}
+        if 'roles' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'roles': {}}})
+            data['roles'] = {}
 
         if str(message.author.id) not in data['users']:
             data['users'][str(message.author.id)] = []
 
-        if ctx.command.clearance not in clearance and ctx.command.name not in data['users'][str(message.author.id)]:
+        if ctx.command.clearance not in clearance and \
+           ctx.command.name not in data['users'][str(message.author.id)] and \
+           not set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys()):
             return
 
         await self.invoke(ctx)

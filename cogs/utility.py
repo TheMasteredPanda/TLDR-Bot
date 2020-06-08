@@ -440,6 +440,9 @@ class Utility(commands.Cog):
         if 'users' not in data:
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
             data['users'] = {}
+        if 'roles' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'roles': {}}})
+            data['roles'] = {}
 
         if str(ctx.author.id) not in data['users']:
             data['users'][str(ctx.author.id)] = []
@@ -452,18 +455,39 @@ class Utility(commands.Cog):
             embed.set_author(name=f'Help - {clearance[0]}', icon_url=ctx.guild.icon_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
 
+            # get special access commands
+            special_access_cmds = []
+
+            # find common roles
+            common = set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys())
+            if common:
+                for r in common:
+                    special_access_cmds += data['roles'][r]
+
+            # add special access field
+            if data['users'][str(ctx.author.id)]:
+                special_access_cmds += data['users'][str(ctx.author.id)]
+
+            # remove duplicates
+            special_access_cmds = list(dict.fromkeys(special_access_cmds))
+
             for cat in help_object:
                 cat_commands = []
                 for cmd in help_object[cat]:
                     if cmd.clearance in clearance:
-                        cat_commands.append(f'`{cmd}`')
+                        cat_commands.append(cmd.name)
 
                 if cat_commands:
-                    embed.add_field(name=f'>{cat}', value=" \| ".join(cat_commands), inline=False)
+                    # remove command from special_access_cmds if user already has access to it
+                    common = set(special_access_cmds) & set(cat_commands)
+                    if common:
+                        for r in common:
+                            special_access_cmds.remove(r)
 
-            # add special access field
-            if data['users'][str(ctx.author.id)]:
-                embed.add_field(name=f'>Special Access', value=" \| ".join([f'`{c}`' for c in data['users'][str(ctx.author.id)]]), inline=False)
+                    embed.add_field(name=f'>{cat}', value=" \| ".join([f'`{c}`' for c in cat_commands]), inline=False)
+
+            if special_access_cmds:
+                embed.add_field(name=f'>Special Access', value=" \| ".join([f'`{c}`' for c in special_access_cmds]), inline=False)
 
             return await ctx.send(embed=embed)
         else:
@@ -472,7 +496,9 @@ class Utility(commands.Cog):
                 if cmd.hidden:
                     return
 
-                if cmd.clearance not in clearance and cmd.name not in data['users'][str(ctx.author.id)]:
+                if ctx.command.clearance not in clearance and \
+                   ctx.command.name not in data['users'][str(ctx.author.id)] and \
+                   not set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys()):
                     return
 
                 examples = f' | {prefix}'.join(cmd.examples)
