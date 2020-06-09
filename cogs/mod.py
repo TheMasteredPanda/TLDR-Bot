@@ -71,27 +71,23 @@ class Mod(commands.Cog):
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.role': role_id}})
             return await embed_maker.message(ctx, f'Daily debates will now be announced every day to <@&{role_id}>')
 
-        missing = False
         # check if time has been set up, if not, inform user
         if not data['daily_debates']['time']:
-            missing = True
             err = f'Time has not been set yet, i dont know when to send the message\n' \
                   f'Set time with `{config.PREFIX}dailydebates set_time [time]` e.g. `{config.PREFIX}dailydebates set_time 2pm GMT+1`'
             return await embed_maker.message(ctx, err, colour='red')
 
         # check if channel has been set up, if not, inform user
         if not data['daily_debates']['channel']:
-            missing = True
             err = f'Channel has not been set yet, i dont know where to send the message\n' \
                   f'Set time with `{config.PREFIX}dailydebates set_channel [#channel]` e.g. `{config.PREFIX}dailydebates set_channel #daily-debates`'
             return await embed_maker.message(ctx, err, colour='red')
 
-        if not missing:
-            # check for active timer
-            timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
-            daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
-            if not daily_debate_timer:
-                await self.start_daily_debate_timer(ctx.guild.id, data['daily_debates']['time'])
+        # check for active timer
+        timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
+        daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
+        if not daily_debate_timer:
+            await self.start_daily_debate_timer(ctx.guild.id, data['daily_debates']['time'])
 
         if action is None:
             # List currently set up daily debate topics
@@ -147,29 +143,23 @@ class Mod(commands.Cog):
         time_diff = parsed_dd_time - datetime.datetime.now(parsed_dd_time.tzinfo)
         time_diff_seconds = round(time_diff.total_seconds())
 
-        # if time_diff is negative try again but add tomorrows
-
         timer_expires = round(time.time()) + time_diff_seconds - 3600  # one hour
         utils_cog = self.bot.get_cog('Utils')
-        await utils_cog.create_timer(expires=timer_expires, guild_id=guild_id, event='daily_debate', extras={'time': dd_time})
+        await utils_cog.create_timer(expires=timer_expires, guild_id=guild_id, event='daily_debate', extras={})
 
     @commands.Cog.listener()
     async def on_daily_debate_timer_over(self, timer):
         guild_id = timer['guild_id']
         guild = self.bot.get_guild(int(guild_id))
 
-        dd_time = timer['extras']['time']
-        parsed_dd_time = dateparser.parse(dd_time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
-        parsed_dd_time = dateparser.parse(dd_time, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_dd_time.tzinfo)})
-        time_diff = parsed_dd_time - datetime.datetime.now(parsed_dd_time.tzinfo)
-        time_diff_seconds = round(time_diff.total_seconds())
+        dd_time = timer['expires'] + 3600
 
         data = db.server_data.find_one({'guild_id': guild.id})
         # check if there are debate topics set up
         topics = data['daily_debates']['topics']
         if not topics:
             # remind mods that a topic needs to be set up
-            msg = f'Daily debate starts in {format_time.seconds(time_diff_seconds)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
+            msg = f'Daily debate starts in {format_time.seconds(dd_time)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
             channel = guild.get_channel(data['daily_debates']['channel'])
 
             if channel is None:
@@ -181,7 +171,7 @@ class Mod(commands.Cog):
                 data['daily_debates']['old_message_id'] = 0
 
             # start final timer which sends daily debate topic
-            timer_expires = round(time.time()) + time_diff_seconds  # one hour
+            timer_expires = dd_time
             utils_cog = self.bot.get_cog('Utils')
             await utils_cog.create_timer(expires=timer_expires, guild_id=guild.id, event='daily_debate_final',
                                          extras={'topic': topics[0], 'channel': data['daily_debates']['channel'],
