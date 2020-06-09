@@ -93,7 +93,7 @@ class Mod(commands.Cog):
             # List currently set up daily debate topics
             topics = data['daily_debates']['topics']
             if not topics:
-                topics_str = f'Currently there are no debate topics set up\n\nNext one in: {format_time.seconds()}'
+                topics_str = f'Currently there are no debate topics set up'
             else:
                 topics_str = '**Topics:**\n' + '\n'.join(f'**{i + 1}:** {topic}' for i, topic in enumerate(topics))
 
@@ -167,16 +167,12 @@ class Mod(commands.Cog):
 
             return await channel.send(msg)
         else:
-            if 'old_message_id' not in data['daily_debates']:
-                data['daily_debates']['old_message_id'] = 0
-
             # start final timer which sends daily debate topic
             timer_expires = dd_time
             utils_cog = self.bot.get_cog('Utils')
             await utils_cog.create_timer(expires=timer_expires, guild_id=guild.id, event='daily_debate_final',
                                          extras={'topic': topics[0], 'channel': data['daily_debates']['channel'],
-                                                 'role': data['daily_debates']['role'], 'time': data['daily_debates']['time'],
-                                                 'old_message_id': data['daily_debates']['old_message_id']})
+                                                 'role': data['daily_debates']['role'], 'time': data['daily_debates']['time']})
 
     @commands.Cog.listener()
     async def on_daily_debate_final_timer_over(self, timer):
@@ -187,7 +183,6 @@ class Mod(commands.Cog):
         dd_time = timer['extras']['time']
         dd_channel_id = timer['extras']['channel']
         dd_role_id = timer['extras']['role']
-        old_message_id = timer['extras']['role']
 
         dd_channel = discord.utils.find(lambda c: c.id == int(dd_channel_id), guild.channels)
         dd_role = discord.utils.find(lambda r: r.id == int(dd_role_id), guild.roles)
@@ -207,15 +202,13 @@ class Mod(commands.Cog):
         # change channel topic
         await dd_channel.edit(topic=f"{topic}")
 
+        # unpin old topic message
+        pins = await dd_channel.pins()
+        last_pin = pins[0]
+        await last_pin.unpin()
+
         # pin new topic message
         await msg.pin()
-
-        # unpin old topic message
-        old_msg = await dd_channel.fetch_message(int(old_message_id))
-        await old_msg.unpin()
-
-        # set old_message_id
-        db.server_data.update_one({'guild_id': guild.id}, {'$set': {'daily_debates.old_message_id': msg.id}})
 
         # start daily_debate timer over
         return await self.start_daily_debate_timer(guild.id, dd_time)
