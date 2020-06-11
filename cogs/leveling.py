@@ -651,7 +651,7 @@ class Leveling(commands.Cog):
 
         # check if user has been in server for more than 7 days
         now = datetime.now()
-        joined_at = member.joined_at
+        joined_at = ctx.author.joined_at
         diff = now - joined_at
         diff_seconds = round(diff.total_seconds())
 
