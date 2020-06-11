@@ -34,6 +34,46 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
+    @commands.command(help='Create a reminder', usage='remindme [time] [reminder]',
+                      examples=['remindme 24h check state of mental health', 'remindme 30m slay demons', 'remindme 7d stay alive'],
+                      clearance='User', cls=command.Command)
+    async def remindme(self, ctx, remind_time=None, *, reminder=None):
+        if remind_time is None:
+            return await embed_maker.command_error(ctx)
+
+        parsed_time = format_time.parse(remind_time)
+        if parsed_time is None:
+            return await embed_maker.command_error(ctx, '[time]')
+
+        if reminder is None:
+            return await embed_maker.command_error(ctx, '[reminder]')
+
+        expires = round(time.time()) + parsed_time
+        utils_cog = self.bot.get_cog('Utils')
+        await utils_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='reminder', extras={'reminder': reminder, 'member_id': ctx.author.id})
+
+        return await embed_maker.message(ctx, f'Alright, in {format_time.seconds(parsed_time)} I will remind you: {reminder}')
+
+    @commands.Cog.listener()
+    async def on_reminder_timer_over(self, timer):
+        guild_id = timer['guild_id']
+        guild = self.bot.get_guild(int(guild_id))
+
+        member_id = timer['extras']['member_id']
+        member = guild.get_member(int(member_id))
+        if member is None:
+            member = await guild.fetch_member(int(member_id))
+            if member is None:
+                return
+
+        reminder = timer['extras']['reminder']
+        embed_colour = config.EMBED_COLOUR
+
+        embed = discord.Embed(colour=embed_colour, description=f'Reminder: {reminder}', timestamp=datetime.now())
+        embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
+
+        return await member.send(embed=embed)
+
     @commands.command(
         help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)',
         usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)] -r (restrict giveaway to a certain role)',
