@@ -640,13 +640,14 @@ class Leveling(commands.Cog):
         await ctx.send(embed=leaderboard_embed)
 
     @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member]',
-                      examples=['rank @Hattyot', 'rank Hattyot'], clearance='User', cls=command.Command)
-    async def rep(self, ctx, member=None):
-        if member is None:
+                      examples=['rep @Hattyot'], clearance='User', cls=command.Command)
+    async def rep(self, ctx, mem=None):
+        if mem is None:
             return await embed_maker.command_error(ctx)
 
-        member = self.get_member(ctx, member)
-        if member is None:
+        if ctx.message.mentions:
+            member = ctx.message.mentions[0]
+        else:
             return await embed_maker.command_error(ctx, '[member]')
 
         # check if user has been in server for more than 7 days
