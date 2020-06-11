@@ -545,7 +545,7 @@ class Leveling(commands.Cog):
 
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
-            [(u, data['users'][u]) for u in data['users'] if data['users'][u][f'{pre}p'] > 0],
+            [(u, data['users'][u]) for u in data['users'] if f'{pre}p' in data['users'][u] and data['users'][u][f'{pre}p'] > 0],
             key=lambda x: x[1][f'{pre}p'], reverse=True
         )
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
@@ -673,6 +673,15 @@ class Leveling(commands.Cog):
             if now < levels_user['rep_timer']:
                 rep_time = levels_user['rep_timer'] - round(time())
                 return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time)}**')
+
+        # check if member is in database
+        if str(member.id) not in data['users']:
+            schema = database.schemas['levels_user']
+            db.levels.update_one(
+                {'guild_id': ctx.guild.id},
+                {'$set': {f'users.{member.id}': schema}}
+            )
+            data['users'][str(member.id)] = schema
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time()) + 86400  # 24 hours
