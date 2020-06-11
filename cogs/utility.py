@@ -34,6 +34,133 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
+    @commands.command(help='Create or add to a role reaction menu identified by its name.\n You can remove roles from role menu by doing `role_menu -n [name of role menu] -e [emote]`',
+                      usage='role_menu -n [name of role menu] -r [role] -e [emote] -m [message after emote]',
+                      examples=['role_menu -n opt-in channels -r sports -e :football: -m opt into the tldr-footbal channel'], clearance='Mod', cls=command.Command)
+    async def role_menu(self, ctx, *, args=None):
+        if args is None:
+            return await embed_maker.command_error(ctx)
+
+        args = self.parse_role_menu_args(args)
+        role_menu_name = args['n']
+        role_name = args['r']
+        emote = args['e']
+        message = args['m']
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'role_menus' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_menus': {}}})
+            data['role_menus'] = {}
+
+        embed_colour = config.EMBED_COLOUR
+        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+        embed.set_author(name=f'Role Menu: {role_menu_name}')
+        embed.set_footer(icon_url=ctx.guild.icon_url)
+        description = 'React to give yourself a role\n'
+
+        if emote and role_menu_name and not role_name and not message:
+            role_menu = [rm_id for rm_id in data['role_menus'] if data['role_menus'][rm_id]['name'] == role_menu_name and data['role_menus'][rm_id]['channel_id'] == ctx.channel.id]
+            if not role_menu:
+                return await embed_maker.message(ctx, f'Couldn\'t find a role menu by the name: {role_menu_name}', colour='red')
+
+            msg_id = role_menu[0]
+            role_menu = data['role_menus'][msg_id]
+            emote_in_menu = [r for r in role_menu['roles'] if r['emote'] == emote]
+            if not emote_in_menu:
+                return await embed_maker.message(ctx, f'That role menu does not contain that emote', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'role_menus.{msg_id}.roles': emote_in_menu[0]}})
+            role_menu['roles'].remove(emote_in_menu[0])
+
+            channel_id = role_menu['channel_id']
+            channel = ctx.guild.get_channel(int(channel_id))
+            message = await channel.fetch_message(msg_id)
+            await message.add_reaction(emote)
+            roles = role_menu['roles']
+
+            # delete message if last one is removed
+            if not roles:
+                await message.delete()
+                return await ctx.message.delete(delay=2000)
+
+            for r in roles:
+                description += f'\n{r["emote"]}: `{r["message"]}`'
+
+            embed.description = description
+            await message.edit(embed=embed)
+
+            return await ctx.message.delete(delay=2000)
+
+        if not role_menu_name or not role_name or not emote or not message:
+            return await embed_maker.message(ctx, 'One or more of the required values is missing', colour='red')
+
+        role = discord.utils.find(lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles)
+        if role is None:
+            return await embed_maker.message(ctx, 'Invalid Role', colour='red')
+
+        if role.permissions.manage_messages:
+            return await embed_maker.message(ctx, 'Role Permissions are too high', colour='red')
+
+        in_database = [rm for rm in data['role_menus'] if data['role_menus'][rm]['name'] == role_menu_name and data['role_menus'][rm]['channel_id'] == ctx.channel.id]
+
+        rl_obj = {
+            'emote': emote,
+            'role_id': role.id,
+            'message': message
+        }
+
+        if not in_database:
+            new_role_menu_obj = {
+                'channel_id': ctx.channel.id,
+                'name': role_menu_name,
+                'roles': [rl_obj]
+            }
+            description += f'\n{emote}: `{message}`'
+            embed.description = description
+            msg = await ctx.send(embed=embed)
+            await msg.add_reaction(emote)
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'role_menus.{msg.id}': new_role_menu_obj}})
+        else:
+            message_id = in_database[0]
+            role_menu = data['role_menus'][str(message_id)]
+            emote_duplicate = [r['emote'] for r in data['role_menus'][str(message_id)]['roles'] if r['emote'] == emote]
+            if emote_duplicate:
+                return await embed_maker.message(ctx, 'Duplicate emote', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'role_menus.{message_id}.roles': rl_obj}})
+            role_menu['roles'].append(rl_obj)
+            channel_id = role_menu['channel_id']
+            channel = ctx.guild.get_channel(int(channel_id))
+            message = await channel.fetch_message(message_id)
+            await message.add_reaction(emote)
+            roles = role_menu['roles']
+            for r in roles:
+                description += f'\n{r["emote"]}: `{r["message"]}`'
+
+            embed.description = description
+            await message.edit(embed=embed)
+
+        return await ctx.message.delete(delay=2000)
+
+    @staticmethod
+    def parse_role_menu_args(args):
+        result = {
+            'n': '',
+            'r': '',
+            'e': '',
+            'm': ''
+        }
+        split_args = filter(None, args.split('-'))
+        for v in split_args:
+            tup = tuple(map(str.strip, v.split(' ', 1)))
+            if len(tup) <= 1:
+                continue
+            key, value = tup
+            result[key] = value
+
+        return result
+
+
     @commands.command(help='Create a reminder', usage='remindme [time] [reminder]',
                       examples=['remindme 24h check state of mental health', 'remindme 30m slay demons', 'remindme 7d stay alive'],
                       clearance='User', cls=command.Command)
