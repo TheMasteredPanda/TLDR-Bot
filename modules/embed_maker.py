@@ -27,9 +27,8 @@ async def message(ctx, msg, *, title=None, footer=None, colour=None):
 
 async def command_error(ctx, bad_arg=None):
     command = ctx.command
-    examples = ', '.join(command.examples)
 
-    examples_str =  '\n'.join(examples)
+    examples_str =  '\n'.join(command.examples)
     if bad_arg is None:
         embed_colour = get_colour('orange')
         description = f'**Description:** {command.help}\n**Usage:** {command.usage}\n**Examples:** {examples_str}'
