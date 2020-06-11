@@ -25,6 +25,74 @@ class TLDR(commands.Bot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
+    async def on_raw_reaction_add(self, payload):
+        guild_id = payload.guild_id
+        guild = self.get_guild(int(guild_id))
+
+        channel_id = payload.channel_id
+        channel = guild.get_channel(int(channel_id))
+
+        message_id = payload.message_id
+        message = await channel.fetch_message(int(message_id))
+
+        user_id = payload.user_id
+        user = guild.get_member(user_id)
+        if user is None:
+            user = await guild.fetch_member(user_id)
+
+        emote = payload.emoji.name
+
+        data = db.server_data.find_one({'guild_id': user.guild.id})
+        role_menus = data['role_menus']
+        if str(message.id) in role_menus:
+            role_menu = role_menus[str(message.id)]
+            rl = [rl for rl in role_menu['roles'] if rl['emote'] == emote]
+            if rl:
+                role = discord.utils.find(lambda r: r.id == int(rl[0]['role_id']), user.guild.roles)
+                await user.add_roles(role)
+
+                msg = f'{rl[0]["message"]}'
+                embed_colour = config.EMBED_COLOUR
+                embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
+                embed.set_author(name='Role Given')
+                embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
+
+                return await user.send(embed=embed)
+
+    async def on_raw_reaction_remove(self, payload):
+        guild_id = payload.guild_id
+        guild = self.get_guild(int(guild_id))
+
+        channel_id = payload.channel_id
+        channel = guild.get_channel(int(channel_id))
+
+        message_id = payload.message_id
+        message = await channel.fetch_message(int(message_id))
+
+        user_id = payload.user_id
+        user = guild.get_member(user_id)
+        if user is None:
+            user = await guild.fetch_member(user_id)
+
+        emote = payload.emoji.name
+
+        data = db.server_data.find_one({'guild_id': user.guild.id})
+        role_menus = data['role_menus']
+        if str(message.id) in role_menus:
+            role_menu = role_menus[str(message.id)]
+            rl = [rl for rl in role_menu['roles'] if rl['emote'] == emote]
+            if rl:
+                role = discord.utils.find(lambda r: r.id == int(rl[0]['role_id']), user.guild.roles)
+                await user.remove_roles(role)
+
+                msg = f'{rl[0]["message"]}'
+                embed_colour = config.EMBED_COLOUR
+                embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
+                embed.set_author(name='Role Roved')
+                embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
+
+                return await user.send(embed=embed)
+
     async def on_command_error(self, ctx, exception):
         trace = exception.__traceback__
         verbosity = 4
