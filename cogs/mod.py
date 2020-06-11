@@ -15,15 +15,36 @@ class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (topic/time/channel/notification role)',
+    @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (arg)',
                       clearance='Mod', cls=command.Command,
                       examples=['dailydebates', 'dailydebates add is TLDR ross mega cool?',
                                 'dailydebates remove is TldR roos mega cool?', 'dailydebates set_time 2pm GMT',
-                                'dailydebates set_channel #daily-debates', 'dailydebates set_role Debaters'])
+                                'dailydebates set_channel #daily-debates', 'dailydebates set_role Debaters',
+                                'dailydebates set_poll_channel #daily-debate-voting',
+                                'dailydebates set_poll_options -i 3 -o burger, pizza, pasta'])
     async def dailydebates(self, ctx, action=None, *, arg=None):
         data = db.server_data.find_one({'guild_id': ctx.guild.id})
         if 'daily_debates' not in data:
             data = self.bot.add_collections(ctx.guild.id, 'server_data')
+
+        if action is None:
+            # List currently set up daily debate topics
+            topics = data['daily_debates']['topics']
+            if not topics:
+                topics_str = f'Currently there are no debate topics set up'
+            else:
+                # generate topics string
+                topics_str = '**Topics:**\n'
+                for i, topic in enumerate(topics):
+                    options = []
+                    if isinstance(topic, dict):
+                        options = topic['poll_options']
+                        topic = topic['topic']
+                    topics_str += f'**{i + 1}:** {topic}\n'
+                    if options:
+                        topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(options)]) + '\n'
+
+            return await embed_maker.message(ctx, msg=topics_str)
 
         if arg is None:
             return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
@@ -62,6 +83,63 @@ class Mod(commands.Cog):
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.channel': channel_id}})
             return await embed_maker.message(ctx, f'Daily debates will now be announced every day at <#{channel_id}>')
 
+        if action == 'set_poll_channel':
+            if not ctx.message.channel_mentions:
+                return await embed_maker.message(ctx, 'Invalid channel mention', colour='red')
+
+            channel_id = ctx.message.channel_mentions[0].id
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'daily_debates.poll_channel': channel_id}})
+            return await embed_maker.message(ctx, f'Daily debate polls will now be sent every day to <#{channel_id}>')
+
+        if action == 'set_poll_options':
+            def parse_args(args):
+                result = {'i': '', 'o': []}
+                split_args = filter(None, args.split('-'))
+                for a in split_args:
+                    tup = tuple(map(str.strip, a.split(' ', 1)))
+                    if len(tup) <= 1:
+                        continue
+                    key, value = tup
+                    result[key] = value
+
+                if result['o']:
+                    result['o'] = [o.strip() for o in result['o'].split(',')]
+
+                return result
+
+            args = parse_args(arg)
+            index = args['i']
+            options = args['o']
+
+            if not index or not index.isdigit():
+                return await embed_maker.message(ctx, 'invalid index arg', colour='red')
+            if not options:
+                return await embed_maker.message(ctx, 'invalid options arg', colour='red')
+            if len(options) < 2:
+                return await embed_maker.message(ctx, 'not enough options set', colour='red')
+            if len(options) > 9:
+                return await embed_maker.message(ctx, 'Too many poll options set', colour='red')
+
+            index = int(index)
+
+            topics = data['daily_debates']['topics']
+            if len(topics) < index:
+                return await embed_maker.message(ctx, 'index out of range', colour='red')
+
+            topic = topics[index - 1]
+            if isinstance(topic, dict):
+                topic = topic['topic']
+
+            new_topic_obj = {
+                'topic': topic,
+                'poll_options': options
+            }
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'daily_debates.topics.{index - 1}': new_topic_obj}})
+            options_str = ' |'.join([f' `{o}`' for i, o in enumerate(options)])
+            if isinstance(topic, dict):
+                topic = topic['topic']
+            return await embed_maker.message(ctx, f'Along with the daily debate: **"{topic}"**\nwill be sent a poll with these options: {options_str}')
+
         if action == 'set_role':
             role = discord.utils.find(lambda r: r.name.lower() == arg.lower(), ctx.guild.roles)
             if not role:
@@ -89,33 +167,15 @@ class Mod(commands.Cog):
         if not daily_debate_timer:
             await self.start_daily_debate_timer(ctx.guild.id, data['daily_debates']['time'])
 
-        if action is None:
-            # List currently set up daily debate topics
-            topics = data['daily_debates']['topics']
-            if not topics:
-                topics_str = f'Currently there are no debate topics set up'
-            else:
-                topics_str = '**Topics:**\n' + '\n'.join(f'**{i + 1}:** {topic}' for i, topic in enumerate(topics))
-
-            # calculate when next daily debate starts
-            timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
-            daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
-
-            if not daily_debate_timer:
-                return
-
-            dd_time = daily_debate_timer[0]['extras']['time']
-            parsed_dd_time = dateparser.parse(dd_time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
-            parsed_dd_time = dateparser.parse(dd_time, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_dd_time.tzinfo)})
-            time_diff = parsed_dd_time - datetime.datetime.now(parsed_dd_time.tzinfo)
-            time_diff_seconds = round(time_diff.total_seconds())
-
-            topics_str += f'\n\nNext one in: **{format_time.seconds(time_diff_seconds)}**'
-
-            return await embed_maker.message(ctx, msg=topics_str)
-
-        if action not in ['add', 'remove']:
+        if action not in ['add', 'remove', 'insert']:
             return await embed_maker.command_error(ctx, '(action)')
+
+        if action == 'insert':
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': {'$each': [arg], '$position': 0}}})
+            return await embed_maker.message(
+                ctx, f'`{arg}` has been inserted into first place in the list of daily debate topics'
+                     f'\nThere are now **{len(data["daily_debates"]["topics"]) + 1}** topics on the list'
+            )
 
         if action == 'add':
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': arg}})
@@ -167,12 +227,22 @@ class Mod(commands.Cog):
 
             return await channel.send(msg)
         else:
+            daily_debates = data['daily_debates']
+            channel = daily_debates['channel']
+            role = daily_debates['role']
+            time = daily_debates['time']
+            if 'poll_channel' in daily_debates:
+                poll_channel = daily_debates['poll_channel']
+            else:
+                poll_channel = ''
+
             # start final timer which sends daily debate topic
             timer_expires = dd_time
             utils_cog = self.bot.get_cog('Utils')
-            await utils_cog.create_timer(expires=timer_expires, guild_id=guild.id, event='daily_debate_final',
-                                         extras={'topic': topics[0], 'channel': data['daily_debates']['channel'],
-                                                 'role': data['daily_debates']['role'], 'time': data['daily_debates']['time']})
+            await utils_cog.create_timer(
+                expires=timer_expires, guild_id=guild.id, event='daily_debate_final',
+                extras={'topic': topics[0], 'channel': channel, 'role': role, 'time': time, 'poll_channel': poll_channel
+                        })
 
     @commands.Cog.listener()
     async def on_daily_debate_final_timer_over(self, timer):
@@ -180,9 +250,16 @@ class Mod(commands.Cog):
         guild = self.bot.get_guild(int(guild_id))
 
         topic = timer['extras']['topic']
+        if isinstance(topic, dict):
+            poll_options = topic['poll_options']
+            topic = topic['topic']
+        else:
+            poll_options = []
+
         dd_time = timer['extras']['time']
         dd_channel_id = timer['extras']['channel']
         dd_role_id = timer['extras']['role']
+        dd_poll_channel_id = timer['extras']['poll_channel']
 
         dd_channel = discord.utils.find(lambda c: c.id == int(dd_channel_id), guild.channels)
         dd_role = discord.utils.find(lambda r: r.id == int(dd_role_id), guild.roles)
@@ -203,13 +280,37 @@ class Mod(commands.Cog):
         await dd_channel.edit(topic=f"{topic}")
 
         # unpin old topic message
-        pins = await dd_channel.pins()
+        pins = [pin for pin in await dd_channel.pins() if pin.author.id == self.bot.user.id]
         if pins:
             last_pin = pins[0]
             await last_pin.unpin()
 
         # pin new topic message
         await msg.pin()
+
+        # send poll to polls channel if its set
+        if dd_poll_channel_id:
+            if not poll_options:
+                poll_emotes = ['👍', '👎', '😐']
+                poll_options = ['Yes', 'No', 'Neutral']
+            else:
+                all_num_emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+                poll_emotes = all_num_emotes[:len(poll_options)]
+
+            dd_poll_channel = discord.utils.find(lambda c: c.id == int(dd_poll_channel_id), guild.channels)
+
+            description = f'**"{topic}"**\n'
+            colour = config.EMBED_COLOUR
+            embed = discord.Embed(colour=colour, description=description, timestamp=datetime.datetime.now())
+            embed.set_author(name='Daily Debate Poll')
+            embed.set_footer(text='Started at', icon_url=guild.icon_url)
+
+            description += '\n'.join(f'\n{e} | **{o}**' for e, o in zip(poll_emotes, poll_options))
+            embed.description = description
+
+            poll_msg = await dd_poll_channel.send(embed=embed)
+            for e in poll_emotes:
+                await poll_msg.add_reaction(e)
 
         # start daily_debate timer over
         return await self.start_daily_debate_timer(guild.id, dd_time)
