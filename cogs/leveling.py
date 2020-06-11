@@ -658,6 +658,12 @@ class Leveling(commands.Cog):
         if diff_seconds < 86400 * 7:  # 7 days
             return await embed_maker.message(ctx, f'You need to be on this server for at least 7 days to give rep points')
 
+        if member.id == ctx.author.id:
+            return await embed_maker.message(ctx, f'You can\'t give rep points to yourself')
+
+        if member.bot:
+            return await embed_maker.message(ctx, f'You can\'t give rep points to bots')
+
         # check if user can give rep point
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         levels_user = data['users'][str(ctx.author.id)]

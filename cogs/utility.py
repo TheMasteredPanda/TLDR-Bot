@@ -34,6 +34,8 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
+    @commands.command(help='Create or add to a role reaction menu', usage='role_menu [action] -m []')
+
     @commands.command(help='Create a reminder', usage='remindme [time] [reminder]',
                       examples=['remindme 24h check state of mental health', 'remindme 30m slay demons', 'remindme 7d stay alive'],
                       clearance='User', cls=command.Command)
