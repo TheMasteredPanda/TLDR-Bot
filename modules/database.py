@@ -74,6 +74,13 @@ schemas = {
             'poll_channel': 0,
             'role': 0
         },
+        'role_menus': {
+            # 'message_id': {
+            #     'channel_id': 0
+            #     'name': '',
+            #     'roles': [{'emote': 'emote', 'role_id': 'role id', 'message': 'msg'}]
+            # }
+        },
         'users': {
             # 'id': {
             #     'special_access': []
