@@ -204,8 +204,9 @@ class Mod(commands.Cog):
 
         # unpin old topic message
         pins = await dd_channel.pins()
-        last_pin = pins[0]
-        await last_pin.unpin()
+        if pins:
+            last_pin = pins[0]
+            await last_pin.unpin()
 
         # pin new topic message
         await msg.pin()
