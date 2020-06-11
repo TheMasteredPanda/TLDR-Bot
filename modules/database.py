@@ -71,7 +71,8 @@ schemas = {
             'topics': [],
             'time': '',
             'channel': 0,
-            'role': 0,
+            'poll_channel': 0,
+            'role': 0
         },
         'users': {
             # 'id': {
