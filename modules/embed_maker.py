@@ -29,12 +29,13 @@ async def command_error(ctx, bad_arg=None):
     command = ctx.command
     examples = ', '.join(command.examples)
 
+    examples_str =  '\n'.join(examples)
     if bad_arg is None:
         embed_colour = get_colour('orange')
-        description = f'**Description:** {command.help}\n**Usage:** {command.usage}\n**Examples:** {examples}'
+        description = f'**Description:** {command.help}\n**Usage:** {command.usage}\n**Examples:** {examples_str}'
     else:
         embed_colour = get_colour('red')
-        description = f'**Invalid Argument:** {bad_arg}\n\n**Usage:** {command.usage}\n**Examples:** {examples}'
+        description = f'**Invalid Argument:** {bad_arg}\n\n**Usage:** {command.usage}\n**Examples:** {examples_str}'
 
     embed = discord.Embed(colour=embed_colour, description=description, title=f'>{command.name}', timestamp=datetime.now())
     embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
