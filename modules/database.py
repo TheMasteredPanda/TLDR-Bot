@@ -62,7 +62,9 @@ schemas = {
         'h_role': None,  # honours role
         'settings': {
             '@_me': False  # setting to check if user wants to be @'d when they level up
-        }
+        },
+        'reputation': 0,
+        'rep_timer': 0
     },
     'server_data': {
         'daily_debates': {

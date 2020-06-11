@@ -639,6 +639,50 @@ class Leveling(commands.Cog):
 
         await ctx.send(embed=leaderboard_embed)
 
+    @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member]',
+                      examples=['rank @Hattyot', 'rank Hattyot'], clearance='User', cls=command.Command)
+    async def rep(self, ctx, member=None):
+        if member is None:
+            return await embed_maker.command_error(ctx)
+
+        member = self.get_member(ctx, member)
+        if member is None:
+            return await embed_maker.command_error(ctx, '[member]')
+
+        # check if user has been in server for more than 7 days
+        now = datetime.now()
+        joined_at = member.joined_at
+        diff = now - joined_at
+        diff_seconds = round(diff.total_seconds())
+
+        if diff_seconds < 86400 * 7:  # 7 days
+            return await embed_maker.message(ctx, f'You need to be on this server for at least 7 days to give rep points')
+
+        # check if user can give rep point
+        data = db.levels.find_one({'guild_id': ctx.guild.id})
+        levels_user = data['users'][str(ctx.author.id)]
+        now = time()
+        if 'rep_timer' in levels_user:
+            if now < levels_user['rep_timer']:
+                rep_time = levels_user['rep_timer'] - round(time())
+                return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time)}**')
+
+        # set rep_time to 24h so user cant spam rep points
+        expire = round(time()) + 86400  # 24 hours
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})  # 24 hours
+
+        # give user rep point
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.reputation': 1}})
+
+        # give user 5% xp boost for an hour
+        boost_dict = {
+            'expires': round(time()) + 3600,  # one hour
+            'multiplier': 0.05
+        }
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
+
+        return await embed_maker.message(ctx, f'Gave +1 rep to <@{member.id}>')
+
     @commands.command(help='Shows your (or someone else\'s) rank and level',
                       usage='rank (member)', examples=['rank', 'rank @Hattyot', 'rank Hattyot'],
                       clearance='User', cls=command.Command)
@@ -710,6 +754,13 @@ class Leveling(commands.Cog):
         pp_progress = self.percent_till_next_level('parliamentary', levels_user)
         pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{p_role_obj.id}> | Progress: **{pp_progress}%**'
         embed.add_field(name='>Parliamentary', value=pp_value, inline=False)
+
+        # add reputation section if user has rep
+        if 'reputation' in levels_user and levels_user['reputation'] > 0:
+            rep = levels_user['reputation']
+            rep_rank = self.calculate_user_rank('reputation', ctx.guild.id, mem.id)
+            rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
+            embed.add_field(name='>Reputation', value=rep_value, inline=False)
 
         return await ctx.send(embed=embed)
 
@@ -857,6 +908,7 @@ class Leveling(commands.Cog):
             {"$project": {"users": {"$arrayToObject": "$users"}}},
         ]
         data = list(db.levels.aggregate(pipeline))[0]
+        data['users'] = {k: v for k, v in data['users'].items() if v}
         sorted_users = sorted(data['users'].items(), key=lambda x: x[1][key], reverse=True)
         user = [u for u in sorted_users if u[0] == str(user_id)]
         return sorted_users.index(user[0]) + 1
