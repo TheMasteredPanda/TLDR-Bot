@@ -643,7 +643,7 @@ class Leveling(commands.Cog):
                       examples=['rep @Hattyot'], clearance='User', cls=command.Command)
     async def rep(self, ctx, mem=None):
         if mem is None:
-            # todo: send info about rep manually, if user has rep timer send info about when they can send the next one
+            # todo: if user has rep timer send info about when they can send the next one otherwise send default command_error embed
             return await embed_maker.command_error(ctx)
 
         if ctx.message.mentions:
