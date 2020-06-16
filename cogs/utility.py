@@ -34,6 +34,173 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
+    @commands.command(help='Create or add to a role reaction menu identified by its name.\n You can remove roles from role menu by doing `role_menu -n [name of role menu] -e [emote]`',
+                      usage='role_menu -n [name of role menu] -r [role] -e [emote] -m [message after emote]',
+                      examples=['role_menu -n opt-in channels -r sports -e :football: -m opt into the tldr-footbal channel'], clearance='Mod', cls=command.Command)
+    async def role_menu(self, ctx, *, args=None):
+        if args is None:
+            return await embed_maker.command_error(ctx)
+
+        args = self.parse_role_menu_args(args)
+        role_menu_name = args['n']
+        role_name = args['r']
+        emote = args['e']
+        message = args['m']
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'role_menus' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_menus': {}}})
+            data['role_menus'] = {}
+
+        embed_colour = config.EMBED_COLOUR
+        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+        embed.set_author(name=f'Role Menu: {role_menu_name}')
+        embed.set_footer(icon_url=ctx.guild.icon_url)
+        description = 'React to give yourself a role\n'
+
+        if emote and role_menu_name and not role_name and not message:
+            role_menu = [rm_id for rm_id in data['role_menus'] if data['role_menus'][rm_id]['name'] == role_menu_name and data['role_menus'][rm_id]['channel_id'] == ctx.channel.id]
+            if not role_menu:
+                return await embed_maker.message(ctx, f'Couldn\'t find a role menu by the name: {role_menu_name}', colour='red')
+
+            msg_id = role_menu[0]
+            role_menu = data['role_menus'][msg_id]
+            emote_in_menu = [r for r in role_menu['roles'] if r['emote'] == emote]
+            if not emote_in_menu:
+                return await embed_maker.message(ctx, f'That role menu does not contain that emote', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'role_menus.{msg_id}.roles': emote_in_menu[0]}})
+            role_menu['roles'].remove(emote_in_menu[0])
+
+            channel_id = role_menu['channel_id']
+            channel = ctx.guild.get_channel(int(channel_id))
+            message = await channel.fetch_message(msg_id)
+            await message.add_reaction(emote)
+            roles = role_menu['roles']
+
+            # delete message if last one is removed
+            if not roles:
+                await message.delete()
+                return await ctx.message.delete(delay=2000)
+
+            for r in roles:
+                description += f'\n{r["emote"]}: `{r["message"]}`'
+
+            embed.description = description
+            await message.edit(embed=embed)
+
+            return await ctx.message.delete(delay=2000)
+
+        if not role_menu_name or not role_name or not emote or not message:
+            return await embed_maker.message(ctx, 'One or more of the required values is missing', colour='red')
+
+        role = discord.utils.find(lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles)
+        if role is None:
+            return await embed_maker.message(ctx, 'Invalid Role', colour='red')
+
+        if role.permissions.manage_messages:
+            return await embed_maker.message(ctx, 'Role Permissions are too high', colour='red')
+
+        in_database = [rm for rm in data['role_menus'] if data['role_menus'][rm]['name'] == role_menu_name and data['role_menus'][rm]['channel_id'] == ctx.channel.id]
+
+        rl_obj = {
+            'emote': emote,
+            'role_id': role.id,
+            'message': message
+        }
+
+        if not in_database:
+            new_role_menu_obj = {
+                'channel_id': ctx.channel.id,
+                'name': role_menu_name,
+                'roles': [rl_obj]
+            }
+            description += f'\n{emote}: `{message}`'
+            embed.description = description
+            msg = await ctx.send(embed=embed)
+            await msg.add_reaction(emote)
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'role_menus.{msg.id}': new_role_menu_obj}})
+        else:
+            message_id = in_database[0]
+            role_menu = data['role_menus'][str(message_id)]
+            emote_duplicate = [r['emote'] for r in data['role_menus'][str(message_id)]['roles'] if r['emote'] == emote]
+            if emote_duplicate:
+                return await embed_maker.message(ctx, 'Duplicate emote', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'role_menus.{message_id}.roles': rl_obj}})
+            role_menu['roles'].append(rl_obj)
+            channel_id = role_menu['channel_id']
+            channel = ctx.guild.get_channel(int(channel_id))
+            message = await channel.fetch_message(message_id)
+            await message.add_reaction(emote)
+            roles = role_menu['roles']
+            for r in roles:
+                description += f'\n{r["emote"]}: `{r["message"]}`'
+
+            embed.description = description
+            await message.edit(embed=embed)
+
+        return await ctx.message.delete(delay=2000)
+
+    @staticmethod
+    def parse_role_menu_args(args):
+        result = {
+            'n': '',
+            'r': '',
+            'e': '',
+            'm': ''
+        }
+        split_args = filter(None, args.split('-'))
+        for v in split_args:
+            tup = tuple(map(str.strip, v.split(' ', 1)))
+            if len(tup) <= 1:
+                continue
+            key, value = tup
+            result[key] = value
+
+        return result
+
+
+    @commands.command(help='Create a reminder', usage='remindme [time] [reminder]',
+                      examples=['remindme 24h check state of mental health', 'remindme 30m slay demons', 'remindme 7d stay alive'],
+                      clearance='User', cls=command.Command)
+    async def remindme(self, ctx, remind_time=None, *, reminder=None):
+        if remind_time is None:
+            return await embed_maker.command_error(ctx)
+
+        parsed_time = format_time.parse(remind_time)
+        if parsed_time is None:
+            return await embed_maker.command_error(ctx, '[time]')
+
+        if reminder is None:
+            return await embed_maker.command_error(ctx, '[reminder]')
+
+        expires = round(time.time()) + parsed_time
+        utils_cog = self.bot.get_cog('Utils')
+        await utils_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='reminder', extras={'reminder': reminder, 'member_id': ctx.author.id})
+
+        return await embed_maker.message(ctx, f'Alright, in {format_time.seconds(parsed_time)} I will remind you: {reminder}')
+
+    @commands.Cog.listener()
+    async def on_reminder_timer_over(self, timer):
+        guild_id = timer['guild_id']
+        guild = self.bot.get_guild(int(guild_id))
+
+        member_id = timer['extras']['member_id']
+        member = guild.get_member(int(member_id))
+        if member is None:
+            member = await guild.fetch_member(int(member_id))
+            if member is None:
+                return
+
+        reminder = timer['extras']['reminder']
+        embed_colour = config.EMBED_COLOUR
+
+        embed = discord.Embed(colour=embed_colour, description=f'Reminder: {reminder}', timestamp=datetime.now())
+        embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
+
+        return await member.send(embed=embed)
+
     @commands.command(
         help='create a giveaway, announces y amount of winners (default 1) after x amount of time (default 24h)',
         usage='giveaway -i [item(s) you want to give away] -w [how many winners] -t [time (m/h/d)] -r (restrict giveaway to a certain role)',
@@ -435,6 +602,18 @@ class Utility(commands.Cog):
         utils = self.bot.get_cog('Utils')
         clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
 
+        # check if user has special access
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'users' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
+            data['users'] = {}
+        if 'roles' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'roles': {}}})
+            data['roles'] = {}
+
+        if str(ctx.author.id) not in data['users']:
+            data['users'][str(ctx.author.id)] = []
+
         if _cmd is None:
             embed = discord.Embed(
                 colour=embed_colour, timestamp=datetime.now(),
@@ -442,21 +621,53 @@ class Utility(commands.Cog):
             )
             embed.set_author(name=f'Help - {clearance[0]}', icon_url=ctx.guild.icon_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+
+            # get special access commands
+            special_access_cmds = []
+
+            # find common roles
+            common = set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys())
+            if common:
+                for r in common:
+                    special_access_cmds += data['roles'][r]
+
+            # add special access field
+            if data['users'][str(ctx.author.id)]:
+                special_access_cmds += data['users'][str(ctx.author.id)]
+
+            # remove duplicates
+            special_access_cmds = list(dict.fromkeys(special_access_cmds))
+
             for cat in help_object:
                 cat_commands = []
                 for cmd in help_object[cat]:
                     if cmd.clearance in clearance:
-                        cat_commands.append(f'`{cmd}`')
+                        cat_commands.append(cmd.name)
 
                 if cat_commands:
-                    embed.add_field(name=f'>{cat}', value=" \| ".join(cat_commands), inline=False)
+                    # remove command from special_access_cmds if user already has access to it
+                    common = set(special_access_cmds) & set(cat_commands)
+                    if common:
+                        for r in common:
+                            special_access_cmds.remove(r)
+
+                    embed.add_field(name=f'>{cat}', value=" \| ".join([f'`{c}`' for c in cat_commands]), inline=False)
+
+            if special_access_cmds:
+                embed.add_field(name=f'>Special Access', value=" \| ".join([f'`{c}`' for c in special_access_cmds]), inline=False)
 
             return await ctx.send(embed=embed)
         else:
             if self.bot.get_command(_cmd):
                 cmd = self.bot.get_command(_cmd)
-                if cmd.hidden or cmd.clearance not in clearance:
+                if cmd.hidden:
                     return
+
+                if ctx.command.clearance not in clearance and \
+                   ctx.command.name not in data['users'][str(ctx.author.id)] and \
+                   not set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys()):
+                    return
+
                 examples = f' | {prefix}'.join(cmd.examples)
                 cmd_help = f"""
                 **Description:** {cmd.help}
@@ -472,6 +683,8 @@ class Utility(commands.Cog):
 
     @staticmethod
     def get_member(ctx, source):
+        if source is None:
+            return None
         # check if source is member mention
         if ctx.message.mentions:
             member = ctx.message.mentions[0]

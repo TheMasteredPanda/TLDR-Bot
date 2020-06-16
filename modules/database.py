@@ -3,7 +3,7 @@ import config
 
 
 class Connection:
-    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets']
+    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets', 'server_data']
 
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -12,6 +12,7 @@ class Connection:
         self.timers = self.db['timers']
         self.polls = self.db['polls']
         self.tickets = self.db['tickets']
+        self.server_data = self.db['server_data']
 
 
 # Default schemas for databases
@@ -61,6 +62,34 @@ schemas = {
         'h_role': None,  # honours role
         'settings': {
             '@_me': False  # setting to check if user wants to be @'d when they level up
+        },
+        'reputation': 0,
+        'rep_timer': 0
+    },
+    'server_data': {
+        'daily_debates': {
+            'topics': [],
+            'time': '',
+            'channel': 0,
+            'poll_channel': 0,
+            'role': 0
+        },
+        'role_menus': {
+            # 'message_id': {
+            #     'channel_id': 0
+            #     'name': '',
+            #     'roles': [{'emote': 'emote', 'role_id': 'role id', 'message': 'msg'}]
+            # }
+        },
+        'users': {
+            # 'id': {
+            #     'special_access': []
+            # }
+        },
+        'roles': {
+            # 'id': {
+            #     'special_access': []
+            # }
         }
     }
 }
