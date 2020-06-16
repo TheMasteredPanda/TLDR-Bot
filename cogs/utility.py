@@ -150,7 +150,7 @@ class Utility(commands.Cog):
             'e': '',
             'm': ''
         }
-        split_args = filter(None, args.split('-'))
+        split_args = filter(None, args.split(' -'))
         for v in split_args:
             tup = tuple(map(str.strip, v.split(' ', 1)))
             if len(tup) <= 1:
@@ -341,7 +341,7 @@ class Utility(commands.Cog):
             't': '24h',
             'r': ''
         }
-        split_args = filter(None, args.split('-'))
+        split_args = filter(None, args.split(' -'))
         for v in split_args:
             tup = tuple(map(str.strip, v.split(' ', 1)))
             if len(tup) <= 1:
@@ -547,7 +547,7 @@ class Utility(commands.Cog):
             't': '5m',
             'o_emotes': {}
         }
-        split_args = filter(None, args.split('-'))
+        split_args = filter(None, args.split(' -'))
         for a in split_args:
             tup = tuple(map(str.strip, a.split(' ', 1)))
             if len(tup) <= 1:
