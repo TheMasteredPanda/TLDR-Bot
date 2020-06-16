@@ -822,7 +822,7 @@ class Leveling(commands.Cog):
         result = {'r': '', 'p': []}
 
         # Filters out empty strings
-        split_args = filter(None, args.split(' -'))
+        split_args = filter(None, args.split('-'))
         for a in split_args:
             # creates tuple of arg and it's value and removes whitespaces where necessary
             match = tuple(map(str.strip, a.split(' ', 1)))
@@ -872,7 +872,7 @@ class Leveling(commands.Cog):
     def parse_role_args(args):
         result = dict.fromkeys(['b', 'r', 'l', 'nr', 'nl'], '')
 
-        split_args = filter(None, args.split(' -'))
+        split_args = filter(None, args.split('-'))
         for a in split_args:
             match = tuple(map(str.strip, a.split(' ', 1)))
             if len(match) < 2:

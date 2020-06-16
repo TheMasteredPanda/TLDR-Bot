@@ -94,7 +94,7 @@ class Mod(commands.Cog):
         if action == 'set_poll_options':
             def parse_args(args):
                 result = {'i': '', 'o': []}
-                split_args = filter(None, args.split(' -'))
+                split_args = filter(None, args.split('-'))
                 for a in split_args:
                     tup = tuple(map(str.strip, a.split(' ', 1)))
                     if len(tup) <= 1:
