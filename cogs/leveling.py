@@ -643,6 +643,7 @@ class Leveling(commands.Cog):
                       examples=['rep @Hattyot'], clearance='User', cls=command.Command)
     async def rep(self, ctx, mem=None):
         if mem is None:
+            # todo: send info about rep manually, if user has rep timer send info about when they can send the next one
             return await embed_maker.command_error(ctx)
 
         if ctx.message.mentions:
@@ -821,7 +822,7 @@ class Leveling(commands.Cog):
         result = {'r': '', 'p': []}
 
         # Filters out empty strings
-        split_args = filter(None, args.split('-'))
+        split_args = filter(None, args.split(' -'))
         for a in split_args:
             # creates tuple of arg and it's value and removes whitespaces where necessary
             match = tuple(map(str.strip, a.split(' ', 1)))
@@ -871,7 +872,7 @@ class Leveling(commands.Cog):
     def parse_role_args(args):
         result = dict.fromkeys(['b', 'r', 'l', 'nr', 'nl'], '')
 
-        split_args = filter(None, args.split('-'))
+        split_args = filter(None, args.split(' -'))
         for a in split_args:
             match = tuple(map(str.strip, a.split(' ', 1)))
             if len(match) < 2:
@@ -994,8 +995,10 @@ class Leveling(commands.Cog):
             return await self.level_up(message, message.author, 'honours', data)
 
     async def process_message(self, message):
+        print('test')
         if cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 60):
             pp_add = randint(15, 25)
+            print('pp_add')
             data = db.levels.find_one({'guild_id': message.guild.id})
             if data is None:
                 data = self.bot.add_collections(message.guild.id, 'levels')
@@ -1015,7 +1018,9 @@ class Leveling(commands.Cog):
                 pp_add = round(pp_add * boost_multiplier)
 
             levels_user = data['users'][str(message.author.id)]
+            print(levels_user['pp'])
             levels_user['pp'] += pp_add
+            print(levels_user['pp'])
             db.levels.update_one(
                 {'guild_id': message.guild.id},
                 {'$set': {f'users.{message.author.id}.pp': levels_user['pp']}}
