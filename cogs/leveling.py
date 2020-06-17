@@ -535,18 +535,21 @@ class Leveling(commands.Cog):
         if branch is None:
             return await embed_maker.command_error(ctx)
 
-        branch = 'honours' if branch in ['h', 'honours'] else 'parliamentary'
-        pre = 'h' if branch == 'honours' else 'p'
+        key_switch = {
+            'h': 'hp',
+            'p': 'pp',
+            'r': 'reputation',
+        }
+        key = key_switch.get(branch[0], 'pp')
 
-        # creates pipeline that reduces data to only user id and key
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         if data is None:
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
-            [(u, data['users'][u]) for u in data['users'] if f'{pre}p' in data['users'][u] and data['users'][u][f'{pre}p'] > 0],
-            key=lambda x: x[1][f'{pre}p'], reverse=True
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
+            key=lambda x: x[1][key], reverse=True
         )
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
         user_index = sorted_users.index(user[0]) if user else None
@@ -559,15 +562,6 @@ class Leveling(commands.Cog):
                 break
 
             user_id, user_values = u
-            user_role_name = user_values[f'{pre}_role']
-            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
-
-            if user_role_name is None:
-                i -= 1
-                continue
-
-            if user_role is None:
-                user_role = await ctx.guild.create_role(name=user_role_name)
 
             member = ctx.guild.get_member(int(user_id))
             if member is None:
@@ -577,17 +571,28 @@ class Leveling(commands.Cog):
                     i -= 1
                     continue
 
-            role_level = self.user_role_level(branch, data, user_values)
-            progress_percent = self.percent_till_next_level(branch, user_values)
+            leaderboard_str += f'***`#{i + 1}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{i + 1}` - {member.name}'
 
-            if user_id == str(ctx.author.id):
-                leaderboard_str += f'***`#{i + 1}`*** - *{member.name}' \
-                                   f' | **Level {role_level}** <@&{user_role.id}>' \
-                                   f' | Progress: **{progress_percent}%***\n'
+            if key[0] in ['p', 'h']:
+                user_role_name = user_values[f'{key[0]}_role']
+                user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+
+                if user_role_name is None:
+                    i -= 1
+                    continue
+
+                if user_role is None:
+                    user_role = await ctx.guild.create_role(name=user_role_name)
+
+                role_level = self.user_role_level(branch, data, user_values)
+                progress_percent = self.percent_till_next_level(branch, user_values)
+                leaderboard_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**'
+                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+
             else:
-                leaderboard_str += f'`#{i + 1}` - {member.name}' \
-                                   f' | **Level {role_level}** <@&{user_role.id}>' \
-                                   f' | Progress: **{progress_percent}%**\n'
+                rep = user_values['reputation']
+                leaderboard_str += f' | **{rep} Reputation**'
+                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
 
         description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
 
@@ -605,35 +610,38 @@ class Leveling(commands.Cog):
                 continue
 
             user_id, user_values = sorted_users[user_index + i]
-            u_obj = ctx.guild.get_member(int(user_id))
-            if u_obj is None:
+            member = ctx.guild.get_member(int(user_id))
+
+            if member is None:
                 try:
-                    u_obj = await ctx.guild.fetch_member(int(user_id))
+                    member = await ctx.guild.fetch_member(int(user_id))
                 except:
                     i -= 1
                     continue
 
-            user_role_name = user_values[f'{pre}_role']
-            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+            leaderboard_str += f'***`#{i + 1}`*** - *{member.name}' if user_id == str(
+                ctx.author.id) else f'`#{i + 1}` - {member.name}'
 
-            if user_role_name is None:
-                i -= 1
-                continue
+            if key[0] in ['p', 'h']:
+                user_role_name = user_values[f'{key[0]}_role']
+                user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
-            if user_role is None:
-                user_role = await ctx.guild.create_role(name=user_role_name)
+                if user_role_name is None:
+                    i -= 1
+                    continue
 
-            role_level = self.user_role_level(branch, data, user_values)
-            progress_percent = self.percent_till_next_level(branch, user_values)
+                if user_role is None:
+                    user_role = await ctx.guild.create_role(name=user_role_name)
 
-            if user_id == str(ctx.author.id):
-                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name}' \
-                                f' | **Level {role_level}** <@&{user_role.id}>' \
-                                f' | Progress: **{progress_percent}%***\n'
+                role_level = self.user_role_level(branch, data, user_values)
+                progress_percent = self.percent_till_next_level(branch, user_values)
+                leaderboard_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**'
+                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+
             else:
-                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name}' \
-                                f' | **Level {role_level}** <@&{user_role.id}>' \
-                                f' | Progress: **{progress_percent}%**\n'
+                rep = user_values['reputation']
+                leaderboard_str += f' | **{rep} Reputation**'
+                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
 
         leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
 
@@ -995,10 +1003,8 @@ class Leveling(commands.Cog):
             return await self.level_up(message, message.author, 'honours', data)
 
     async def process_message(self, message):
-        print('test')
         if cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 60):
             pp_add = randint(15, 25)
-            print('pp_add')
             data = db.levels.find_one({'guild_id': message.guild.id})
             if data is None:
                 data = self.bot.add_collections(message.guild.id, 'levels')
@@ -1018,9 +1024,7 @@ class Leveling(commands.Cog):
                 pp_add = round(pp_add * boost_multiplier)
 
             levels_user = data['users'][str(message.author.id)]
-            print(levels_user['pp'])
             levels_user['pp'] += pp_add
-            print(levels_user['pp'])
             db.levels.update_one(
                 {'guild_id': message.guild.id},
                 {'$set': {f'users.{message.author.id}.pp': levels_user['pp']}}
