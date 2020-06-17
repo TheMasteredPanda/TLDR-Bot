@@ -652,10 +652,17 @@ class Leveling(commands.Cog):
         await ctx.send(embed=leaderboard_embed)
 
     @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member]',
-                      examples=['rep @Hattyot'], clearance='User', cls=command.Command)
+                      examples=['rep @Hattyot'], clearance='User', cls=command.Command, aliases=['reputation'])
     async def rep(self, ctx, mem=None):
+        # check if user can give rep point
+        data = db.levels.find_one({'guild_id': ctx.guild.id})
+        levels_user = data['users'][str(ctx.author.id)]
+        now = time()
+        if 'rep_timer' in levels_user and now < levels_user['rep_timer']:
+            rep_time = levels_user['rep_timer'] - round(time())
+            return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time)}**')
+
         if mem is None:
-            # todo: if user has rep timer send info about when they can send the next one otherwise send default command_error embed
             return await embed_maker.command_error(ctx)
 
         if ctx.message.mentions:
@@ -663,29 +670,18 @@ class Leveling(commands.Cog):
         else:
             return await embed_maker.command_error(ctx, '[member]')
 
-        # check if user has been in server for more than 7 days
+        # check if user has been in server for more than 5 days
         now = datetime.now()
         joined_at = ctx.author.joined_at
         diff = now - joined_at
-        diff_seconds = round(diff.total_seconds())
-
-        if diff_seconds < 86400 * 7:  # 7 days
-            return await embed_maker.message(ctx, f'You need to be on this server for at least 7 days to give rep points')
+        if round(diff.total_seconds()) < 86400 * 5:  # 5 days
+            return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points')
 
         if member.id == ctx.author.id:
             return await embed_maker.message(ctx, f'You can\'t give rep points to yourself')
 
         if member.bot:
             return await embed_maker.message(ctx, f'You can\'t give rep points to bots')
-
-        # check if user can give rep point
-        data = db.levels.find_one({'guild_id': ctx.guild.id})
-        levels_user = data['users'][str(ctx.author.id)]
-        now = time()
-        if 'rep_timer' in levels_user:
-            if now < levels_user['rep_timer']:
-                rep_time = levels_user['rep_timer'] - round(time())
-                return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time)}**')
 
         # check if member is in database
         if str(member.id) not in data['users']:
@@ -703,9 +699,9 @@ class Leveling(commands.Cog):
         # give user rep point
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.reputation': 1}})
 
-        # give user 5% xp boost for an hour
+        # give user 5% xp boost for 6 hours
         boost_dict = {
-            'expires': round(time()) + 3600,  # one hour
+            'expires': round(time()) + (3600 * 6),  # 6 hours
             'multiplier': 0.05
         }
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
