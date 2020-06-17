@@ -624,8 +624,7 @@ class Leveling(commands.Cog):
                     i -= 1
                     continue
 
-            your_pos_str += f'***`#{i + 1}`*** - *{member.name}' if user_id == str(
-                ctx.author.id) else f'`#{i + 1}` - {member.name}'
+            your_pos_str += f'***`#{user_index + 1 + i}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{user_index + 1 + i}` - {member.name}'
 
             if key[0] in ['p', 'h']:
                 user_role_name = user_values[f'{key[0]}_role']
