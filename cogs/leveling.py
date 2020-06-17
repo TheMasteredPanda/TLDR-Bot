@@ -624,7 +624,7 @@ class Leveling(commands.Cog):
                     i -= 1
                     continue
 
-            leaderboard_str += f'***`#{i + 1}`*** - *{member.name}' if user_id == str(
+            your_pos_str += f'***`#{i + 1}`*** - *{member.name}' if user_id == str(
                 ctx.author.id) else f'`#{i + 1}` - {member.name}'
 
             if key[0] in ['p', 'h']:
@@ -640,13 +640,13 @@ class Leveling(commands.Cog):
 
                 role_level = self.user_role_level(branch, data, user_values)
                 progress_percent = self.percent_till_next_level(branch, user_values)
-                leaderboard_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**'
-                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+                your_pos_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**'
+                your_pos_str += '*\n' if user_id == str(ctx.author.id) else '\n'
 
             else:
                 rep = user_values['reputation']
-                leaderboard_str += f' | **{rep} Reputation**'
-                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+                your_pos_str += f' | **{rep} Reputation**'
+                your_pos_str += '*\n' if user_id == str(ctx.author.id) else '\n'
 
         leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
 
