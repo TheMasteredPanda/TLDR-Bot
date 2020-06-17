@@ -540,7 +540,12 @@ class Leveling(commands.Cog):
             'p': 'pp',
             'r': 'reputation',
         }
+        branch_switch = {
+            'h': 'honours',
+            'p': 'parliamentary'
+        }
         key = key_switch.get(branch[0], 'pp')
+        branch = branch_switch.get(branch[0], 'parliamentary')
 
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         if data is None:
