@@ -493,7 +493,7 @@ class Leveling(commands.Cog):
         return await embed_maker.message(ctx, msg, colour=colour)
 
     @commands.command(help='See current leveling routes', usage='leveling_routes',
-                      examples=['leveling_routes'], clearance='User', cls=command.Command)
+                      examples=['leveling_routes'], clearance='User', cls=command.Command, aliases=['ranks'])
     async def leveling_routes(self, ctx, branch='parliamentary'):
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         if data is None:
