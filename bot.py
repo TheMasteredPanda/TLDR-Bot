@@ -247,6 +247,13 @@ class TLDR(commands.Bot):
     async def on_member_join(member):
         data = db.levels.find_one({'guild_id': member.guild.id})
         if str(member.id) in data['users']:
+            # delete timer
+            timer_data = db.timers.find_one({'guild_id': member.guild.id})
+            delete_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'delete_user_data' and int(timer['extras']['user_id']) == int(member.id)]
+            timer_id = delete_timer[0]['id']
+            db.timers.update_one({'guild_id': member.guild.id}, {'$pull': {'timers': {'id': timer_id}}})
+
+            # give user data back
             levels_user = data['users'][f'{member.id}']
             leveling_routes = data['leveling_routes']
             parliamentary_route = leveling_routes['parliamentary']
