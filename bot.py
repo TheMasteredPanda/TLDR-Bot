@@ -288,9 +288,9 @@ class TLDR(commands.Bot):
         if member.bot:
             return
 
-        # Delete user data after 48h
+        # Delete user data after 5 days
         utils_cog = self.get_cog('Utils')
-        expires = int(time.time()) + 172800  # 48h
+        expires = int(time.time()) + (86400 * 5)  # 5 days
         await utils_cog.create_timer(
             expires=expires, guild_id=member.guild.id, event='delete_user_data',
             extras={'user_id': member.id}
