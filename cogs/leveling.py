@@ -499,6 +499,12 @@ class Leveling(commands.Cog):
         if data is None:
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
+        branch_switch = {
+            'h': 'honours',
+            'p': 'parliamentary'
+        }
+        branch = branch_switch.get(branch[0], 'parliamentary')
+
         leveling_routes = data['leveling_routes']
         embed_colour = config.EMBED_COLOUR
 
