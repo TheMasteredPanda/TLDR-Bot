@@ -74,9 +74,6 @@ schemas = {
             #     }
             # }
         },
-        'message_spike': {
-            'channel': 0
-        },
         'daily_debates': {
             'topics': [],
             'time': '',
