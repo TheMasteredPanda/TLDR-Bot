@@ -15,7 +15,7 @@ class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='Warn mods when a channel has a message spike (4 messages in a minute)',
+    @commands.command(help='Warn mods when a channel has a message spike (5 messages in a minute)',
                       usage='message_spike [#channel]', examples=['message_spike #staff'],
                       clearance='Mod', cls=command.Command)
     async def message_spike(self, ctx, channel=None):

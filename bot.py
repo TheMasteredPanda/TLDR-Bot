@@ -146,10 +146,16 @@ class TLDR(commands.Bot):
             now = datetime.now()
             if str(message.channel.id) not in message_data:
                 db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
-            if str(now.hour) not in message_data[f'{message.channel.id}']:
+                message_data[f'{message.channel.id}'] = {}
+                message_data[f'{message.channel.id}'][f'{now.hour}'] = {}
+                message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
+            elif str(now.hour) not in message_data[f'{message.channel.id}']:
                 db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
-            if str(now.minute) not in message_data[f'{message.channel.id}'][f'{now.hour}']:
+                message_data[f'{message.channel.id}'][f'{now.hour}'] = {}
+                message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
+            elif str(now.minute) not in message_data[f'{message.channel.id}'][f'{now.hour}']:
                 db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
+                message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
 
             db.server_data.update_one({'guild_id': message.guild.id}, {'$inc': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
 
@@ -162,7 +168,7 @@ class TLDR(commands.Bot):
             previous_min_msg_count = message_data[f'{message.channel.id}'][f'{now.hour}'][f'{previous_minute}']
             if not previous_min_msg_count >= 1:
                 current_min_msg_count = message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}']
-                if current_min_msg_count == 3:
+                if current_min_msg_count == 4:
                     channel_id = data['message_spike']['channel']
                     channel = message.guild.get_channel(int(channel_id))
 
