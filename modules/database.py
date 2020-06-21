@@ -67,6 +67,16 @@ schemas = {
         'rep_timer': 0
     },
     'server_data': {
+        'messages': {
+            # 'channel_id': {
+            #     'hour': {
+            #         'minute': 0
+            #     }
+            # }
+        },
+        'message_spike': {
+            'channel': 0
+        },
         'daily_debates': {
             'topics': [],
             'time': '',

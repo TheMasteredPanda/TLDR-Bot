@@ -15,6 +15,21 @@ class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(help='Warn mods when a channel has a message spike (7 messages in a minute)',
+                      usage='message_spike [#channel]', examples=['message_spike #staff'],
+                      clearance='Mod', cls=command.Command)
+    async def message_spike(self, ctx, channel=None):
+        if channel is None:
+            return await embed_maker.command_error(ctx)
+
+        if not ctx.message.channel_mentions:
+            return await embed_maker.command_error(ctx, '[#channel]')
+
+        channel_obj = ctx.message.channel_mentions[0]
+        db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'message_spike.channel': channel_obj.id}})
+
+        return await embed_maker.message(ctx, f'Message spike warning channel has been set to <#{channel_obj.id}>')
+
     @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (arg)',
                       clearance='Mod', cls=command.Command,
                       examples=['dailydebates', 'dailydebates add is TLDR ross mega cool?',
