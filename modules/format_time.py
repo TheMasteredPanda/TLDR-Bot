@@ -44,7 +44,6 @@ def plural(sec, n, name):
 
 
 def parse(string=None):
-    print('fds')
     if string is None:
         return None
 
@@ -64,7 +63,7 @@ def parse(string=None):
         regex = re.compile(r'^((?:\d+)?\-?\d?\.?\d+) *(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$')
         match = re.findall(regex, i)
         if not match:
-            continue
+            return None
 
         match = match[0]
         n = int(match[0])
