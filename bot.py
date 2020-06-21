@@ -181,7 +181,7 @@ class TLDR(commands.Bot):
                 return
 
             current_min_msg_count = message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{now.minute}']
-            if current_min_msg_count == 5:
+            if current_min_msg_count == 4:
                 channel_id = data['message_spike']['channel']
                 channel = message.guild.get_channel(int(channel_id))
 
