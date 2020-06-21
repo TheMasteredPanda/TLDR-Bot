@@ -16,11 +16,15 @@ class Mod(commands.Cog):
         self.bot = bot
 
     @commands.command(help='Warn mods when a channel has a message spike (5 messages in a minute)',
-                      usage='message_spike [#channel]', examples=['message_spike #staff'],
+                      usage='message_spike [#channel/disable]', examples=['message_spike #staff', 'message_spike disable'],
                       clearance='Mod', cls=command.Command)
     async def message_spike(self, ctx, channel=None):
         if channel is None:
             return await embed_maker.command_error(ctx)
+
+        if channel == 'disable':
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$unset': {'message_spike': ''}})
+            return await embed_maker.message(ctx, 'Message spike warnings have been disabled')
 
         if not ctx.message.channel_mentions:
             return await embed_maker.command_error(ctx, '[#channel]')
