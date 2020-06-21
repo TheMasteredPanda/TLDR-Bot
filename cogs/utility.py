@@ -160,20 +160,57 @@ class Utility(commands.Cog):
 
         return result
 
+    @commands.command(help='See the list of your current reminders', usage='reminders (action) (reminder index)',
+                      examples=['reminders', 'reminders remove kill demons'], clearance='User', cls=command.Command)
+    async def reminders(self, ctx, action=None, *, index=None):
+        timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
+        user_reminders = [timer for timer in timer_data['timers'] if timer['event'] == 'reminder' and timer['extras']['member_id'] == ctx.author.id]
+        if action is None:
+            if not user_reminders:
+                msg = 'You currently have no reminders'
+            else:
+                msg = ''
+                for i, r in enumerate(user_reminders):
+                    expires = r["expires"] - round(time.time())
+                    msg += f'`#{i + 1}` - {r["extras"]["reminder"]} in **{format_time.seconds(expires)}**\n'
+
+            return await embed_maker.message(ctx, msg)
+        elif action not in ['remove']:
+            return await embed_maker.command_error(ctx, '(action)')
+        elif index is None or int(index) <= 0 or int(index) > len(user_reminders):
+            return await embed_maker.command_error(ctx, '(reminder index)')
+        else:
+            timer = user_reminders[int(index) - 1]
+            db.timers.update_one({'guild_id': ctx.guild.id}, {'$pull': {'timers': {'id': timer['id']}}})
+            return await embed_maker.message(ctx, f'`{timer["extras"]["reminder"]}` has been removed from your list of reminders', colour='red')
 
     @commands.command(help='Create a reminder', usage='remindme [time] [reminder]',
-                      examples=['remindme 24h check state of mental health', 'remindme 30m slay demons', 'remindme 7d stay alive'],
+                      examples=['remindme 24h check state of mental health', 'remindme 30m slay demons', 'remindme 10h 30m 10s stay alive'],
                       clearance='User', cls=command.Command)
-    async def remindme(self, ctx, remind_time=None, *, reminder=None):
-        if remind_time is None:
+    async def remindme(self, ctx, *, reminder=None):
+        if reminder is None:
             return await embed_maker.command_error(ctx)
 
-        parsed_time = format_time.parse(remind_time)
+        # check for time
+        remind_times = []
+        remind_time_str = ''
+        for i, r in enumerate(reminder.split(' ')):
+            if format_time.parse(r) is not None:
+                if remind_times:
+                    prev_remind_time = remind_times[i - 1]
+                    if prev_remind_time <= format_time.parse(r):
+                        break
+
+                remind_times.append(format_time.parse(r))
+                reminder = reminder.replace(r, '', 1)
+                remind_time_str += f' {r}'
+            else:
+                break
+
+        reminder = reminder.strip()
+        parsed_time = format_time.parse(remind_time_str.strip())
         if parsed_time is None:
             return await embed_maker.command_error(ctx, '[time]')
-
-        if reminder is None:
-            return await embed_maker.command_error(ctx, '[reminder]')
 
         expires = round(time.time()) + parsed_time
         utils_cog = self.bot.get_cog('Utils')
