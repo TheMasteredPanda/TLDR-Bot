@@ -175,31 +175,29 @@ class TLDR(commands.Bot):
 
                 # return if message count went over the limit previous minute
                 previous_min_msg_count = message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{previous_minute}']
-                if not previous_min_msg_count >= 1:
+                if previous_min_msg_count >= 1:
                     break
-            else:
-                return
 
-            current_min_msg_count = message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{now.minute}']
-            if current_min_msg_count == 4:
-                channel_id = data['message_spike']['channel']
-                channel = message.guild.get_channel(int(channel_id))
+                current_min_msg_count = message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{now.minute}']
+                if current_min_msg_count == 4:
+                    channel_id = data['message_spike']['channel']
+                    channel = message.guild.get_channel(int(channel_id))
 
-                msg = f'<#{message.channel.id}> is experiencing a message spike'
-                embed_colour = config.EMBED_COLOUR
-                embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
-                embed.set_footer(text=f'{message.guild.name}', icon_url=message.guild.icon_url)
-                await channel.send(embed=embed)
+                    msg = f'<#{message.channel.id}> is experiencing a message spike'
+                    embed_colour = config.EMBED_COLOUR
+                    embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
+                    embed.set_footer(text=f'{message.guild.name}', icon_url=message.guild.icon_url)
+                    await channel.send(embed=embed)
 
-            previous_minute = now.minute - i
-            previous_hour = str(list(range(0, 24))[now.hour - 1]) if previous_minute < 0 else str(now.hour)
+                previous_minute = now.minute - i
+                previous_hour = str(list(range(0, 24))[now.hour - 1]) if previous_minute < 0 else str(now.hour)
 
-            # do a bit of cleanup so the database doesnt get too filled
-            if str(list(range(0, 60))[now.minute - 6]) in message_data[f'{message.channel.id}'][f'{previous_hour}']:
-                db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{previous_hour}.{str(list(range(0, 60))[now.minute - 6])}': ''}})
+                # do a bit of cleanup so the database doesnt get too filled
+                if str(list(range(0, 60))[now.minute - 6]) in message_data[f'{message.channel.id}'][f'{previous_hour}']:
+                    db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{previous_hour}.{str(list(range(0, 60))[now.minute - 6])}': ''}})
 
-            if str(list(range(0, 24))[now.hour - 2]) in message_data[f'{message.channel.id}']:
-                db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{str(list(range(0, 24))[now.hour - 2])}': ''}})
+                if str(list(range(0, 24))[now.hour - 2]) in message_data[f'{message.channel.id}']:
+                    db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{str(list(range(0, 24))[now.hour - 2])}': ''}})
 
         if message.content.startswith(config.PREFIX):
             return await self.process_commands(message)
