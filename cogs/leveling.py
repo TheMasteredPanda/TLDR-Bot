@@ -548,7 +548,8 @@ class Leveling(commands.Cog):
         }
         branch_switch = {
             'h': 'honours',
-            'p': 'parliamentary'
+            'p': 'parliamentary',
+            'r': 'reputation'
         }
         key = key_switch.get(branch[0], 'pp')
         branch = branch_switch.get(branch[0], 'parliamentary')
