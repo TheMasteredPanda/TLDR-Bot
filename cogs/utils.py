@@ -26,6 +26,12 @@ class Utils(commands.Cog):
         self.event = asyncio.Event(loop=self.loop)
 
         self.menus = TTLItemCache(maxsize=2048, ttl=2*60)
+        self.no_expire_menus = {}
+
+    async def new_no_expire_menu(self, message, buttons):
+        self.no_expire_menus[message.id] = buttons
+        for button in buttons:
+            await message.add_reaction(button)
 
     async def new_menu(self, message, buttons, ttl=None):
         self.menus.__setitem__(message.id, buttons, ttl=ttl)
@@ -45,7 +51,8 @@ class Utils(commands.Cog):
 
         if message_id in self.menus:
             menu = self.menus
-
+        elif message_id in self.no_expire_menus:
+            menu = self.no_expire_menus
         else:
             return
 
