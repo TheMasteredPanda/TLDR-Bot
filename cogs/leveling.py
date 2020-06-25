@@ -659,7 +659,7 @@ class Leveling(commands.Cog):
         await ctx.send(embed=leaderboard_embed)
 
     @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member]',
-                      examples=['rep @Hattyot'], clearance='User', cls=command.Command, aliases=['reputation'])
+                      examples=['rep @Hattyot'], clearance='Mod', cls=command.Command, aliases=['reputation'])
     async def rep(self, ctx, mem=None):
         # check if user can give rep point
         data = db.levels.find_one({'guild_id': ctx.guild.id})
