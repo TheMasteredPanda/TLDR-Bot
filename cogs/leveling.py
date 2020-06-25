@@ -544,12 +544,12 @@ class Leveling(commands.Cog):
         key_switch = {
             'h': 'hp',
             'p': 'pp',
-            'r': 'reputation',
+            # 'r': 'reputation',
         }
         branch_switch = {
             'h': 'honours',
             'p': 'parliamentary',
-            'r': 'reputation'
+            # 'r': 'reputation'
         }
         key = key_switch.get(branch[0], 'pp')
         branch = branch_switch.get(branch[0], 'parliamentary')
