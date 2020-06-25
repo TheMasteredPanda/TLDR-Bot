@@ -788,11 +788,11 @@ class Leveling(commands.Cog):
         embed.add_field(name='>Parliamentary', value=pp_value, inline=False)
 
         # add reputation section if user has rep
-        if 'reputation' in levels_user and levels_user['reputation'] > 0:
-            rep = levels_user['reputation']
-            rep_rank = self.calculate_user_rank('reputation', ctx.guild.id, mem.id)
-            rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
-            embed.add_field(name='>Reputation', value=rep_value, inline=False)
+        # if 'reputation' in levels_user and levels_user['reputation'] > 0:
+        #     rep = levels_user['reputation']
+        #     rep_rank = self.calculate_user_rank('reputation', ctx.guild.id, mem.id)
+        #     rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
+        #     embed.add_field(name='>Reputation', value=rep_value, inline=False)
 
         return await ctx.send(embed=embed)
 
