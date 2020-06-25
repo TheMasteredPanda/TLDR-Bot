@@ -436,11 +436,16 @@ class Utility(commands.Cog):
                 all_num_emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
                 emotes = all_num_emotes[:len(options)]
 
-            description += '\n'.join(f'{e} | **{o}**' for o, e in zip(options, emotes))
+            description += '\n\n'.join(f'{e} | **{o}**' for o, e in zip(options, emotes))
             embed.description = description
 
         poll_msg = await ctx.send(embed=embed)
         voted_users = {}
+
+        embed_colour = config.EMBED_COLOUR
+        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+        embed.set_footer(text=f'{ctx.guild.name}', icon_url=ctx.guild.icon_url)
+        embed.title = f'**"{question}"**'
 
         async def count(user, msg, emote):
             if msg.id != poll_msg.id:
@@ -448,27 +453,26 @@ class Utility(commands.Cog):
 
             if user.id in voted_users:
                 if voted_users[user.id]['buffer'] >= 5:
-                    return await user.send(f'Don\'t spam please')
+                    embed.description = f'Don\'t spam please'
+                    return await user.send(embed=embed)
                 voted_users[user.id]['buffer'] += 1
 
                 previous_emote = voted_users[user.id]['emote']
                 if emote == previous_emote:
-                    return await user.send(f'Your vote has been already counted towards: {emote}')
+                    embed.description = f'Your vote has already been counted towards: {emote}'
+                    return await user.send(embed=embed)
 
-                db.polls.update_one({'guild_id': ctx.guild.id},
-                                    {'$inc': {
-                                        f'polls.{msg.id}.{emote}': 1,
-                                        f'polls.{msg.id}.{previous_emote}': -1}})
-
+                db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1, f'polls.{msg.id}.{previous_emote}': -1}})
                 voted_users[user.id]['emote'] = emote
 
-                return await user.send(f'Your vote has been changed to: {emote}')
+                embed.description = f'Your vote has been changed to: {emote}'
+                return await user.send(embed=embed)
 
-            voted_users[user.id] = {
-                'emote': emote,
-                'buffer': 0  # checking for spammers
-            }
+            voted_users[user.id] = {'emote': emote, 'buffer': 0}  # checking for spammers
             db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1}})
+
+            embed.description = f'Your vote has been counted towards: {emote}'
+            return await user.send(embed=embed)
 
         poll = dict.fromkeys(emotes, 0)
         buttons = dict.fromkeys(emotes, count)
@@ -506,15 +510,14 @@ class Utility(commands.Cog):
         emote_count = poll
         channel = self.bot.get_channel(channel_id)
         message = await channel.fetch_message(message_id)
-        sorted_emote_count = sorted(emote_count.items(), key=lambda x: x[1], reverse=True)
         total_emotes = sum(emote_count.values())
-        description = f'**{question}**\n'
+        description = f'**"{question}"**\n\n'
 
         if total_emotes == 0:
             # just incase nobody participated
-            description += '\n'.join(f'{emote} **- {emote_count}** | **0%**' for emote, emote_count in sorted_emote_count)
+            description += '\n\n'.join(f'{emote} **- {emote_count}** | **0%**' for emote, emote_count in emote_count.items())
         else:
-            description += '\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in sorted_emote_count)
+            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in emote_count.items())
 
         embed = message.embeds[0]
         embed.description = description
@@ -596,7 +599,7 @@ class Utility(commands.Cog):
             result[key] = value
 
         if result['o']:
-            result['o'] = result['o'].replace(' ', '').split(',')
+            result['o'] = [r.strip() for r in result['o'].split(',')]
         else:
             return result
 
@@ -607,6 +610,7 @@ class Utility(commands.Cog):
                 oe = re.match(oe_regex, option)
                 if oe:
                     e, o = oe.groups()
+                    e = e.strip()
                     result['o_emotes'][e] = o
                     continue
 
