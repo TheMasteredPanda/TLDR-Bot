@@ -581,7 +581,6 @@ class Leveling(commands.Cog):
                 try:
                     member = await ctx.guild.fetch_member(int(user_id))
                 except:
-                    u_rank -= 1
                     continue
 
             leaderboard_str += f'***`#{u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.name}'
@@ -591,7 +590,6 @@ class Leveling(commands.Cog):
                 user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
                 if user_role_name is None:
-                    u_rank -= 1
                     continue
 
                 if user_role is None:
@@ -954,7 +952,6 @@ class Leveling(commands.Cog):
                 try:
                     await guild.fetch_member(int(u_id))
                 except:
-                    u_rank -= 1
                     continue
 
             if int(u_id) == int(user_id):
