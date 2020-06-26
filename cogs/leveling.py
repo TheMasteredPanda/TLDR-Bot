@@ -614,6 +614,7 @@ class Leveling(commands.Cog):
         leaderboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
         # Displays user position under leaderboard and users above and below them if user is below position 10
+        u_rank = -1
         if user_index is None or user_index <= 9:
             return await ctx.send(embed=leaderboard_embed)
 
@@ -629,17 +630,15 @@ class Leveling(commands.Cog):
                 try:
                     member = await ctx.guild.fetch_member(int(user_id))
                 except:
-                    i -= 1
                     continue
 
-            your_pos_str += f'***`#{user_index + 1 + i}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{user_index + 1 + i}` - {member.name}'
+            your_pos_str += f'***`#{user_index + u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{user_index + u_rank}` - {member.name}'
 
             if key[0] in ['p', 'h']:
                 user_role_name = user_values[f'{key[0]}_role']
                 user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
                 if user_role_name is None:
-                    i -= 1
                     continue
 
                 if user_role is None:
@@ -654,6 +653,8 @@ class Leveling(commands.Cog):
                 rep = user_values['reputation']
                 your_pos_str += f' | **{rep} Reputation**'
                 your_pos_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+
+            u_rank += 1
 
         leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
 
