@@ -569,6 +569,7 @@ class Leveling(commands.Cog):
         embed_colour = config.EMBED_COLOUR
         leaderboard_str = ''
 
+        u_rank = 1
         for i, u in enumerate(sorted_users):
             if i == 10:
                 break
@@ -580,17 +581,17 @@ class Leveling(commands.Cog):
                 try:
                     member = await ctx.guild.fetch_member(int(user_id))
                 except:
-                    i -= 1
+                    u_rank -= 1
                     continue
 
-            leaderboard_str += f'***`#{i + 1}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{i + 1}` - {member.name}'
+            leaderboard_str += f'***`#{u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.name}'
 
             if key[0] in ['p', 'h']:
                 user_role_name = user_values[f'{key[0]}_role']
                 user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
                 if user_role_name is None:
-                    i -= 1
+                    u_rank -= 1
                     continue
 
                 if user_role is None:
@@ -605,6 +606,8 @@ class Leveling(commands.Cog):
                 rep = user_values['reputation']
                 leaderboard_str += f' | **{rep} Reputation**'
                 leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+
+            u_rank += 1
 
         description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
 
@@ -761,7 +764,7 @@ class Leveling(commands.Cog):
             member_h_level = self.user_role_level('honours', data, levels_user)
             h_role_name = levels_user['h_role']
             h_role_obj = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
-            h_rank = self.calculate_user_rank('hp', ctx.guild.id, mem.id)
+            h_rank = await self.calculate_user_rank('hp', ctx.guild.id, mem.id)
 
             if h_role_name is not None:
                 if h_role_obj is None:
@@ -777,7 +780,7 @@ class Leveling(commands.Cog):
         member_p_level = self.user_role_level('parliamentary', data, levels_user)
         p_role_name = levels_user['p_role']
         p_role_obj = discord.utils.find(lambda r: r.name == p_role_name, ctx.guild.roles)
-        p_rank = self.calculate_user_rank('pp', ctx.guild.id, mem.id)
+        p_rank = await self.calculate_user_rank('pp', ctx.guild.id, mem.id)
 
         if p_role_obj is None:
             member_p_role = await ctx.guild.create_role(name=p_role_name)
@@ -790,7 +793,7 @@ class Leveling(commands.Cog):
         # add reputation section if user has rep
         # if 'reputation' in levels_user and levels_user['reputation'] > 0:
         #     rep = levels_user['reputation']
-        #     rep_rank = self.calculate_user_rank('reputation', ctx.guild.id, mem.id)
+        #     rep_rank = await self.calculate_user_rank('reputation', ctx.guild.id, mem.id)
         #     rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
         #     embed.add_field(name='>Reputation', value=rep_value, inline=False)
 
@@ -930,8 +933,7 @@ class Leveling(commands.Cog):
 
         return percent
 
-    @staticmethod
-    def calculate_user_rank(key, guild_id, user_id):
+    async def calculate_user_rank(self, key, guild_id, user_id):
         # creates pipeline that reduces data to only user id and key
         pipeline = [
             {'$match': {'guild_id': guild_id}},
@@ -942,8 +944,23 @@ class Leveling(commands.Cog):
         data = list(db.levels.aggregate(pipeline))[0]
         data['users'] = {k: v for k, v in data['users'].items() if v}
         sorted_users = sorted(data['users'].items(), key=lambda x: x[1][key], reverse=True)
-        user = [u for u in sorted_users if u[0] == str(user_id)]
-        return sorted_users.index(user[0]) + 1
+
+        guild = self.bot.get_guild(int(guild_id))
+        u_rank = 1
+        for u in sorted_users:
+            u_id, _ = u
+            member = guild.get_member(int(u_id))
+            if member is None:
+                try:
+                    await guild.fetch_member(int(u_id))
+                except:
+                    u_rank -= 1
+                    continue
+
+            if int(u_id) == int(user_id):
+                return u_rank
+
+            u_rank += 1
 
     @staticmethod
     def get_member(ctx, source):
