@@ -626,9 +626,13 @@ class Utility(commands.Cog):
         prefix = config.PREFIX
         all_commands = self.bot.commands
         help_object = {}
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
 
         for cmd in all_commands:
             if hasattr(cmd, 'dm_only'):
+                continue
+
+            if 'commands' in data and 'disabled' in data['commands'] and cmd.name in data['commands']['disabled']:
                 continue
 
             # Check if cog is levels and if cmd requires mod perms
@@ -705,6 +709,9 @@ class Utility(commands.Cog):
             if self.bot.get_command(_cmd):
                 cmd = self.bot.get_command(_cmd)
                 if cmd.hidden:
+                    return
+
+                if 'commands' in data and 'disabled' in data['commands'] and cmd.name in data['commands']['disabled']:
                     return
 
                 if ctx.command.clearance not in clearance and \

@@ -4,6 +4,7 @@ import config
 import dateparser
 import traceback
 import time
+from modules import embed_maker
 from datetime import datetime
 from modules import database
 from discord.ext import commands
@@ -242,7 +243,7 @@ class TLDR(commands.Bot):
         if 'commands' in data:
             disabled_commands = data['commands']['disabled']
             if ctx.command.name in disabled_commands:
-                return
+                return await embed_maker.message(ctx, 'This command has been disabled', colour='red')
 
         if 'users' not in data:
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
