@@ -1,6 +1,7 @@
 import discord
 import config
 import re
+from cogs.utils import get_member
 from datetime import datetime
 from time import time
 from discord.ext import commands
@@ -570,8 +571,9 @@ class Leveling(commands.Cog):
         leaderboard_str = ''
 
         u_rank = 1
+        limit = 10
         for i, u in enumerate(sorted_users):
-            if i == 10:
+            if i == limit:
                 break
 
             user_id, user_values = u
@@ -581,6 +583,7 @@ class Leveling(commands.Cog):
                 try:
                     member = await ctx.guild.fetch_member(int(user_id))
                 except:
+                    limit += 1
                     continue
 
             leaderboard_str += f'***`#{u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.name}'
@@ -590,6 +593,7 @@ class Leveling(commands.Cog):
                 user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
                 if user_role_name is None:
+                    limit += 1
                     continue
 
                 if user_role is None:
@@ -674,23 +678,29 @@ class Leveling(commands.Cog):
         if mem is None:
             return await embed_maker.command_error(ctx)
 
-        if ctx.message.mentions:
-            member = ctx.message.mentions[0]
-        else:
+        member = await get_member(ctx, self.bot, mem)
+
+        if member is None:
             return await embed_maker.command_error(ctx, '[member]')
+        elif isinstance(member, str):
+            return await embed_maker.message(ctx, member, colour='red')
 
         # check if user has been in server for more than 5 days
         now = datetime.now()
         joined_at = ctx.author.joined_at
         diff = now - joined_at
         if round(diff.total_seconds()) < 86400 * 5:  # 5 days
-            return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points')
+            return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points', colour='red')
 
         if member.id == ctx.author.id:
-            return await embed_maker.message(ctx, f'You can\'t give rep points to yourself')
+            return await embed_maker.message(ctx, f'You can\'t give rep points to yourself', colour='red')
 
         if member.bot:
-            return await embed_maker.message(ctx, f'You can\'t give rep points to bots')
+            return await embed_maker.message(ctx, f'You can\'t give rep points to bots', colour='red')
+
+        # check last rep
+        if 'last_rep' in levels_user and int(levels_user['last_rep']) == member.id:
+            return await embed_maker.message(ctx, f'You can\'t give rep to the same person twice in a row', colour='red')
 
         # check if member is in database
         if str(member.id) not in data['users']:
@@ -708,6 +718,9 @@ class Leveling(commands.Cog):
         # give user rep point
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.reputation': 1}})
 
+        # log who author repped
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.last_rep': member.id}})
+
         # give user 5% xp boost for 6 hours
         boost_dict = {
             'expires': round(time()) + (3600 * 6),  # 6 hours
@@ -724,9 +737,11 @@ class Leveling(commands.Cog):
         if member is None:
             mem = ctx.author
         else:
-            mem = self.get_member(ctx, member)
+            mem = await get_member(ctx, self.bot, member)
             if mem is None:
                 return await embed_maker.command_error(ctx)
+            elif isinstance(mem, str):
+                return await embed_maker.message(ctx, mem, colour='red')
 
         if mem.bot:
             return await embed_maker.message(ctx, 'No bots allowed >:(', colour='red')
