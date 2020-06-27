@@ -92,10 +92,6 @@ class PrivateMessages(commands.Cog):
             try:
                 user_message = await self.bot.wait_for('message', check=user_check, timeout=90)
             except asyncio.TimeoutError:
-                err_msg = 'Report user function timed out'
-                err_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=err_msg)
-                err_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
-                await ctx.author.send(embed=err_embed)
                 return None
 
             # checks if user ids are valid, if not, returns false
@@ -284,7 +280,7 @@ class PrivateMessages(commands.Cog):
         else:
             return await embed_maker.message(ctx, 'Invalid ticket channel')
 
-    @commands.command(help='Closes the current ticket', usage='close_ticket', examples=['close_ticket'], clearance='Mod', cls=command.Command)
+    @commands.command(help='get user who reported issue into channel', usage='get_reporter', examples=['get_reporter'], clearance='Mod', cls=command.Command)
     async def get_reporter(self, ctx):
         regex = re.compile(r'(20\d*-\d*-\d*-.*?)')
         match = re.match(regex, ctx.message.channel.name)
