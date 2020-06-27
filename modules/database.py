@@ -74,6 +74,9 @@ schemas = {
             #     }
             # }
         },
+        'commands': {
+            'disabled': []
+        },
         'daily_debates': {
             'topics': [],
             'time': '',

@@ -238,6 +238,12 @@ class TLDR(commands.Bot):
         clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
 
         data = db.server_data.find_one({'guild_id': ctx.guild.id})
+
+        if 'commands' in data:
+            disabled_commands = data['commands']['disabled']
+            if ctx.command.name in disabled_commands:
+                return
+
         if 'users' not in data:
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
             data['users'] = {}
