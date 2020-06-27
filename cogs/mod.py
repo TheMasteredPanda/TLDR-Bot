@@ -5,6 +5,7 @@ import datetime
 import time
 import asyncio
 import config
+from cogs.utils import get_member
 from modules import command, database, embed_maker, format_time
 from discord.ext import commands
 
@@ -413,6 +414,60 @@ class Mod(commands.Cog):
                   f'https://discordapp.com/channels/{guild_id}/{channel_id}/{announcement_id}'
             await user.send(msg)
             await asyncio.sleep(0.3)
+
+    @commands.command(help='Open a ticket for discussion', usage='open_ticket [ticket]', clearance='Mod', cls=command.Command,
+                      examples=['open_ticket new mods'])
+    async def open_ticket(self, ctx, ticket=None):
+        if ticket is None:
+            return await embed_maker.command_error(ctx)
+
+        main_guild = self.bot.get_guild(config.MAIN_SERVER)
+        embed_colour = config.EMBED_COLOUR
+        ticket_embed = discord.Embed(colour=embed_colour, timestamp=datetime.datetime.now())
+        ticket_embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+        ticket_embed.set_author(name='New Ticket', icon_url=main_guild.icon_url)
+        ticket_embed.add_field(name='>Opened By', value=f'<@{ctx.author.id}>', inline=False)
+        ticket_embed.add_field(name='>Ticket', value=ticket, inline=False)
+
+        ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
+
+        if ticket_category is None:
+            # get all staff roles
+            staff_roles = filter(lambda r: r.permissions.manage_messages, ctx.guild.roles)
+
+            # staff roles can read channels in category, users cant
+            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True))
+            overwrites[ctx.guild.default_role] = discord.PermissionOverwrite(read_messages=False)
+
+            ticket_category = await ctx.guild.create_category(name='Open Tickets', overwrites=overwrites)
+
+        today = datetime.date.today()
+        date_str = today.strftime('%Y-%m-%d')
+        ticket_channel = await ctx.guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
+        await ticket_channel.send(embed=ticket_embed)
+
+        # adds to tickets document
+        db.tickets.update_one({'guild_id': ctx.guild.id}, {'$set': {f'tickets.{ticket_channel.id}': ctx.author.id}})
+
+    @commands.command(help='Give user access to ticket', usage='get_user', examples=['get_user'],
+                      clearance='Mod', cls=command.Command)
+    async def get_user(self, ctx, member=None):
+        if member is None:
+            return await embed_maker.command_error(ctx)
+
+        member = await get_member(ctx, self.bot, member)
+        if member is None:
+            return await embed_maker.command_error(ctx, '[member]')
+        elif isinstance(member, str):
+            return await embed_maker.message(ctx, member, colour='red')
+
+        regex = re.compile(r'(20\d*-\d*-\d*-.*?)')
+        match = re.match(regex, ctx.message.channel.name)
+        if not match:
+            return await embed_maker.message(ctx, 'Invalid ticket channel')
+
+        await ctx.channel.set_permissions(member, read_messages=True, send_messages=True)
+        return await ctx.channel.send(f'<@{member.id}>')
 
     @commands.command(help='Grant users access to commands that aren\'t available to users',
                       usage='command_access [member/role] [action] [command]', clearance='Admin', cls=command.Command,
