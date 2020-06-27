@@ -150,12 +150,12 @@ class TLDR(commands.Bot):
                 message_data[f'{message.channel.id}'][f'{now.hour}'] = {}
                 message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
                 message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute + 1}'] = 0
-            elif str(now.hour) not in message_data[f'{message.channel.id}']:
+            if str(now.hour) not in message_data[f'{message.channel.id}']:
                 db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
                 message_data[f'{message.channel.id}'][f'{now.hour}'] = {}
                 message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
                 message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute + 1}'] = 0
-            elif str(now.minute) not in message_data[f'{message.channel.id}'][f'{now.hour}']:
+            if str(now.minute) not in message_data[f'{message.channel.id}'][f'{now.hour}']:
                 db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
                 message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
                 message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute + 1}'] = 0
@@ -179,7 +179,7 @@ class TLDR(commands.Bot):
                     break
 
                 current_min_msg_count = message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{now.minute}']
-                if current_min_msg_count == 4:
+                if current_min_msg_count == 3:
                     channel_id = data['message_spike']['channel']
                     channel = message.guild.get_channel(int(channel_id))
 
@@ -188,6 +188,7 @@ class TLDR(commands.Bot):
                     embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
                     embed.set_footer(text=f'{message.guild.name}', icon_url=message.guild.icon_url)
                     await channel.send(embed=embed)
+                    break
 
                 previous_minute = now.minute - i
                 previous_hour = str(list(range(0, 24))[now.hour - 1]) if previous_minute < 0 else str(now.hour)
