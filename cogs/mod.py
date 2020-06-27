@@ -18,7 +18,7 @@ class Mod(commands.Cog):
 
     @commands.command(help='Warn mods when a channel has a message spike (5 messages in a minute)',
                       usage='message_spike [#channel/disable]', examples=['message_spike #staff', 'message_spike disable'],
-                      clearance='Mod', cls=command.Command)
+                      clearance='Dev', cls=command.Command)
     async def message_spike(self, ctx, channel=None):
         if channel is None:
             return await embed_maker.command_error(ctx)
