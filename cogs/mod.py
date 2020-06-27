@@ -417,7 +417,7 @@ class Mod(commands.Cog):
 
     @commands.command(help='Open a ticket for discussion', usage='open_ticket [ticket]', clearance='Mod', cls=command.Command,
                       examples=['open_ticket new mods'])
-    async def open_ticket(self, ctx, ticket=None):
+    async def open_ticket(self, ctx, *, ticket=None):
         if ticket is None:
             return await embed_maker.command_error(ctx)
 
