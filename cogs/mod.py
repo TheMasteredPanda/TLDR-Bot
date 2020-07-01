@@ -466,8 +466,8 @@ class Mod(commands.Cog):
             return await embed_maker.message(ctx, 'Invalid ticket channel')
 
         # check if user already has access to channel
-        overwrites = ctx.channel.overwrites_for(member)
-        if overwrites or overwrites.isempty():
+        permissions = ctx.channel.permissions_for(member)
+        if permissions.read_messages:
             return await embed_maker.message(ctx, 'User already has access to this channel')
 
         await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, read_message_history=True)
