@@ -461,10 +461,14 @@ class Mod(commands.Cog):
         elif isinstance(member, str):
             return await embed_maker.message(ctx, member, colour='red')
 
-        regex = re.compile(r'(20\d*-\d*-\d*-.*?)')
-        match = re.match(regex, ctx.message.channel.name)
-        if not match:
+        ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
+        if ctx.channel.category != ticket_category:
             return await embed_maker.message(ctx, 'Invalid ticket channel')
+
+        # check if user already has access to channel
+        overwrites = ctx.channel.overwrites_for(member)
+        if overwrites or overwrites.isempty():
+            return await embed_maker.message(ctx, 'User already has access to this channel')
 
         await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, read_message_history=True)
         return await ctx.channel.send(f'<@{member.id}>')

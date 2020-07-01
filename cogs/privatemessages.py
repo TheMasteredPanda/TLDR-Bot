@@ -1,7 +1,7 @@
 import config
 import discord
 import asyncio
-import re
+from cogs.utils import get_member
 from modules import command, embed_maker, database
 from datetime import datetime, date
 from discord.ext import commands
@@ -281,9 +281,8 @@ class PrivateMessages(commands.Cog):
 
     @commands.command(help='get user who reported issue into channel', usage='get_reporter', examples=['get_reporter'], clearance='Mod', cls=command.Command)
     async def get_reporter(self, ctx):
-        regex = re.compile(r'(20\d*-\d*-\d*-.*?)')
-        match = re.match(regex, ctx.message.channel.name)
-        if not match:
+        ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
+        if ctx.channel.category != ticket_category:
             return await embed_maker.message(ctx, 'Invalid ticket channel')
 
         data = db.tickets.find_one({'guild_id': ctx.guild.id})
@@ -293,12 +292,15 @@ class PrivateMessages(commands.Cog):
         tickets = data['tickets']
 
         user_id = tickets[str(ctx.channel.id)]
-        user = self.bot.get_user(int(user_id))
-        if user is None:
-            user = await self.bot.fetch_user(user_id)
+        member = await get_member(ctx, self.bot, user_id)
 
-        await ctx.channel.set_permissions(user, read_messages=True, send_messages=True, read_message_history=True)
-        return await ctx.channel.send(f'<@{user.id}>')
+        # check if user already has access to channel
+        overwrites = ctx.channel.overwrites_for(member)
+        if overwrites or overwrites.isempty():
+            return await embed_maker.message(ctx, 'User already has access to this channel')
+
+        await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, read_message_history=True)
+        return await ctx.channel.send(f'<@{member.id}>')
 
 
 def setup(bot):
