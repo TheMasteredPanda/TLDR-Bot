@@ -566,6 +566,7 @@ class Leveling(commands.Cog):
         )
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
         user_index = sorted_users.index(user[0]) if user else None
+        user_rank = await self.calculate_user_rank(key, ctx.guild.id, ctx.author.id)
 
         embed_colour = config.EMBED_COLOUR
         leaderboard_str = ''
@@ -592,7 +593,7 @@ class Leveling(commands.Cog):
                 user_role_name = user_values[f'{key[0]}_role']
                 user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
-                if user_role_name is None:
+                if not user_role_name:
                     limit += 1
                     continue
 
@@ -602,12 +603,12 @@ class Leveling(commands.Cog):
                 role_level = self.user_role_level(branch, data, user_values)
                 progress_percent = self.percent_till_next_level(branch, user_values)
                 leaderboard_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**'
-                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
 
             else:
                 rep = user_values['reputation']
                 leaderboard_str += f' | **{rep} Reputation**'
-                leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+
+            leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
 
             u_rank += 1
 
@@ -618,7 +619,6 @@ class Leveling(commands.Cog):
         leaderboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
         # Displays user position under leaderboard and users above and below them if user is below position 10
-        u_rank = -1
         if user_index is None or user_index <= 9:
             return await ctx.send(embed=leaderboard_embed)
 
@@ -627,36 +627,54 @@ class Leveling(commands.Cog):
             if user_index == 10 and i == -1:
                 continue
 
-            user_id, user_values = sorted_users[user_index + i]
-            member = ctx.guild.get_member(int(user_id))
+            if i == -1:
+                for j in range(user_index - 1, 0, -1):
+                    print(j)
+                    u_id, u_val = sorted_users[j]
 
-            if member is None:
-                try:
-                    member = await ctx.guild.fetch_member(int(user_id))
-                except:
-                    continue
+                    member = ctx.guild.get_member(int(u_id))
+                    if member is None:
+                        try:
+                            await ctx.guild.fetch_member(int(u_id))
+                        except:
+                            continue
+                    break
+            elif i == 0:
+                member = ctx.author
+                u_id, u_val = sorted_users[user_index]
+            elif i == 1:
+                for k in range(user_index + 1, len(sorted_users)):
+                    u_id, u_val = sorted_users[k]
 
-            your_pos_str += f'***`#{user_index + u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{user_index + u_rank}` - {member.name}'
+                    member = ctx.guild.get_member(int(u_id))
+                    if member is None:
+                        try:
+                            await ctx.guild.fetch_member(int(u_id))
+                        except:
+                            continue
+                    break
 
+            print(u_id, u_val)
+            your_pos_str += f'***`#{user_rank + i}`*** - *{member.name}' if u_id == str(ctx.author.id) else f'`#{user_rank + i}` - {member.name}'
             if key[0] in ['p', 'h']:
-                user_role_name = user_values[f'{key[0]}_role']
+                user_role_name = u_val[f'{key[0]}_role']
                 user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
-                if user_role_name is None:
+                if not user_role_name:
                     continue
 
                 if user_role is None:
                     user_role = await ctx.guild.create_role(name=user_role_name)
 
-                role_level = self.user_role_level(branch, data, user_values)
-                progress_percent = self.percent_till_next_level(branch, user_values)
+                role_level = self.user_role_level(branch, data, u_val)
+                progress_percent = self.percent_till_next_level(branch, u_val)
                 your_pos_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**'
-                your_pos_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+                your_pos_str += '*\n' if u_id == str(ctx.author.id) else '\n'
 
             else:
-                rep = user_values['reputation']
+                rep = u_val['reputation']
                 your_pos_str += f' | **{rep} Reputation**'
-                your_pos_str += '*\n' if user_id == str(ctx.author.id) else '\n'
+                your_pos_str += '*\n' if u_id == str(ctx.author.id) else '\n'
 
             u_rank += 1
 
@@ -773,22 +791,22 @@ class Leveling(commands.Cog):
             embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
 
         # checks if honours section needs to be added
-        member_hp = levels_user['hp']
-        if member_hp > 0:
-            member_h_level = self.user_role_level('honours', data, levels_user)
-            h_role_name = levels_user['h_role']
-            h_role_obj = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
-            h_rank = await self.calculate_user_rank('hp', ctx.guild.id, mem.id)
-
-            if h_role_name is not None:
-                if h_role_obj is None:
-                    member_h_role = await ctx.guild.create_role(name=h_role_name)
-                    await mem.add_roles(member_h_role)
-
-                hp_progress = self.percent_till_next_level('honours', levels_user)
-                hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role_obj.id}>' \
-                           f' | Progress: **{hp_progress}%**'
-                embed.add_field(name='>Honours', value=hp_value, inline=False)
+        # member_hp = levels_user['hp']
+        # if member_hp > 0:
+        #     member_h_level = self.user_role_level('honours', data, levels_user)
+        #     h_role_name = levels_user['h_role']
+        #     h_role_obj = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
+        #     h_rank = await self.calculate_user_rank('hp', ctx.guild.id, mem.id)
+        #
+        #     if h_role_name is not None:
+        #         if h_role_obj is None:
+        #             member_h_role = await ctx.guild.create_role(name=h_role_name)
+        #             await mem.add_roles(member_h_role)
+        #
+        #         hp_progress = self.percent_till_next_level('honours', levels_user)
+        #         hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role_obj.id}>' \
+        #                    f' | Progress: **{hp_progress}%**'
+        #         embed.add_field(name='>Honours', value=hp_value, inline=False)
 
         # add parliamentary section
         member_p_level = self.user_role_level('parliamentary', data, levels_user)
@@ -947,17 +965,16 @@ class Leveling(commands.Cog):
 
         return percent
 
-    async def calculate_user_rank(self, key, guild_id, user_id):
-        # creates pipeline that reduces data to only user id and key
-        pipeline = [
-            {'$match': {'guild_id': guild_id}},
-            {"$project": {"users": {"$objectToArray": "$users"}}},
-            {"$project": {'_id': 0, 'users.k': 1, f"users.v.{key}": 1}},
-            {"$project": {"users": {"$arrayToObject": "$users"}}},
-        ]
-        data = list(db.levels.aggregate(pipeline))[0]
-        data['users'] = {k: v for k, v in data['users'].items() if v}
-        sorted_users = sorted(data['users'].items(), key=lambda x: x[1][key], reverse=True)
+    async def calculate_user_rank(self, key, guild_id, user_id, return_mem=False):
+        data = db.levels.find_one({'guild_id': int(guild_id)})
+        if data is None:
+            data = self.bot.add_collections(int(guild_id), 'levels')
+
+        # Sorts users and takes out people who's pp or hp is 0
+        sorted_users = sorted(
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
+            key=lambda x: x[1][key], reverse=True
+        )
 
         guild = self.bot.get_guild(int(guild_id))
         u_rank = 1
@@ -971,6 +988,9 @@ class Leveling(commands.Cog):
                     continue
 
             if int(u_id) == int(user_id):
+                if return_mem:
+                    return u_rank, member
+
                 return u_rank
 
             u_rank += 1
