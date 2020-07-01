@@ -252,7 +252,7 @@ class PrivateMessages(commands.Cog):
             staff_roles = filter(lambda r: r.permissions.manage_messages, guild.roles)
 
             # staff roles can read channels in category, users cant
-            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True))
+            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True))
             overwrites[guild.default_role] = discord.PermissionOverwrite(read_messages=False)
 
             ticket_category = await guild.create_category(name='Open Tickets', overwrites=overwrites)
@@ -297,7 +297,7 @@ class PrivateMessages(commands.Cog):
         if user is None:
             user = await self.bot.fetch_user(user_id)
 
-        await ctx.channel.set_permissions(user, read_messages=True, send_messages=True)
+        await ctx.channel.set_permissions(user, read_messages=True, send_messages=True, read_message_history=True)
         return await ctx.channel.send(f'<@{user.id}>')
 
 

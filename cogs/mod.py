@@ -436,7 +436,7 @@ class Mod(commands.Cog):
             staff_roles = filter(lambda r: r.permissions.manage_messages, ctx.guild.roles)
 
             # staff roles can read channels in category, users cant
-            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True))
+            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True))
             overwrites[ctx.guild.default_role] = discord.PermissionOverwrite(read_messages=False)
 
             ticket_category = await ctx.guild.create_category(name='Open Tickets', overwrites=overwrites)
@@ -466,7 +466,7 @@ class Mod(commands.Cog):
         if not match:
             return await embed_maker.message(ctx, 'Invalid ticket channel')
 
-        await ctx.channel.set_permissions(member, read_messages=True, send_messages=True)
+        await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, read_message_history=True)
         return await ctx.channel.send(f'<@{member.id}>')
 
     @commands.command(help='Grant users access to commands that aren\'t available to users',
