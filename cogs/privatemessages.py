@@ -272,9 +272,8 @@ class PrivateMessages(commands.Cog):
 
     @commands.command(help='Closes the current ticket', usage='close_ticket', examples=['close_ticket'], clearance='Mod', cls=command.Command)
     async def close_ticket(self, ctx):
-        regex = re.compile(r'(20\d*-\d*-\d*-.*?)')
-        match = re.match(regex, ctx.message.channel.name)
-        if match:
+        ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
+        if ctx.channel.category == ticket_category:
             await ctx.channel.delete()
             db.tickets.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'tickets.{ctx.channel.id}': ''}})
         else:
