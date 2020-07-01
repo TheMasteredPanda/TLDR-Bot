@@ -290,6 +290,8 @@ class PrivateMessages(commands.Cog):
             data = self.bot.add_collections(ctx.guild.id, 'tickets')
 
         tickets = data['tickets']
+        if str(ctx.channel.id) not in tickets:
+            return await embed_maker.message(ctx, msg=f'This ticket does not have a reporter', colour='red')
 
         user_id = tickets[str(ctx.channel.id)]
         member = await get_member(ctx, self.bot, user_id)

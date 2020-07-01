@@ -446,9 +446,6 @@ class Mod(commands.Cog):
         ticket_channel = await ctx.guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
         await ticket_channel.send(embed=ticket_embed)
 
-        # adds to tickets document
-        db.tickets.update_one({'guild_id': ctx.guild.id}, {'$set': {f'tickets.{ticket_channel.id}': ctx.author.id}})
-
     @commands.command(help='Give user access to ticket', usage='get_user', examples=['get_user'],
                       clearance='Mod', cls=command.Command)
     async def get_user(self, ctx, member=None):
