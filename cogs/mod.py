@@ -239,7 +239,8 @@ class Mod(commands.Cog):
         topics = data['daily_debates']['topics']
         if not topics:
             # remind mods that a topic needs to be set up
-            msg = f'Daily debate starts in {format_time.seconds(dd_time)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
+            tm = round(time.time()) - dd_time
+            msg = f'Daily debate starts in {format_time.seconds(tm)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
             channel = guild.get_channel(data['daily_debates']['channel'])
 
             if channel is None:
@@ -250,7 +251,7 @@ class Mod(commands.Cog):
             daily_debates = data['daily_debates']
             channel = daily_debates['channel']
             role = daily_debates['role']
-            time = daily_debates['time']
+            time_str = daily_debates['time']
             if 'poll_channel' in daily_debates:
                 poll_channel = daily_debates['poll_channel']
             else:
@@ -261,7 +262,7 @@ class Mod(commands.Cog):
             utils_cog = self.bot.get_cog('Utils')
             await utils_cog.create_timer(
                 expires=timer_expires, guild_id=guild.id, event='daily_debate_final',
-                extras={'topic': topics[0], 'channel': channel, 'role': role, 'time': time, 'poll_channel': poll_channel
+                extras={'topic': topics[0], 'channel': channel, 'role': role, 'time': time_str, 'poll_channel': poll_channel
                         })
 
     @commands.Cog.listener()
