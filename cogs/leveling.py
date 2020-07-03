@@ -790,7 +790,7 @@ class Leveling(commands.Cog):
             boost_percent = round((boost_multiplier - 1) * 100)
             embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
 
-        checks if honours section needs to be added
+        # checks if honours section needs to be added
         member_hp = levels_user['hp']
         if member_hp > 0:
             member_h_level = self.user_role_level('honours', data, levels_user)
