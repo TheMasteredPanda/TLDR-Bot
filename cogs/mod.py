@@ -239,7 +239,7 @@ class Mod(commands.Cog):
         topics = data['daily_debates']['topics']
         if not topics:
             # remind mods that a topic needs to be set up
-            tm = round(time.time()) - dd_time
+            tm = dd_time - round(time.time())
             msg = f'Daily debate starts in {format_time.seconds(tm)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
             channel = guild.get_channel(data['daily_debates']['channel'])
 
