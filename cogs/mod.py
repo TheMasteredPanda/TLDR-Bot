@@ -549,11 +549,9 @@ class Mod(commands.Cog):
             emoji = discord.utils.find(lambda e: e.id == int(match[0]), ctx.guild.emojis)
 
         if emoji.roles:
-            embed = embed_maker.message(ctx, f'This emote is restricted to: {", ".join([f"<@&{r.id}>" for r in emoji.roles])}')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, f'This emote is restricted to: {", ".join([f"<@&{r.id}>" for r in emoji.roles])}')
         else:
-            embed = embed_maker.message(ctx, 'This emote is available to everyone')
-            return await ctx.send(embed=embed)
+            return await embed_maker.message(ctx, 'This emote is available to everyone')
 
     @commands.command(help='restrict an emote to specific role(s)', usage='emote_role [action] [emote] [role]',
                       examples=['emote_role add :TldrNewsUK: @Mayor', 'emote_role add :TldrNewsUK: 697184345903071265', 'emote_role remove :TldrNewsUK: Mayor'],
