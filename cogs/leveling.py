@@ -790,23 +790,23 @@ class Leveling(commands.Cog):
             boost_percent = round((boost_multiplier - 1) * 100)
             embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
 
-        # checks if honours section needs to be added
-        # member_hp = levels_user['hp']
-        # if member_hp > 0:
-        #     member_h_level = self.user_role_level('honours', data, levels_user)
-        #     h_role_name = levels_user['h_role']
-        #     h_role_obj = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
-        #     h_rank = await self.calculate_user_rank('hp', ctx.guild.id, mem.id)
-        #
-        #     if h_role_name is not None:
-        #         if h_role_obj is None:
-        #             member_h_role = await ctx.guild.create_role(name=h_role_name)
-        #             await mem.add_roles(member_h_role)
-        #
-        #         hp_progress = self.percent_till_next_level('honours', levels_user)
-        #         hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role_obj.id}>' \
-        #                    f' | Progress: **{hp_progress}%**'
-        #         embed.add_field(name='>Honours', value=hp_value, inline=False)
+        checks if honours section needs to be added
+        member_hp = levels_user['hp']
+        if member_hp > 0:
+            member_h_level = self.user_role_level('honours', data, levels_user)
+            h_role_name = levels_user['h_role']
+            h_role_obj = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
+            h_rank = await self.calculate_user_rank('hp', ctx.guild.id, mem.id)
+        
+            if h_role_name is not None:
+                if h_role_obj is None:
+                    member_h_role = await ctx.guild.create_role(name=h_role_name)
+                    await mem.add_roles(member_h_role)
+        
+                hp_progress = self.percent_till_next_level('honours', levels_user)
+                hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role_obj.id}>' \
+                           f' | Progress: **{hp_progress}%**'
+                embed.add_field(name='>Honours', value=hp_value, inline=False)
 
         # add parliamentary section
         member_p_level = self.user_role_level('parliamentary', data, levels_user)
