@@ -100,6 +100,24 @@ class Dev(commands.Cog):
         db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'commands.disabled': cmd_obj.name}})
         return await embed_maker.message(ctx, f'{cmd} has been disabled', colour='green')
 
+    @commands.command(hidden=True, help='Enable a command', usage='enable_command', examples=['enable_command'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def enable_command(self, ctx, cmd=None):
+        if command is None:
+            return await embed_maker.command_error(ctx)
+
+        if self.bot.get_command(cmd) is None:
+            return await embed_maker.command_error(ctx, '[command]')
+
+        cmd_obj = self.bot.get_command(cmd)
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'commands' not in data and cmd_obj.name not in data['commands']['disabled']:
+            return await embed_maker.message(ctx, f'{cmd} is already enabled', colour='red')
+
+        db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'commands.disabled': cmd_obj.name}})
+        return await embed_maker.message(ctx, f'{cmd} has been enabled', colour='green')
+
     # adds anglorex resource usage monitor
     @commands.command(hidden=True, help='monitors bot resource usage', usage='resrc_usage',
                       examples=['resrc_usage'], clearance='Dev', cls=command.Command)
