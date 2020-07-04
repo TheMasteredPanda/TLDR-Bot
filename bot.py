@@ -360,6 +360,8 @@ class TLDR(commands.Bot):
         if member.bot:
             return
 
+        db.levels.update_one({'guild_id': member.guild.id}, {'$set': {f'users.{member.id}.left': True}})
+
         # Delete user data after 5 days
         utils_cog = self.get_cog('Utils')
         expires = int(time.time()) + (86400 * 5)  # 5 days

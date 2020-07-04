@@ -561,7 +561,7 @@ class Leveling(commands.Cog):
 
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
-            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0 and 'left' not in data['users'][u]],
             key=lambda x: x[1][key], reverse=True
         )
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
@@ -585,6 +585,7 @@ class Leveling(commands.Cog):
                     member = await ctx.guild.fetch_member(int(user_id))
                 except:
                     limit += 1
+                    db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{user_id}.left': True}})
                     continue
 
             leaderboard_str += f'***`#{u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.name}'
@@ -654,7 +655,6 @@ class Leveling(commands.Cog):
                             continue
                     break
 
-            print(u_id, u_val)
             your_pos_str += f'***`#{user_rank + i}`*** - *{member.name}' if u_id == str(ctx.author.id) else f'`#{user_rank + i}` - {member.name}'
             if key[0] in ['p', 'h']:
                 user_role_name = u_val[f'{key[0]}_role']
@@ -813,7 +813,6 @@ class Leveling(commands.Cog):
         p_role_name = levels_user['p_role']
         p_role_obj = discord.utils.find(lambda r: r.name == p_role_name, ctx.guild.roles)
         p_rank = await self.calculate_user_rank('pp', ctx.guild.id, mem.id)
-
         if p_role_obj is None:
             member_p_role = await ctx.guild.create_role(name=p_role_name)
             await mem.add_roles(member_p_role)
@@ -972,7 +971,7 @@ class Leveling(commands.Cog):
 
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
-            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0 and 'left' not in data['users'][u]],
             key=lambda x: x[1][key], reverse=True
         )
 
@@ -985,6 +984,7 @@ class Leveling(commands.Cog):
                 try:
                     await guild.fetch_member(int(u_id))
                 except:
+                    db.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{u_id}.left': True}})
                     continue
 
             if int(u_id) == int(user_id):
