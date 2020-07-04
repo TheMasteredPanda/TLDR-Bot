@@ -191,7 +191,26 @@ class Mod(commands.Cog):
             return await embed_maker.command_error(ctx, '(action)')
 
         if action == 'insert':
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': {'$each': [arg], '$position': 0}}})
+            args = arg.split(' -ta ')
+            if len(args) > 1:
+                ta_arg = args[1].strip()
+                member = await get_member(ctx, self.bot, ta_arg)
+                if member is None:
+                    return await embed_maker.message(ctx, 'Invalid topic author', colour='red')
+                elif isinstance(member, str):
+                    return await embed_maker.message(ctx, member, colour='red')
+
+                else:
+                    topic_obj = {
+                        'topic': args[0].strip(),
+                        'topic_author': member.id
+                    }
+                    push = topic_obj
+                    arg = args[0]
+            else:
+                push = arg
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': {'$each': [push], '$position': 0}}})
             return await embed_maker.message(
                 ctx, f'`{arg}` has been inserted into first place in the list of daily debate topics'
                      f'\nThere are now **{len(data["daily_debates"]["topics"]) + 1}** topics on the list'
