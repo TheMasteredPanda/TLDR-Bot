@@ -66,7 +66,7 @@ class Leveling(commands.Cog):
         err = ''
         suc = ''
         if source_type == 'role' and 'roles' in data['boost']:
-            if str(boost_remove.id) in data['boost']['roles']:
+            if str(boost_remove.id) in data['boost']['roles'] and data['boost']['roles'][str(boost_remove.id)]:
                 db.levels.update_one(
                     {'guild_id': ctx.guild.id},
                     {'$unset': {f'boost.roles.{boost_remove.id}': ''}}
@@ -82,7 +82,7 @@ class Leveling(commands.Cog):
                     err = 'No boost is active for everyone'
 
         elif source_type == 'user' and 'users' in data['boost']:
-            if str(boost_remove.id) in data['boost']['users']:
+            if str(boost_remove.id) in data['boost']['users'] and data['boost']['users'][str(boost_remove.id)]:
                 latest_boost = data['boost']['users'][f'{boost_remove.id}'][-1]
                 db.levels.update_one(
                     {'guild_id': ctx.guild.id},
@@ -730,8 +730,8 @@ class Leveling(commands.Cog):
             data['users'][str(member.id)] = schema
 
         # set rep_time to 24h so user cant spam rep points
-        expire = round(time()) + 86400  # 24 hours
-        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})  # 24 hours
+        expire = round(time()) # + 86400  # 24 hours
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})
 
         # give user rep point
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.reputation': 1}})
@@ -739,14 +739,21 @@ class Leveling(commands.Cog):
         # log who author repped
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.last_rep': member.id}})
 
-        # give user 5% xp boost for 6 hours
+        await embed_maker.message(ctx, f'Gave +1 rep to <@{member.id}>')
+
+        # check if user already has rep boost, if they do, extend it by 30 minutes
+        if 'boost' in data and str(member.id) in data['boost']['users']:
+            boosts = [b for b in data['boost']['users'][str(member.id)] if b['type'] == 'rep']
+            if boosts:
+                return db.levels.update_one({'guild_id': ctx.guild.id, f'boost.users.{member.id}.type': 'rep'}, {'$inc': {f'boost.users.{member.id}.$.expires': 1800}})  # 30 min
+
+        # give user 2.5% xp boost for 3 hours
         boost_dict = {
-            'expires': round(time()) + (3600 * 6),  # 6 hours
-            'multiplier': 0.05
+            'expires': round(time()) + (3600 * 3),
+            'multiplier': 0.025,
+            'type': 'rep'
         }
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
-
-        return await embed_maker.message(ctx, f'Gave +1 rep to <@{member.id}>')
 
     @commands.command(help='Shows your (or someone else\'s) rank and level',
                       usage='rank (member)', examples=['rank', 'rank @Hattyot', 'rank Hattyot'],
