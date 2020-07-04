@@ -232,14 +232,15 @@ class Mod(commands.Cog):
         guild_id = timer['guild_id']
         guild = self.bot.get_guild(int(guild_id))
 
+        now = round(time.time())
         dd_time = timer['expires'] + 3600
+        tm = dd_time - now
 
         data = db.server_data.find_one({'guild_id': guild.id})
         # check if there are debate topics set up
         topics = data['daily_debates']['topics']
         if not topics:
             # remind mods that a topic needs to be set up
-            tm = dd_time - round(time.time())
             msg = f'Daily debate starts in {format_time.seconds(tm)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
             channel = guild.get_channel(data['daily_debates']['channel'])
 
