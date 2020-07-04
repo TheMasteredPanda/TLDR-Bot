@@ -36,7 +36,7 @@ class Mod(commands.Cog):
         return await embed_maker.message(ctx, f'Message spike warning channel has been set to <#{channel_obj.id}>')
 
     @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (arg)',
-                      clearance='Mod', cls=command.Command,
+                      clearance='Mod', cls=command.Command, aliases=['dd', 'dailydebate'],
                       examples=['dailydebates', 'dailydebates add is TLDR ross mega cool?',
                                 'dailydebates remove is TldR roos mega cool?', 'dailydebates set_time 2pm GMT',
                                 'dailydebates set_channel #daily-debates', 'dailydebates set_role Debaters',
