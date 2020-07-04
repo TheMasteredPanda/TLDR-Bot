@@ -35,9 +35,9 @@ class Mod(commands.Cog):
 
         return await embed_maker.message(ctx, f'Message spike warning channel has been set to <#{channel_obj.id}>')
 
-    @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (arg)',
+    @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (arg) -ta (topic author)',
                       clearance='Mod', cls=command.Command, aliases=['dd', 'dailydebate'],
-                      examples=['dailydebates', 'dailydebates add is TLDR ross mega cool?',
+                      examples=['dailydebates', 'dailydebates add is TLDR ross mega cool? -ta Hattyot',
                                 'dailydebates remove is TldR roos mega cool?', 'dailydebates set_time 2pm GMT',
                                 'dailydebates set_channel #daily-debates', 'dailydebates set_role Debaters',
                                 'dailydebates set_poll_channel #daily-debate-voting',
@@ -198,7 +198,26 @@ class Mod(commands.Cog):
             )
 
         if action == 'add':
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': arg}})
+            args = arg.split(' -ta ')
+            if len(args) > 1:
+                ta_arg = args[1].strip()
+                member = await get_member(ctx, self.bot, ta_arg)
+                if member is None:
+                    return await embed_maker.message(ctx, 'Invalid topic author', colour='red')
+                elif isinstance(member, str):
+                    return await embed_maker.message(ctx, member, colour='red')
+
+                else:
+                    topic_obj = {
+                        'topic': args[0].strip(),
+                        'topic_author': member.id
+                    }
+                    push = topic_obj
+                    arg = args[0]
+            else:
+                push = arg
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': push}})
             return await embed_maker.message(
                 ctx, f'`{arg}` has been added to the list of daily debate topics'
                 f'\nThere are now **{len(data["daily_debates"]["topics"]) + 1}** topics on the list'
@@ -273,10 +292,20 @@ class Mod(commands.Cog):
 
         topic = timer['extras']['topic']
         if isinstance(topic, dict):
-            poll_options = topic['poll_options']
+            if 'poll_options' in topic:
+                poll_options = topic['poll_options']
+            if 'topic_author' in topic:
+                topic_author_id = topic['topic_author']
+                try:
+                    topic_author = await self.bot.fetch_user(int(topic_author_id))
+                except:
+                    topic_author_id = 0
+
             topic = topic['topic']
         else:
             poll_options = []
+            topic_author_id = 0
+            topic_author = 0
 
         dd_time = timer['extras']['time']
         dd_channel_id = timer['extras']['channel']
@@ -290,6 +319,8 @@ class Mod(commands.Cog):
             return
 
         message = f'Today\'s debate: **“{topic}”**'
+        if topic_author:
+            message += f' - Topic suggested by <@{topic_author_id}>'
         if dd_role:
             message += f'\n\n<@&{dd_role.id}>'
 
@@ -333,6 +364,14 @@ class Mod(commands.Cog):
             poll_msg = await dd_poll_channel.send(embed=embed)
             for e in poll_emotes:
                 await poll_msg.add_reaction(e)
+
+        # award topic author boost if there is one
+        if topic_author:
+            boost_object = {
+                'expires': round(time.time()) + (3600 * 3),
+                'multiplier': 0.05
+            }
+            db.levels.update_one({'guild_id': int(guild_id)}, {f'$push': {f'boost.users.{topic_author_id}': boost_object}})
 
         # start daily_debate timer over
         return await self.start_daily_debate_timer(guild.id, dd_time)
