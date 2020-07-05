@@ -56,6 +56,9 @@ class Mod(commands.Cog):
                 # generate topics string
                 topics_str = '**Topics:**\n'
                 for i, topic in enumerate(topics):
+                    options = []
+                    topic_author_id = 0
+                    topic_author = 0
                     if isinstance(topic, dict):
                         if 'poll_options' in topic:
                             options = topic['poll_options']
@@ -67,10 +70,7 @@ class Mod(commands.Cog):
                                 topic_author_id = 0
 
                         topic = topic['topic']
-                    else:
-                        options = []
-                        topic_author_id = 0
-                        topic_author = 0
+
                     topics_str += f'**{i + 1}:** {topic}\n'
                     if options:
                         topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(options)]) + '\n'
