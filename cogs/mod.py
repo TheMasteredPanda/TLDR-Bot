@@ -56,13 +56,26 @@ class Mod(commands.Cog):
                 # generate topics string
                 topics_str = '**Topics:**\n'
                 for i, topic in enumerate(topics):
-                    options = []
                     if isinstance(topic, dict):
-                        options = topic['poll_options']
+                        if 'poll_options' in topic:
+                            options = topic['poll_options']
+                        if 'topic_author' in topic:
+                            topic_author_id = topic['topic_author']
+                            try:
+                                topic_author = await self.bot.fetch_user(int(topic_author_id))
+                            except:
+                                topic_author_id = 0
+
                         topic = topic['topic']
+                    else:
+                        options = []
+                        topic_author_id = 0
+                        topic_author = 0
                     topics_str += f'**{i + 1}:** {topic}\n'
                     if options:
                         topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(options)]) + '\n'
+                    if topic_author:
+                        topics_str += f'**Topic Author:** {str(topic_author)}'
 
             return await embed_maker.message(ctx, msg=topics_str)
 
