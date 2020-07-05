@@ -582,6 +582,7 @@ class Leveling(commands.Cog):
             member = ctx.guild.get_member(int(user_id))
             if member is None:
                 if 'left' in user_values:
+                    limit += 1
                     continue
                 try:
                     member = await ctx.guild.fetch_member(int(user_id))
