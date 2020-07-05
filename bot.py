@@ -327,6 +327,9 @@ class TLDR(commands.Bot):
 
             # give user data back
             levels_user = data['users'][f'{member.id}']
+            if 'left' in levels_user:
+                db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{member.id}.left': ''}})
+
             leveling_routes = data['leveling_routes']
             parliamentary_route = leveling_routes['parliamentary']
             honours_route = leveling_routes['honours']

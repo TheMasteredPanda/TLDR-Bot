@@ -561,7 +561,7 @@ class Leveling(commands.Cog):
 
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
-            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0 and 'left' not in data['users'][u]],
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
             key=lambda x: x[1][key], reverse=True
         )
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
@@ -581,12 +581,17 @@ class Leveling(commands.Cog):
 
             member = ctx.guild.get_member(int(user_id))
             if member is None:
+                if 'left' in user_values:
+                    continue
                 try:
                     member = await ctx.guild.fetch_member(int(user_id))
                 except:
                     limit += 1
                     db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{user_id}.left': True}})
                     continue
+            else:
+                if 'left' in user_values:
+                    db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{user_id}.left': ''}})
 
             leaderboard_str += f'***`#{u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.name}'
 
@@ -630,15 +635,19 @@ class Leveling(commands.Cog):
 
             if i == -1:
                 for j in range(user_index - 1, 0, -1):
-                    print(j)
                     u_id, u_val = sorted_users[j]
 
                     member = ctx.guild.get_member(int(u_id))
                     if member is None:
+                        if 'left' in u_val:
+                            continue
                         try:
                             await ctx.guild.fetch_member(int(u_id))
                         except:
                             continue
+                    else:
+                        if 'left' in u_val:
+                            db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{u_id}.left': ''}})
                     break
             elif i == 0:
                 member = ctx.author
@@ -649,10 +658,15 @@ class Leveling(commands.Cog):
 
                     member = ctx.guild.get_member(int(u_id))
                     if member is None:
+                        if 'left' in u_val:
+                            continue
                         try:
                             await ctx.guild.fetch_member(int(u_id))
                         except:
                             continue
+                    else:
+                        if 'left' in u_val:
+                            db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{u_id}.left': ''}})
                     break
 
             your_pos_str += f'***`#{user_rank + i}`*** - *{member.name}' if u_id == str(ctx.author.id) else f'`#{user_rank + i}` - {member.name}'
@@ -978,21 +992,27 @@ class Leveling(commands.Cog):
 
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
-            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0 and 'left' not in data['users'][u]],
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
             key=lambda x: x[1][key], reverse=True
         )
 
         guild = self.bot.get_guild(int(guild_id))
         u_rank = 1
         for u in sorted_users:
-            u_id, _ = u
+            u_id, u_vals = u
             member = guild.get_member(int(u_id))
             if member is None:
+                if 'left' in u_vals:
+                    continue
+
                 try:
                     await guild.fetch_member(int(u_id))
                 except:
                     db.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{u_id}.left': True}})
                     continue
+            else:
+                if 'left' in u_vals:
+                    db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{u_id}.left': ''}})
 
             if int(u_id) == int(user_id):
                 if return_mem:
@@ -1088,6 +1108,10 @@ class Leveling(commands.Cog):
                 pp_add = round(pp_add * boost_multiplier)
 
             levels_user = data['users'][str(message.author.id)]
+            # check if 'left' tag is left in user
+            if 'left' in levels_user:
+                db.levels.update_one({'guild_id': message.guild.id}, {'$unset': {f'users.{message.author.id}.left': ''}})
+                del levels_user['left']
             levels_user['pp'] += pp_add
             db.levels.update_one(
                 {'guild_id': message.guild.id},
