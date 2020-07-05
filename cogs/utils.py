@@ -41,10 +41,12 @@ async def get_member(ctx, bot, source):
         if len(source) < 3:
             return 'User name input needs to be at least 3 characters long'
 
-        regex = re.compile(fr'({source.lower()})')
-        members = list(filter(lambda m: re.findall(regex, str(m).lower()) or re.findall(regex, m.display_name.lower()), ctx.guild.members))
-        if len(members) > 10:
-            return 'Too many username matches'
+        members = list(filter(lambda m: m.name.lower() == source.lower() or m.display_name.lower() == source.lower(), ctx.guild.members))
+        if not members:
+            regex = re.compile(fr'({source.lower()})')
+            members = list(filter(lambda m: re.findall(regex, str(m).lower()) or re.findall(regex, m.display_name.lower()), ctx.guild.members))
+            if len(members) > 10:
+                return 'Too many username matches'
 
         if len(members) > 1:
             embed_colour = config.EMBED_COLOUR
