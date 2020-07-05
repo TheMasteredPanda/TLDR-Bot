@@ -75,7 +75,7 @@ class Mod(commands.Cog):
                     if options:
                         topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(options)]) + '\n'
                     if topic_author:
-                        topics_str += f'**Topic Author:** {str(topic_author)}'
+                        topics_str += f'**Topic Author:** {str(topic_author)}\n'
 
             return await embed_maker.message(ctx, msg=topics_str)
 
