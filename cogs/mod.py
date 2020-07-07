@@ -323,6 +323,11 @@ class Mod(commands.Cog):
         guild = self.bot.get_guild(int(guild_id))
 
         topic = timer['extras']['topic']
+
+        poll_options = []
+        topic_author_id = 0
+        topic_author = 0
+
         if isinstance(topic, dict):
             if 'poll_options' in topic:
                 poll_options = topic['poll_options']
@@ -334,10 +339,6 @@ class Mod(commands.Cog):
                     topic_author_id = 0
 
             topic = topic['topic']
-        else:
-            poll_options = []
-            topic_author_id = 0
-            topic_author = 0
 
         dd_time = timer['extras']['time']
         dd_channel_id = timer['extras']['channel']
@@ -359,7 +360,7 @@ class Mod(commands.Cog):
         msg = await dd_channel.send(message)
 
         # delete used topic
-        db.server_data.update_one({'guild_id': guild.id}, {'$pull': {'daily_debates.topics': topic}})
+        db.server_data.update_one({'guild_id': guild.id}, {'$pull': {'daily_debates.topics': timer['extras']['topic']}})
 
         # change channel topic
         await dd_channel.edit(topic=f"{topic}")
