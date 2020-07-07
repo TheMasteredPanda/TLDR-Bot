@@ -44,6 +44,8 @@ class TLDR(commands.Bot):
         emote = payload.emoji.name
 
         data = db.server_data.find_one({'guild_id': user.guild.id})
+        if 'role_menus' not in data:
+            data['role_menus'] = {}
         role_menus = data['role_menus']
         if str(message.id) in role_menus:
             role_menu = role_menus[str(message.id)]
