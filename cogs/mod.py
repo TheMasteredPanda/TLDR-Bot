@@ -256,7 +256,7 @@ class Mod(commands.Cog):
             )
         if action == 'remove':
             if arg not in data['daily_debates']['topics']:
-                topic = [t for t in data['daily_debates']['topics'] if t['topic'] == arg]
+                topic = [t for t in data['daily_debates']['topics'] if isinstance(t, dict) and t['topic'] == arg]
                 if topic:
                     pull = topic[0]
                 else:
