@@ -224,6 +224,11 @@ class Mod(commands.Cog):
                 push = arg
 
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'daily_debates.topics': {'$each': [push], '$position': 0}}})
+            # check if final timer is active, if it is change to this topic
+            dd_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate_final']
+            if dd_timer:
+                db.timers.update_one({'guild_id': ctx.guild.id, 'timers.extras.topic': dd_timer[0]['extras']['topic']}, {'$set': {f'timers.$.extras.topic': push}})
+
             return await embed_maker.message(
                 ctx, f'`{arg}` has been inserted into first place in the list of daily debate topics'
                      f'\nThere are now **{len(data["daily_debates"]["topics"]) + 1}** topics on the list'
@@ -265,6 +270,11 @@ class Mod(commands.Cog):
                 pull = arg
 
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'daily_debates.topics': pull}})
+            dd_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate_final']
+            if dd_timer:
+                db.timers.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'timers': {'id': dd_timer[0]['id']}}})
+                await self.start_daily_debate_timer(ctx.guild.id, data['daily_debates']['time'])
+
             return await embed_maker.message(
                 ctx, f'`{arg}` has been removed from the list of daily debate topics'
                 f'\nThere are now **{len(data["daily_debates"]["topics"]) - 1}** topics on the list'
