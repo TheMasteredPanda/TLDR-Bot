@@ -256,9 +256,15 @@ class Mod(commands.Cog):
             )
         if action == 'remove':
             if arg not in data['daily_debates']['topics']:
-                return await embed_maker.message(ctx, f'`{arg}` is not on the list of daily debate topics')
+                topic = [t for t in data['daily_debates']['topics'] if t['topic'] == arg]
+                if topic:
+                    pull = topic[0]
+                else:
+                    return await embed_maker.message(ctx, f'`{arg}` is not on the list of daily debate topics')
+            else:
+                pull = arg
 
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'daily_debates.topics': arg}})
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'daily_debates.topics': pull}})
             return await embed_maker.message(
                 ctx, f'`{arg}` has been removed from the list of daily debate topics'
                 f'\nThere are now **{len(data["daily_debates"]["topics"]) - 1}** topics on the list'
