@@ -4,6 +4,7 @@ import config
 import re
 import random
 import asyncio
+from cogs.utils import get_member
 from datetime import datetime
 from discord.ext import commands
 from modules import database, command, embed_maker, format_time
@@ -31,6 +32,41 @@ class Utility(commands.Cog):
 
         embed = discord.Embed(description=f'**Profile Picture of {member}**')
         embed.set_image(url=str(member.avatar_url).replace(".webp?size=1024", ".png?size=2048"))
+
+        return await ctx.send(embed=embed)
+
+    @commands.command(help='See info about a user', usage='userinfo (user)', examples=['userinfo', 'userinfo Hattyot'],
+                      clearance='User', cls=command.Command)
+    async def userinfo(self, ctx, user=None):
+        if user is None:
+            member = ctx.author
+        else:
+            member = await get_member(ctx, self.bot, user)
+            if member is None:
+                return await embed_maker.command_error(ctx, '(user)')
+            elif isinstance(member, str):
+                return await embed_maker.message(ctx, member, colour='red')
+
+        embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
+        name = str(member)
+        if member.display_name:
+            name += f' - {member.display_name}'
+        embed.set_author(name=name, icon_url=member.avatar_url)
+
+        embed.add_field(name='ID', value=member.id)
+        embed.add_field(name='Avatar', value=f'[link]({member.avatar_url})')
+        embed.add_field(name='\u200b', value='\u200b')
+        created_at = datetime.now() - member.created_at
+        created_at_seconds = created_at.total_seconds()
+        embed.add_field(name='Account Created', value=f'{member.created_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(created_at_seconds)} Ago')
+        joined_at = datetime.now() - member.joined_at
+        joined_at_seconds = joined_at.total_seconds()
+        embed.add_field(name='Joined Server', value=f'{member.joined_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(joined_at_seconds)} Ago')
+        embed.add_field(name='\u200b', value='\u200b')
+        embed.add_field(name='Status', value=str(member.status), inline=False)
+
+        embed.set_thumbnail(url=member.avatar_url)
+        embed.set_footer(text=str(member), icon_url=ctx.guild.icon_url)
 
         return await ctx.send(embed=embed)
 
