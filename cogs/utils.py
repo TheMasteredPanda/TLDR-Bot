@@ -69,7 +69,7 @@ async def get_member(ctx, bot, source):
             try:
                 user_message = await bot.wait_for('message', check=user_check, timeout=20)
             except asyncio.TimeoutError:
-                return None
+                return 'Timeout'
 
             index = user_message.content
             if index.isdigit() and len(members) >= int(index) - 1 >= 0:
