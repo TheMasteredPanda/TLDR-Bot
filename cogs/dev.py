@@ -36,7 +36,7 @@ class Dev(commands.Cog):
 
     @commands.command(hidden=True, help='Reload an extension, so you dont have to restart the bot',
                       usage='reload_extension [ext]', examples=['reload_extension cogs.levels'],
-                      clearance='Dev', cls=command.Command)
+                      clearance='Dev', cls=command.Command, aliases=['re'])
     @commands.check(is_dev)
     async def reload_extension(self, ctx, ext):
         if ext in self.bot.extensions.keys():
