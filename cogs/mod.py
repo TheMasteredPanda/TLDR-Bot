@@ -41,7 +41,7 @@ class Mod(commands.Cog):
                                 'dailydebates remove is TldR roos mega cool?', 'dailydebates set_time 2pm GMT',
                                 'dailydebates set_channel #daily-debates', 'dailydebates set_role Debaters',
                                 'dailydebates set_poll_channel #daily-debate-voting',
-                                'dailydebates set_poll_options -i 3 -o burger, pizza, pasta'])
+                                'dailydebates set_poll_options -i 3 -o burger | pizza | pasta'])
     async def dailydebates(self, ctx, action=None, *, arg=None):
         data = db.server_data.find_one({'guild_id': ctx.guild.id})
         if 'daily_debates' not in data:
@@ -136,7 +136,7 @@ class Mod(commands.Cog):
                     result[key] = value
 
                 if result['o']:
-                    result['o'] = [o.strip() for o in result['o'].split(',')]
+                    result['o'] = [o.strip() for o in result['o'].split('|')]
 
                 return result
 

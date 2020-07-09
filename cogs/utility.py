@@ -571,7 +571,7 @@ class Utility(commands.Cog):
         return await channel.send(f'Poll finished: https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}')
 
     @commands.command(help='Create a poll. with options adds numbers as reactions, without it just adds thumbs up and down.',
-                      usage='poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...)',
+                      usage='poll [-q question] (-o option1 | option2 | ...)/(-o [emote: option], [emote: option], ...)',
                       examples=['poll -q best food? -o pizza, burger, fish and chips, salad -l 2', 'poll -q Do you guys like pizza?', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK]'],
                       clearance='Mod', cls=command.Command)
     async def poll(self, ctx, *, args=None):
@@ -635,7 +635,7 @@ class Utility(commands.Cog):
             result[key] = value
 
         if result['o']:
-            result['o'] = [r.strip() for r in result['o'].split(',')]
+            result['o'] = [r.strip() for r in result['o'].split('|')]
         else:
             return result
 
