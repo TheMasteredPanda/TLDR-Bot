@@ -44,6 +44,7 @@ class Mod(commands.Cog):
                                 'dailydebates set_poll_options -i 3 -o burger | pizza | pasta'])
     async def dailydebates(self, ctx, action=None, *, arg=None):
         data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
         if 'daily_debates' not in data:
             data = self.bot.add_collections(ctx.guild.id, 'server_data')
 
@@ -168,6 +169,11 @@ class Mod(commands.Cog):
                 'poll_options': options
             }
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'daily_debates.topics.{index - 1}': new_topic_obj}})
+            # check if final timer is active, if it is change to these poll options
+            dd_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate_final']
+            if dd_timer:
+                db.timers.update_one({'guild_id': ctx.guild.id, 'timers.extras.topic': dd_timer[0]['extras']['topic']}, {'$set': {f'timers.$.extras.topic': new_topic_obj}})
+
             options_str = ' |'.join([f' `{o}`' for i, o in enumerate(options)])
             if isinstance(topic, dict):
                 topic = topic['topic']
@@ -195,7 +201,6 @@ class Mod(commands.Cog):
             return await embed_maker.message(ctx, err, colour='red')
 
         # check for active timer
-        timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
         daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
         if not daily_debate_timer:
             await self.start_daily_debate_timer(ctx.guild.id, data['daily_debates']['time'])
