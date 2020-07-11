@@ -27,6 +27,9 @@ class TLDR(commands.Bot):
                 print(f'{filename[:-3]} is now loaded')
 
     async def on_raw_message_edit(self, payload):
+        if 'guild_id' not in payload.data:
+            return
+
         guild_id = payload.data['guild_id']
         guild = self.get_guild(int(guild_id))
 
@@ -395,15 +398,11 @@ class TLDR(commands.Bot):
         guild = self.get_guild(int(guild_id))
         if guild:
             # check if member joined back
-            mem = guild.get_member(int(user_id))
-            if mem is None:
-                mem = await guild.fetch_member(int(user_id))
-
-            if mem is None:
-                return
-
-        # Delete user levels data
-        db.levels.update_one({'guild_id': guild_id}, {'$unset': {f'users.{user_id}': ''}})
+            try:
+                await guild.fetch_member(int(user_id))
+            except:
+                # Delete user levels data
+                db.levels.update_one({'guild_id': guild_id}, {'$unset': {f'users.{user_id}': ''}})
 
     async def close(self):
         await super().close()
