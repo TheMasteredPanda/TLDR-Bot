@@ -453,6 +453,8 @@ class Utility(commands.Cog):
 
         if len(options) > 9:
             err = 'Too many options'
+        if len(options) < 2:
+            err = 'Too few options'
 
         if err:
             return await embed_maker.message(ctx, err, colour='red')
@@ -589,6 +591,8 @@ class Utility(commands.Cog):
 
         if len(options) > 9:
             err = 'Too many options'
+        if len(options) < 2:
+            err = 'Too few options'
 
         if err:
             return await embed_maker.message(ctx, err, colour='red')
