@@ -2,10 +2,10 @@ import discord
 import re
 import requests
 import config
-import random
 import json
 import aiohttp
 import asyncio
+from cogs.utils import get_member
 from wand.image import Image as Wand
 from io import BytesIO
 from modules import command, embed_maker
@@ -20,34 +20,33 @@ class Fun(commands.Cog):
                       clearance='User', cls=command.Command)
     async def pride(self, ctx, source=None):
         url = None
-        mem = None
 
         # check for attachments
         if ctx.message.attachments:
             url = ctx.message.attachments[0].url
 
-        # check if source is member
-        if source and ctx.message.mentions:
-            mem = ctx.message.mentions[0]
-        elif source:
-            # check if source is emote
-            emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
-            match = re.findall(emote_regex, source)
-            if match:
-                emote_id = match[0]
-                url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
-            else:
-                # Check if source is member name or id
-                regex = re.compile(fr'({source.lower()})')
-                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
-                if mem is None:
+        if source is None and url is None:
+            url = str(ctx.author.avatar_url)
+            url = url.replace('webp', 'png')
+        else:
+            # check if source is member
+            mem = await get_member(ctx, self.bot, source)
+            if mem is None:
+                # check if source is emote
+                emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
+                match = re.findall(emote_regex, source)
+                if match:
+                    emote_id = match[0]
+                    url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
+                else:
+                    # take source as url
                     url = source
+            else:
+                url = str(mem.avatar_url)
+                url = url.replace('webp', 'png')
 
-        if source is None:
-            mem = ctx.author
-
-        if mem and url is None:
-            url = str(mem.avatar_url).replace('webp', 'png')
+        if url is None:
+            return
 
         if config.WEB_API_URL:
             async with aiohttp.ClientSession() as session:
@@ -82,7 +81,7 @@ class Fun(commands.Cog):
 
     async def do_pride(self, ctx, url):
         async with aiohttp.ClientSession() as session:
-            image_task = asyncio.create_task(self.fetch_image(session, f'{config.WEB_API_URL}/pride?img={url}'))
+            image_task = asyncio.create_task(self.fetch_image(session, url))
             content = await image_task
 
         if not content:
@@ -175,38 +174,33 @@ class Fun(commands.Cog):
                       clearance='User', cls=command.Command)
     async def distort(self, ctx, source=None):
         url = None
-        mem = None
 
         # check for attachments
         if ctx.message.attachments:
             url = ctx.message.attachments[0].url
 
-        # check if source is member
-        if source and ctx.message.mentions:
-            mem = ctx.message.mentions[0]
-        elif source:
-            # check if source is emote
-            emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
-            match = re.findall(emote_regex, source)
-            if match:
-                emote_id = match[0]
-                url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
-            else:
-                # Check if source is member name or id
-                regex = re.compile(fr'({source.lower()})')
-                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
-                if mem is None:
+        if source is None and url is None:
+            url = str(ctx.author.avatar_url)
+            url = url.replace('webp', 'png')
+        else:
+            # check if source is member
+            mem = await get_member(ctx, self.bot, source)
+            if mem is None:
+                # check if source is emote
+                emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
+                match = re.findall(emote_regex, source)
+                if match:
+                    emote_id = match[0]
+                    url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
+                else:
+                    # take source as url
                     url = source
+            else:
+                url = str(mem.avatar_url)
+                url = url.replace('webp', 'png')
 
-        if source is None:
-            mem = ctx.author
-
-        # Choose a random member
-        if source == 'random':
-            mem = random.choice(ctx.guild.members)
-
-        if mem and url is None:
-            url = str(mem.avatar_url).replace('webp', 'png')
+        if url is None:
+            return
 
         if config.WEB_API_URL:
             async with aiohttp.ClientSession() as session:
