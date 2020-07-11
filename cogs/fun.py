@@ -118,11 +118,13 @@ class Fun(commands.Cog):
 
         return buffer
 
-    def get_random_image(self, url, json_key):
+    def get_random_image(self, url, json_key, *, list_indc=None):
         response = requests.get(url)
         json_text = response.text.encode("ascii", "ignore").decode('ascii')
-
-        img_url = json.loads(json_text)[json_key]
+        if list_indc is not None:
+            img_url = json.loads(json_text)[list_indc][json_key]
+        else:
+            img_url = json.loads(json_text)[json_key]
         # get image extension
         split = img_url.split('.')
         extension = split[-1]
@@ -151,8 +153,8 @@ class Fun(commands.Cog):
     @commands.command(help='Gets a random cat image', usage='cat', examples=['cat'],
                       clearance='User', cls=command.Command)
     async def cat(self, ctx):
-        url = 'http://aws.random.cat/meow'
-        image, extension = self.get_random_image(url, 'file')
+        url = 'https://api.thecatapi.com/v1/images/search'
+        image, extension = self.get_random_image(url, 'url', list_indc=0)
 
         embed = discord.Embed()
         embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
