@@ -626,7 +626,7 @@ class Leveling(commands.Cog):
         leaderboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
         # Displays user position under leaderboard and users above and below them if user is below position 10
-        if user_index is None or user_index <= 9:
+        if user_rank is None or user_rank <= 9:
             return await ctx.send(embed=leaderboard_embed)
 
         your_pos_str = ''
