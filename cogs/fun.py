@@ -28,7 +28,7 @@ class Fun(commands.Cog):
         if source is None and url is None:
             url = str(ctx.author.avatar_url)
             url = url.replace('webp', 'png')
-        else:
+        elif url is None:
             # check if source is member
             mem = await get_member(ctx, self.bot, source)
             if mem is None:
@@ -182,7 +182,7 @@ class Fun(commands.Cog):
         if source is None and url is None:
             url = str(ctx.author.avatar_url)
             url = url.replace('webp', 'png')
-        else:
+        elif url is None:
             # check if source is member
             mem = await get_member(ctx, self.bot, source)
             if mem is None:
