@@ -198,7 +198,7 @@ class Utility(commands.Cog):
 
     @commands.command(help='See info about a user', usage='userinfo (user)', examples=['userinfo', 'userinfo Hattyot'],
                       clearance='User', cls=command.Command)
-    async def userinfo(self, ctx, user=None):
+    async def userinfo(self, ctx, *, user=None):
         if user is None:
             member = ctx.author
         else:
