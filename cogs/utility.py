@@ -160,7 +160,11 @@ class Utility(commands.Cog):
                 return await embed_maker.message(ctx, f'You are the new owner of tag `{tag}`', colour='green')
         elif action.lower() == 'edit':
             if response is None:
-                return await embed_maker.command_error(ctx, '(response)')
+                # check for attachment
+                if ctx.message.attachments:
+                    response = ctx.message.attachments[0].url
+                else:
+                    return await embed_maker.command_error(ctx, '(response)')
 
             # check if user is owner of tag
             if owner_id != ctx.author.id:
