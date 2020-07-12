@@ -118,7 +118,11 @@ class Utility(commands.Cog):
 
         elif action.lower() == 'create':
             if response is None:
-                return await embed_maker.command_error(ctx, '(response)')
+                # check for attachment
+                if ctx.message.attachments:
+                    response = ctx.message.attachments[0].url
+                else:
+                    return await embed_maker.command_error(ctx, '(response)')
             # max tags by user is 10, check this limit, if user is staff, limit does not apply
             user_tags = [t for t in tag_data if t != 'guild_id' and t != '_id' and tag_data[t]['owner_id'] == ctx.author.id]
             permissions = ctx.channel.permissions_for(ctx.author)
