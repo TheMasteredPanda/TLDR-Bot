@@ -58,6 +58,35 @@ class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(help='see your or other user\'s tags', usage='tags (user)', examples=['tags', 'tags hatty'],
+                      clearance='User', cls=command.Command)
+    async def tags(self, ctx, user=None):
+        if user is None:
+            member = ctx.author
+        else:
+            member = await get_member(ctx, self.bot, user)
+            if member is None:
+                return await embed_maker.command_error(ctx, '(user)')
+            elif isinstance(member, str):
+                return await embed_maker.message(ctx, member, colour='red')
+
+        tag_data = db.tags.find_one({'guild_id': ctx.guild.id})
+        user_tags = [t for t in tag_data if t != 'guild_id' and t != '_id' and tag_data[t]['owner_id'] == member.id]
+
+        desc = ''
+        if not user_tags:
+            desc = 'This user has no tags'
+        else:
+            for i, tag in enumerate(user_tags):
+                desc += f'`#{i + 1}`: {tag}\n'
+
+        embed_colour = config.EMBED_COLOUR
+        tag_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=desc)
+        tag_embed.set_author(name=f'{str(member)} - Tags')
+        tag_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+
+        return await ctx.send(embed=tag_embed)
+
     @commands.command(help='Create and use tags for common responses', usage='tag [action/tag] (tag) (response)',
                       examples=['tag create vc We don\'t want to have VCs', 'tag vc', 'tag claim vc', 'tag edit vc We don\'t have VCs', 'tag delete vc'], clearance='User', cls=command.Command)
     async def tag(self, ctx, action=None, tag=None, *, response=None):
