@@ -24,7 +24,7 @@ async def filter_tags(ctx, bot, tags, tag_name):
 
         description = 'Found multiple tags, which one did you mean? `input digit of tag`\n\n'
         for i, tag in enumerate(filtered_tags):
-            description += f'`#{i + 1}` | {tag}'
+            description += f'`#{i + 1}` | {tag}\n'
 
         tag_embed.description = description
 
