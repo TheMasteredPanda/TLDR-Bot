@@ -58,24 +58,49 @@ class TLDR(commands.Bot):
 
         emote = payload.emoji.name
 
-        data = db.server_data.find_one({'guild_id': user.guild.id})
-        if 'role_menus' not in data:
-            data['role_menus'] = {}
-        role_menus = data['role_menus']
-        if str(message.id) in role_menus:
-            role_menu = role_menus[str(message.id)]
-            rl = [rl for rl in role_menu['roles'] if rl['emote'] == emote]
-            if rl:
-                role = discord.utils.find(lambda r: r.id == int(rl[0]['role_id']), user.guild.roles)
-                await user.add_roles(role)
+        # polls
+        utils_cog = self.get_cog('Utils')
+        if message_id in utils_cog.menus:
+            menu = utils_cog.menus
+        elif message_id in utils_cog.no_expire_menus:
+            menu = utils_cog.no_expire_menus
+        else:
+            # role menus
+            data = db.server_data.find_one({'guild_id': user.guild.id})
+            if 'role_menus' not in data:
+                data['role_menus'] = {}
+            role_menus = data['role_menus']
+            if str(message.id) in role_menus:
+                role_menu = role_menus[str(message.id)]
+                rl = [rl for rl in role_menu['roles'] if rl['emote'] == emote]
+                if rl:
+                    role = discord.utils.find(lambda r: r.id == int(rl[0]['role_id']), user.guild.roles)
+                    await user.add_roles(role)
 
-                msg = f'{rl[0]["message"]}'
-                embed_colour = config.EMBED_COLOUR
-                embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
-                embed.set_author(name='Role Given')
-                embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
+                    msg = f'{rl[0]["message"]}'
+                    embed_colour = config.EMBED_COLOUR
+                    embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
+                    embed.set_author(name='Role Given')
+                    embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
 
-                return await user.send(embed=embed)
+                    return await user.send(embed=embed)
+
+            else:
+                return
+
+        if payload.emoji.is_custom_emoji():
+            emote = f'<:{payload.emoji.name}:{payload.emoji.id}>'
+
+        if user.bot:
+            return
+
+        if emote in menu[message_id]:
+            await message.remove_reaction(payload.emoji, user)
+
+            channel = self.get_channel(channel_id)
+            message = await channel.fetch_message(message_id)
+            func = menu[message_id][emote]
+            await func(user, message, payload.emoji)
 
     async def on_raw_reaction_remove(self, payload):
         guild_id = payload.guild_id

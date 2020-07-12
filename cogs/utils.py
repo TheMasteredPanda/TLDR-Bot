@@ -105,35 +105,6 @@ class Utils(commands.Cog):
         for button in buttons:
             await message.add_reaction(button)
 
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
-        channel_id = payload.channel_id
-        message_id = payload.message_id
-        user_id = payload.user_id
-        emote_name = payload.emoji.name
-
-        user = self.bot.get_user(payload.user_id)
-        if user is None:
-            user = await self.bot.fetch_user(payload.user_id)
-
-        if message_id in self.menus:
-            menu = self.menus
-        elif message_id in self.no_expire_menus:
-            menu = self.no_expire_menus
-        else:
-            return
-
-        if user.bot or payload.emoji.is_custom_emoji():
-            return
-
-        if emote_name in menu[message_id]:
-            channel = self.bot.get_channel(channel_id)
-            message = await channel.fetch_message(message_id)
-            func = menu[message_id][emote_name]
-            await func(user, message, emote_name)
-
-        return await self.bot.http.remove_reaction(channel_id, message_id, emote_name, user_id)
-
     async def run_old_timers(self):
         timers_collection = db.timers.find({})
         for g in timers_collection:
