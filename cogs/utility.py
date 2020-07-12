@@ -13,7 +13,13 @@ db = database.Connection()
 
 async def filter_tags(ctx, bot, tags, tag_name):
     regex = re.compile(fr'({tag_name.lower()})')
-    filtered_tags = list(filter(lambda t: re.findall(regex, t), tags))
+
+    filtered_tags = list(filter(lambda t: t.lower() == tag_name.lower(), tags))
+    if not filtered_tags:
+        regex = re.compile(fr'({tag_name.lower()})')
+        filtered_tags = list(filter(lambda t: re.findall(regex, t.lower()), tags))
+        if len(filtered_tags) > 10:
+            return 'Too many tag matches'
 
     tag = None
     if len(filtered_tags) > 1:
