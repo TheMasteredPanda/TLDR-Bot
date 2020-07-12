@@ -803,7 +803,6 @@ class Utility(commands.Cog):
         for i in range(int(len(_args)/2)):
             split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
 
-        print(split_args)
         for a in split_args:
             tup = tuple(map(str.strip, a.split(' ', 1)))
             if len(tup) <= 1:
@@ -830,7 +829,6 @@ class Utility(commands.Cog):
                 result['o_emotes'] = None
                 break
 
-        print(result)
         return result
 
     @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'],

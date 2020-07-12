@@ -436,16 +436,13 @@ class Leveling(commands.Cog):
         new_hp = amount + user_hp
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.hp': new_hp}})
-        print(levels_user)
         levels_user['hp'] = new_hp
-        print(levels_user)
 
         await embed_maker.message(
             ctx, f'**{member.name}** has been awarded **{amount} honours points**',
             colour='green'
         )
         if levels_user['hp'] == 0:
-            print('here')
             leveling_routes = data['leveling_routes']
 
             # gets the name of the first honours role
