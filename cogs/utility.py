@@ -721,7 +721,7 @@ class Utility(commands.Cog):
 
         if total_emotes == 0:
             # just incase nobody participated
-            description += '\n\n'.join(f'{emote} **- {emote_count}** | **0%**' for emote, emote_count in emote_count.items())
+            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **0%**' for emote, emote_count in emote_count.items())
         else:
             description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in emote_count.items())
 
