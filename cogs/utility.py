@@ -204,7 +204,7 @@ class Utility(commands.Cog):
         else:
             member = await get_member(ctx, self.bot, user)
             if member is None:
-                return await embed_maker.command_error(ctx, '(user)')
+                return await embed_maker.message(ctx, 'User not found', colour='red')
             elif isinstance(member, str):
                 return await embed_maker.message(ctx, member, colour='red')
 
