@@ -1,7 +1,6 @@
 import discord
 import os
 import config
-import dateparser
 import traceback
 import time
 from modules import embed_maker
@@ -286,7 +285,7 @@ class TLDR(commands.Bot):
     @staticmethod
     def add_collections(guild_id, col=None):
         return_doc = None
-        collections = ['levels', 'timers', 'polls', 'tickets', 'server_data']
+        collections = ['levels', 'timers', 'polls', 'tickets', 'server_data', 'tags']
         for c in collections:
             collection = db.__getattribute__(c)
             doc = collection.find_one({'guild_id': guild_id})
