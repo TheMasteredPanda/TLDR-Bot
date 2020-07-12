@@ -347,7 +347,11 @@ class Utility(commands.Cog):
             'e': '',
             'm': ''
         }
-        split_args = filter(None, args.split('-'))
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([n|r|e|m]) ', args)))
+        split_args = []
+        for i in range(int(len(_args) / 2)):
+            split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
+
         for v in split_args:
             tup = tuple(map(str.strip, v.split(' ', 1)))
             if len(tup) <= 1:
@@ -578,7 +582,11 @@ class Utility(commands.Cog):
             't': '24h',
             'r': ''
         }
-        split_args = filter(None, args.split('-'))
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([i|w|t|r]) ', args)))
+        split_args = []
+        for i in range(int(len(_args) / 2)):
+            split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
+
         for v in split_args:
             tup = tuple(map(str.strip, v.split(' ', 1)))
             if len(tup) <= 1:
@@ -601,7 +609,6 @@ class Utility(commands.Cog):
         options = args['o']
         poll_time = format_time.parse(args['t'])
         option_emotes = args['o_emotes']
-
         err = ''
         if poll_time is None:
             err = 'Invalid time arg'
@@ -784,14 +791,19 @@ class Utility(commands.Cog):
         return await ctx.message.delete(delay=5)
 
     @staticmethod
-    def parse_poll_args( args):
+    def parse_poll_args(args):
         result = {
             'q': '',
             'o': [],
             't': '5m',
             'o_emotes': {}
         }
-        split_args = filter(None, args.split('-'))
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([t|o|q]) ', args)))
+        split_args = []
+        for i in range(int(len(_args)/2)):
+            split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
+
+        print(split_args)
         for a in split_args:
             tup = tuple(map(str.strip, a.split(' ', 1)))
             if len(tup) <= 1:
@@ -808,9 +820,9 @@ class Utility(commands.Cog):
         oe_regex = re.compile(r'\[(.*):(.*)\]')
         if re.match(oe_regex, result['o'][0]):
             for option in result['o']:
-                oe = re.match(oe_regex, option)
+                oe = re.findall(oe_regex, option)
                 if oe:
-                    e, o = oe.groups()
+                    e, o = oe[0]
                     e = e.strip()
                     result['o_emotes'][e] = o
                     continue
@@ -818,6 +830,7 @@ class Utility(commands.Cog):
                 result['o_emotes'] = None
                 break
 
+        print(result)
         return result
 
     @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'],

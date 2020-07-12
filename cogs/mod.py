@@ -128,7 +128,11 @@ class Mod(commands.Cog):
         if action == 'set_poll_options':
             def parse_args(args):
                 result = {'i': '', 'o': []}
-                split_args = filter(None, args.split('-'))
+                _args = list(filter(lambda a: bool(a), re.split(r' ?-([i|o|]) ', args)))
+                split_args = []
+                for i in range(int(len(_args) / 2)):
+                    split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
+
                 for a in split_args:
                     tup = tuple(map(str.strip, a.split(' ', 1)))
                     if len(tup) <= 1:
