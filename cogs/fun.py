@@ -31,7 +31,7 @@ class Fun(commands.Cog):
         elif url is None:
             # check if source is member
             mem = await get_member(ctx, self.bot, source)
-            if mem is None:
+            if mem is None or isinstance(mem, str):
                 # check if source is emote
                 emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
                 match = re.findall(emote_regex, source)
@@ -185,7 +185,7 @@ class Fun(commands.Cog):
         elif url is None:
             # check if source is member
             mem = await get_member(ctx, self.bot, source)
-            if mem is None:
+            if mem is None or isinstance(mem, str):
                 # check if source is emote
                 emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
                 match = re.findall(emote_regex, source)
