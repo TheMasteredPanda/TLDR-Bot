@@ -18,7 +18,7 @@ class Fun(commands.Cog):
 
     @commands.command(help='put they gay pride flag on your profile picture', usage='pride', examples=['pride'],
                       clearance='User', cls=command.Command)
-    async def pride(self, ctx, source=None):
+    async def pride(self, ctx, *, source=None):
         url = None
 
         # check for attachments
@@ -172,7 +172,7 @@ class Fun(commands.Cog):
     @commands.command(help='Distort images or peoples profile pictures', usage='distort [image link | @Member]',
                       examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot'],
                       clearance='User', cls=command.Command)
-    async def distort(self, ctx, source=None):
+    async def distort(self, ctx, *, source=None):
         url = None
 
         # check for attachments
