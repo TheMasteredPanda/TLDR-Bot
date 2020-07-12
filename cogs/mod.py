@@ -651,57 +651,67 @@ class Mod(commands.Cog):
         else:
             return await embed_maker.message(ctx, 'This emote is available to everyone')
 
-    @commands.command(help='restrict an emote to specific role(s)', usage='emote_role [action] [emote] [role]',
-                      examples=['emote_role add :TldrNewsUK: @Mayor', 'emote_role add :TldrNewsUK: 697184345903071265', 'emote_role remove :TldrNewsUK: Mayor'],
+    @commands.command(help='restrict an emote to specific role(s)', usage='emote_role [role] [action] [emote 1], (emote 2)...',
+                      examples=['emote_role Mayor add :TldrNewsUK:, ', 'emote_role Mayor remove :TldrNewsUK: :TldrNewsUS: :TldrNewsEU:'],
                       clearance='Mod', cls=command.Command)
-    async def emote_role(self, ctx, action=None, emote=None, *, role=None):
-        if action is None:
+    async def emote_role(self, ctx, role=None, action=None, *, emotes=None):
+        if role is None:
             return await embed_maker.command_error(ctx)
 
-        if emote is None:
-            return await embed_maker.command_error(ctx, '[emote]')
-
-        regex = re.compile(r'<:.*:(\d*)>')
-        match = re.findall(regex, emote)
-        if not match:
-            return await embed_maker.command_error(ctx, '[emote]')
-        else:
-            emoji = discord.utils.find(lambda e: e.id == int(match[0]), ctx.guild.emojis)
-
-        if role is None:
-            return await embed_maker.command_error(ctx, '[role]')
-
-        if ctx.message.role_mentions:
-            role = ctx.message.role_mentions[0]
-        elif role.isdigit():
-            role = discord.utils.find(lambda rl: rl.id == role, ctx.guild.roles)
-        else:
-            role = discord.utils.find(lambda rl: rl.name == role, ctx.guild.roles)
-
-        if role is None:
-            return await embed_maker.command_error(ctx, '[role]')
-
-        emote_roles = emoji.roles
-        if action == 'add':
-            emote_roles.append(role)
-            await emoji.edit(roles=emote_roles)
-            await ctx.guild.fetch_emoji(emoji.id)
-            return await embed_maker.message(ctx, f'<@&{role.id}> has been added to whitelisted roles of emote {emote}', colour='green')
-
-        elif action == 'remove':
-            for i, r in enumerate(emote_roles):
-                if r.id == role.id:
-                    emote_roles.pop(i)
-                    await emoji.edit(roles=emote_roles)
-                    await ctx.guild.fetch_emoji(emoji.id)
-                    embed = embed_maker.message(ctx, f'<@&{role.id}> has been removed from whitelisted roles of emote {emote}', colour='green')
-                    return await ctx.send(embed=embed)
-            else:
-                embed = embed_maker.message(ctx, f'<@&{role.id}> is not whitelisted for emote {emote}', colour='red')
-                return await ctx.send(embed=embed)
-        else:
+        if action is None or action not in ['add', 'remove']:
             return await embed_maker.command_error(ctx, '[action]')
 
+        if emotes is None:
+            return await embed_maker.command_error(ctx, '[emotes]')
+
+        regex = re.compile(r'<:.*:(\d*)>')
+        emote_list = emotes.split(' ')
+        msg = None
+        on_list = []
+        for emote in emote_list:
+            match = re.findall(regex, emote)
+            if not match:
+                return await embed_maker.message(ctx, 'Invalid emote', colour='red')
+            else:
+                emoji = discord.utils.find(lambda e: e.id == int(match[0]), ctx.guild.emojis)
+
+            if ctx.message.role_mentions:
+                role = ctx.message.role_mentions[0]
+            elif role.isdigit():
+                role = discord.utils.find(lambda rl: rl.id == role, ctx.guild.roles)
+            else:
+                role = discord.utils.find(lambda rl: rl.name == role, ctx.guild.roles)
+
+            if role is None:
+                return await embed_maker.command_error(ctx, '[role]')
+
+            emote_roles = emoji.roles
+            if role in emote_roles:
+                on_list.append(emote)
+                continue
+
+            if action == 'add':
+                emote_roles.append(role)
+                await emoji.edit(roles=emote_roles)
+                await ctx.guild.fetch_emoji(emoji.id)
+                msg = f'<@&{role.id}> has been added to whitelisted roles of emotes {emotes}'
+
+            elif action == 'remove':
+                for i, r in enumerate(emote_roles):
+                    if r.id == role.id:
+                        emote_roles.pop(i)
+                        await emoji.edit(roles=emote_roles)
+                        await ctx.guild.fetch_emoji(emoji.id)
+                        msg = f'<@&{role.id}> has been removed from whitelisted roles of emotes {emotes}'
+                else:
+                    msg = f'<@&{role.id}> is not whitelisted for emote {emote}'
+            else:
+                return await embed_maker.command_error(ctx, '[action]')
+
+        if msg:
+            return await embed_maker.message(ctx, msg, colour='green')
+        elif on_list:
+            return await embed_maker.message(ctx, 'That role already has access to all those emotes', colour='red')
     @staticmethod
     def get_member(ctx, source):
         # check if source is member mention
