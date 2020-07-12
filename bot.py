@@ -25,22 +25,6 @@ class TLDR(commands.Bot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
-    async def on_raw_message_edit(self, payload):
-        if 'guild_id' not in payload.data:
-            return
-
-        guild_id = payload.data['guild_id']
-        guild = self.get_guild(int(guild_id))
-
-        channel_id = payload.channel_id
-        channel = guild.get_channel(int(channel_id))
-
-        message_id = payload.message_id
-        message = await channel.fetch_message(int(message_id))
-
-        if message.content.startswith(config.PREFIX):
-            return await self.process_commands(message)
-
     async def on_raw_reaction_add(self, payload):
         guild_id = payload.guild_id
         guild = self.get_guild(int(guild_id))
