@@ -3,7 +3,7 @@ import config
 
 
 class Connection:
-    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets', 'server_data']
+    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets', 'server_data', 'tags']
 
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -13,6 +13,7 @@ class Connection:
         self.polls = self.db['polls']
         self.tickets = self.db['tickets']
         self.server_data = self.db['server_data']
+        self.tags = self.db['tags']
 
 
 # Default schemas for databases
@@ -101,5 +102,11 @@ schemas = {
             #     'special_access': []
             # }
         }
+    },
+    'tags': {
+        # 'tag name': {
+        #     'response': '',
+        #     'owner_id': 0
+        # }
     }
 }

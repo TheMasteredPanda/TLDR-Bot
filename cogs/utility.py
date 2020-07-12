@@ -11,10 +11,142 @@ from modules import database, command, embed_maker, format_time
 
 db = database.Connection()
 
+async def filter_tags(ctx, bot, tags, tag_name):
+    regex = re.compile(fr'({tag_name.lower()})')
+    filtered_tags = list(filter(lambda t: re.findall(regex, t), tags))
+
+    tag = None
+    if len(filtered_tags) > 1:
+        embed_colour = config.EMBED_COLOUR
+        tag_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+        tag_embed.set_author(name=f'Tags')
+        tag_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+
+        description = 'Found multiple tags, which one did you mean? `input digit of tag`\n\n'
+        for i, tag in enumerate(filtered_tags):
+            description += f'`#{i + 1}` | {tag}'
+
+        tag_embed.description = description
+
+        await ctx.send(embed=tag_embed)
+
+        def user_check(m):
+            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
+
+        try:
+            tag_message = await bot.wait_for('message', check=user_check, timeout=20)
+        except asyncio.TimeoutError:
+            return 'Tag Timeout'
+
+        index = tag_message.content
+        if index.isdigit() and len(filtered_tags) >= int(index) - 1 >= 0:
+            tag = filtered_tags[int(index) - 1]
+        elif not index.isdigit():
+            return 'Input is not a number'
+        elif int(index) - 1 > len(filtered_tags) or int(index) - 1 < 0:
+            return 'Input number out of range'
+
+    elif len(filtered_tags) == 1:
+        tag = filtered_tags[0]
+    else:
+        return None
+
+    return [tag]
+
 
 class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(help='Create and use tags for common responses', usage='tag [action/tag] (tag) (response)',
+                      examples=['tag create vc We don\'t want to have VCs', 'tag vc', 'tag claim vc', 'tag edit vc We don\'t have VCs', 'tag delete vc'], clearance='User', cls=command.Command)
+    async def tag(self, ctx, action=None, tag=None, *, response=None):
+        if action is None:
+            return await embed_maker.command_error(ctx)
+
+        tag_data = db.tags.find_one({'guild_id': ctx.guild.id})
+        if tag_data is None:
+            await self.bot.add_collections(ctx.guild.id, 'tags')
+        tags = [t.lower() for t in tag_data if t != 'guild_id' and t != '_id']
+        if action not in ['create', 'claim', 'edit', 'remove']:
+            tag = action
+            tag = await filter_tags(ctx, self.bot, tags, tag)
+            if tag is None:
+                return await embed_maker.message(ctx, 'That tag doesn\'t exist', colour='red')
+            elif isinstance(tag, str):
+                return await embed_maker.message(ctx, tag, colour='red')
+            else:
+                tag = tag[0]
+
+            response = tag_data[tag]['response']
+            owner_id = tag_data[tag]['owner_id']
+            owner = await get_member(ctx, self.bot, str(owner_id))
+
+            if owner is None or isinstance(owner, str):
+                response += '\n\n This tag is unclaimed'
+
+            return await ctx.send(response)
+
+        elif action.lower() == 'create':
+            if response is None:
+                return await embed_maker.command_error(ctx, '(response)')
+            # max tags by user is 10, check this limit, if user is staff, limit does not apply
+            user_tags = [t for t in tag_data if t != 'guild_id' and t != '_id' and tag_data[t]['owner_id'] == ctx.author.id]
+            permissions = ctx.channel.permissions_for(ctx.author)
+            if len(user_tags) >= 10 and not permissions.manage_messages:
+                return await embed_maker.message(ctx, 'You\'ve reached your tag limit, the maximum amount of tags that one user can have is 10.', colour='red')
+
+            if tag in ['guild_id', '_id', 'create', 'edit', 'claim', 'remove']:
+                return await embed_maker.message(ctx, 'That tag name is forbidden', colour='red')
+
+            # check if tag already exists
+            if tag in tag_data:
+                return await embed_maker.message(ctx, 'A tag by that name already exists', colour='red')
+
+            tag_obj = {'response': response, 'owner_id': ctx.author.id}
+            db.tags.update_one({'guild_id': ctx.guild.id}, {'$set': {f'{tag}': tag_obj}})
+            return await embed_maker.message(ctx, f'Tag {tag} has been successfully created.', colour='green')
+
+        tag = await filter_tags(ctx, self.bot, tags, tag)
+        if tag is None:
+            return await embed_maker.message(ctx, 'That tag doesn\'t exist', colour='red')
+        elif isinstance(tag, str):
+            return await embed_maker.message(ctx, tag, colour='red')
+        else:
+            tag = tag[0]
+
+        owner_id = tag_data[tag]['owner_id']
+
+        if action.lower() == 'claim':
+            # check if tag owner is still in server
+            owner = await get_member(ctx, self.bot, str(owner_id))
+            if isinstance(owner, discord.Member):
+                return await embed_maker.message(ctx, 'You can\'t claim a tag if the tag\'s owner is still in the server')
+            else:
+                db.tags.update_one({'guild_id': ctx.guild.id}, {'$set': {f'{tag}.owner_id': ctx.author.id}})
+                return await embed_maker.message(ctx, f'You are the new owner of tag `{tag}`', colour='green')
+        elif action.lower() == 'edit':
+            if response is None:
+                return await embed_maker.command_error(ctx, '(response)')
+
+            # check if user is owner of tag
+            if owner_id != ctx.author.id:
+                return await embed_maker.message(ctx, 'You are not the owner of this tag', colour='red')
+
+            new_tag_obj = {
+                'response': response,
+                'owner_id': ctx.author.id
+            }
+            db.tags.update_one({'guild_id': ctx.guild.id}, {'$set': {f'{tag}': new_tag_obj}})
+            return await embed_maker.message(ctx, f'Tag `{tag}` has been successfully edited.', colour='green')
+
+        elif action.lower() == 'remove':
+            # check if user is owner of tag
+            if owner_id != ctx.author.id:
+                return await embed_maker.message(ctx, 'You are not the owner of this tag', colour='red')
+
+            db.tags.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'{tag}': ''}})
+            return await embed_maker.message(ctx, f'Tag `{tag}` has been successfully removed.', colour='green')
 
     @commands.command(help='Get bot\'s latency', usage='ping', examples=['ping'], clearance='User', cls=command.Command)
     async def ping(self, ctx):
