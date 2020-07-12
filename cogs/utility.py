@@ -89,7 +89,7 @@ class Utility(commands.Cog):
 
     @commands.command(help='Create and use tags for common responses', usage='tag [action/tag] "(tag name)" (response)',
                       examples=['tag create "vc" We don\'t want to have VCs', 'tag vc', 'tag claim vc', 'tag edit "vc" We don\'t have VCs', 'tag delete vc'], clearance='User', cls=command.Command)
-    async def tag(self, ctx, action=None, *, tag=None):
+    async def tag(self, ctx, action=None, tag=None, *, response=None):
         if action is None:
             return await embed_maker.command_error(ctx)
 
