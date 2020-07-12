@@ -695,7 +695,7 @@ class Leveling(commands.Cog):
         await ctx.send(embed=leaderboard_embed)
 
     @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member]',
-                      examples=['rep @Hattyot'], clearance='Mod', cls=command.Command, aliases=['reputation'])
+                      examples=['rep @Hattyot'], clearance='User', cls=command.Command, aliases=['reputation'])
     async def rep(self, ctx, mem=None):
         # check if user can give rep point
         data = db.levels.find_one({'guild_id': ctx.guild.id})
@@ -742,7 +742,7 @@ class Leveling(commands.Cog):
             data['users'][str(member.id)] = schema
 
         # set rep_time to 24h so user cant spam rep points
-        expire = round(time()) # + 86400  # 24 hours
+        expire = round(time()) + 86400  # 24 hours
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})
 
         # give user rep point
@@ -759,10 +759,10 @@ class Leveling(commands.Cog):
             if boosts:
                 return db.levels.update_one({'guild_id': ctx.guild.id, f'boost.users.{member.id}.type': 'rep'}, {'$inc': {f'boost.users.{member.id}.$.expires': 1800}})  # 30 min
 
-        # give user 2.5% xp boost for 3 hours
+        # give user 7.5% xp boost for 6 hours
         boost_dict = {
-            'expires': round(time()) + (3600 * 3),
-            'multiplier': 0.025,
+            'expires': round(time()) + (3600 * 6),
+            'multiplier': 0.075,
             'type': 'rep'
         }
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
