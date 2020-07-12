@@ -773,7 +773,7 @@ class Leveling(commands.Cog):
     @commands.command(help='Shows your (or someone else\'s) rank and level',
                       usage='rank (member)', examples=['rank', 'rank @Hattyot', 'rank Hattyot'],
                       clearance='User', cls=command.Command)
-    async def rank(self, ctx, member=None):
+    async def rank(self, ctx, *, member=None):
         if member is None:
             mem = ctx.author
         else:
