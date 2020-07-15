@@ -124,15 +124,20 @@ class Fun(commands.Cog):
             img_url = json.loads(json_text)[list_indc][json_key]
         else:
             img_url = json.loads(json_text)[json_key]
+        if 'fileSizeBytes' in json.loads(json_text):
+            if int(json.loads(json_text)['fileSizeBytes'] / 1000000) >= 8:
+                return self.get_random_image(url, json_key, list_indc=list_indc)
         # get image extension
         split = img_url.split('.')
         extension = split[-1]
 
         allowed_extensions = ['jpg', 'jpeg', 'png', 'gif']
-        while extension not in allowed_extensions:
-            return self.get_random_image(url, json_key)
+        if extension not in allowed_extensions:
+            return self.get_random_image(url, json_key, list_indc=list_indc)
 
         image_response = requests.get(img_url)
+        if int(len(image_response.content) / 1000000) >= 8:
+            return self.get_random_image(url, json_key, list_indc=list_indc)
         image = BytesIO(image_response.content)
         image.seek(0)
 
