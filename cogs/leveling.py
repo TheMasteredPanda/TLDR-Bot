@@ -745,7 +745,7 @@ class Leveling(commands.Cog):
             data['users'][str(member.id)] = schema
 
         # set rep_time to 24h so user cant spam rep points
-        expire = round(time()) + 86400  # 24 hours
+        expire = round(time())  # + 86400  # 24 hours
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})
 
         # give user rep point
@@ -760,7 +760,12 @@ class Leveling(commands.Cog):
         if 'boost' in data and str(member.id) in data['boost']['users']:
             boosts = [b for b in data['boost']['users'][str(member.id)] if b['type'] == 'rep']
             if boosts:
-                return db.levels.update_one({'guild_id': ctx.guild.id, f'boost.users.{member.id}.type': 'rep'}, {'$inc': {f'boost.users.{member.id}.$.expires': 1800}})  # 30 min
+                boost_expire = boosts[0]['expires']
+                if boost_expire < round(time()) or (boost_expire + 1800) - round(time()) > (3600 * 6):
+                    expire = round(time()) + (3600 * 6)
+                else:
+                    expire = boost_expire + 1800  # 30 min
+                return db.levels.update_one({'guild_id': ctx.guild.id, f'boost.users.{member.id}.type': 'rep'}, {'$set': {f'boost.users.{member.id}.$.expires': expire}})
 
         # give user 7.5% xp boost for 6 hours
         boost_dict = {
