@@ -667,6 +667,9 @@ class Leveling(commands.Cog):
                             db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{u_id}.left': ''}})
                     break
 
+            if i != 0 and member == ctx.author:
+                continue
+
             your_pos_str += f'***`#{user_rank + i}`*** - *{member.name}' if u_id == str(ctx.author.id) else f'`#{user_rank + i}` - {member.name}'
             if key[0] in ['p', 'h']:
                 user_role_name = u_val[f'{key[0]}_role']
