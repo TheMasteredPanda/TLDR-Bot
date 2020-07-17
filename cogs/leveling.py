@@ -745,7 +745,7 @@ class Leveling(commands.Cog):
             data['users'][str(member.id)] = schema
 
         # set rep_time to 24h so user cant spam rep points
-        expire = round(time())  # + 86400  # 24 hours
+        expire = round(time()) + 86400  # 24 hours
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})
 
         # give user rep point
