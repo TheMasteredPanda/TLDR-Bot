@@ -117,53 +117,25 @@ class Fun(commands.Cog):
 
         return buffer
 
-    def get_random_image(self, url, json_key, *, list_indc=None):
-        response = requests.get(url)
-        json_text = response.text.encode("ascii", "ignore").decode('ascii')
-        if list_indc is not None:
-            img_url = json.loads(json_text)[list_indc][json_key]
-        else:
-            img_url = json.loads(json_text)[json_key]
-        if 'fileSizeBytes' in json.loads(json_text):
-            if int(json.loads(json_text)['fileSizeBytes'] / 1000000) >= 8:
-                return self.get_random_image(url, json_key, list_indc=list_indc)
-        # get image extension
-        split = img_url.split('.')
-        extension = split[-1]
-
-        allowed_extensions = ['jpg', 'jpeg', 'png', 'gif']
-        if extension not in allowed_extensions:
-            return self.get_random_image(url, json_key, list_indc=list_indc)
-
-        image_response = requests.get(img_url)
-        if int(len(image_response.content) / 1000000) >= 8:
-            return self.get_random_image(url, json_key, list_indc=list_indc)
-        image = BytesIO(image_response.content)
-        image.seek(0)
-
-        return image, extension
-
     @commands.command(help='Gets a random dog image', usage='dog', examples=['dog'],
                       clearance='User', cls=command.Command)
     async def dog(self, ctx):
         url = 'https://random.dog/woof.json'
-        image, extension = self.get_random_image(url, 'url')
+        response = requests.get(url)
+        json_text = response.text.encode("ascii", "ignore").decode('ascii')
+        img_url = json.loads(json_text)['url']
 
-        embed = discord.Embed()
-        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        embed.set_image(url=f'attachment://cat.{extension}')
-        return await ctx.send(file=discord.File(fp=image, filename=f'cat.{extension}'), embed=embed)
+        return await ctx.send(img_url)
 
     @commands.command(help='Gets a random cat image', usage='cat', examples=['cat'],
                       clearance='User', cls=command.Command)
     async def cat(self, ctx):
         url = 'https://api.thecatapi.com/v1/images/search'
-        image, extension = self.get_random_image(url, 'url', list_indc=0)
+        response = requests.get(url)
+        json_text = response.text.encode("ascii", "ignore").decode('ascii')
+        img_url = json.loads(json_text)[0]['url']
 
-        embed = discord.Embed()
-        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        embed.set_image(url=f'attachment://cat.{extension}')
-        return await ctx.send(file=discord.File(fp=image, filename=f'cat.{extension}'), embed=embed)
+        return await ctx.send(img_url)
 
     @commands.command(help='Gets a random dad joke', usage='dadjoke', examples=['dadjoke'],
                       clearance='User', cls=command.Command)
