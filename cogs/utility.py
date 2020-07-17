@@ -11,6 +11,7 @@ from modules import database, command, embed_maker, format_time
 
 db = database.Connection()
 
+
 async def filter_tags(ctx, bot, tags, tag_name):
     regex = re.compile(fr'({tag_name.lower()})')
 
@@ -611,8 +612,8 @@ class Utility(commands.Cog):
         return result
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d)',
-                      examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d'],
+                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d) (-u update interval)',
+                      examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
         if args is None:
@@ -623,6 +624,8 @@ class Utility(commands.Cog):
         options = args['o']
         poll_time = format_time.parse(args['t'])
         option_emotes = args['o_emotes']
+        update_interval = args['u']
+
         err = ''
         if poll_time is None:
             err = 'Invalid time arg'
@@ -637,6 +640,13 @@ class Utility(commands.Cog):
             err = 'Too many options'
         if len(options) < 2:
             err = 'Too few options'
+
+        if update_interval and format_time.parse(update_interval) is None:
+            err = 'Invalid update interval time'
+        else:
+            update_interval = format_time.parse(update_interval)
+            if update_interval < 30:
+                err = 'Update interval can\'t be smaller than 30 seconds'
 
         if err:
             return await embed_maker.message(ctx, err, colour='red')
@@ -660,7 +670,6 @@ class Utility(commands.Cog):
             embed.description = description
 
         poll_msg = await ctx.send(embed=embed)
-        voted_users = {}
 
         embed_colour = config.EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
@@ -671,25 +680,17 @@ class Utility(commands.Cog):
             if msg.id != poll_msg.id:
                 return
 
-            if user.id in voted_users:
-                if voted_users[user.id]['buffer'] >= 5:
-                    embed.description = f'Don\'t spam please'
-                    return await user.send(embed=embed)
-                voted_users[user.id]['buffer'] += 1
+            data = db.polls.find_one({'guild_id': ctx.guild.id})
+            if str(user.id) in data['polls'][str(msg.id)]:
 
-                previous_emote = voted_users[user.id]['emote']
-                if emote == previous_emote:
-                    embed.description = f'Your vote has already been counted towards: {emote}'
+                voted = data['polls'][str(msg.id)][str(user.id)]['voted']
+                print(voted)
+                if voted:
+                    embed.description = f'You have already voted'
                     return await user.send(embed=embed)
 
-                db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1, f'polls.{msg.id}.{previous_emote}': -1}})
-                voted_users[user.id]['emote'] = emote
-
-                embed.description = f'Your vote has been changed to: {emote}'
-                return await user.send(embed=embed)
-
-            voted_users[user.id] = {'emote': emote, 'buffer': 0}  # checking for spammers
-            db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote}': 1}})
+            db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote.name}': 1}})
+            db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{msg.id}.{user.id}.voted': True}})
 
             embed.description = f'Your vote has been counted towards: {emote}'
             return await user.send(embed=embed)
@@ -698,12 +699,24 @@ class Utility(commands.Cog):
         buttons = dict.fromkeys(emotes, count)
 
         utils_cog = self.bot.get_cog('Utils')
-        expires = round(time.time()) + round(poll_time)
-        await utils_cog.create_timer(
-            expires=expires, guild_id=ctx.guild.id, event='anon_poll',
-            extras={'message_id': poll_msg.id, 'channel_id': poll_msg.channel.id,
-                    'question': question, 'options': dict(zip(emotes, options))}
-        )
+        if update_interval:
+            expires = round(time.time()) + round(update_interval)
+        else:
+            expires = round(time.time()) + round(poll_time)
+
+        extras = {
+            'message_id': poll_msg.id,
+            'channel_id': poll_msg.channel.id,
+            'question': question,
+            'options': dict(zip(emotes, options)),
+            'update_interval': 0,
+            'true_expire': 0
+        }
+        if update_interval:
+            extras['update_interval'] = update_interval
+            extras['true_expire'] = round(time.time()) + poll_time
+
+        await utils_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='anon_poll', extras=extras)
         await utils_cog.new_no_expire_menu(poll_msg, buttons)
 
         db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{poll_msg.id}': poll}})
@@ -716,43 +729,58 @@ class Utility(commands.Cog):
         channel_id = timer['extras']['channel_id']
         guild_id = timer['guild_id']
         options = timer['extras']['options']
+        update_interval = timer['extras']['update_interval']
+        true_expire = timer['extras']['true_expire']
+
         data = db.polls.find_one({'guild_id': guild_id})
-        if data is None:
-            data = self.bot.add_collections(guild_id, 'polls')
 
         if str(message_id) not in data['polls']:
             return
-
-        db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ''}})
 
         question = timer['extras']['question']
         poll = data['polls'][str(message_id)]
         emote_count = poll
         channel = self.bot.get_channel(channel_id)
         message = await channel.fetch_message(message_id)
-        total_emotes = sum(emote_count.values())
+        total_emotes = sum([v for v in emote_count.values() if isinstance(v, int)])
         description = f'**"{question}"**\n\n'
 
         if total_emotes == 0:
             # just incase nobody participated
-            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **0%**' for emote, emote_count in emote_count.items())
+            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **0%**' for emote, emote_count in emote_count.items() if emote in options)
         else:
-            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in emote_count.items())
+            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in emote_count.items() if emote in options)
 
+        old_embed = message.embeds[0].to_dict()
         embed = message.embeds[0]
         embed.description = description
-        embed.timestamp = datetime.now()
-        embed.set_footer(text='Ended at')
+        embed.timestamp = datetime.fromtimestamp(true_expire)
+        if update_interval:
+            embed.set_footer(text=f'Updates every {format_time.seconds(update_interval)} | Ends at')
+        else:
+            embed.set_footer(text='Ended at')
+
+        if old_embed != embed.to_dict():
+            await message.edit(embed=embed)
 
         utils_cog = self.bot.get_cog('Utils')
-        if message_id in utils_cog.no_expire_menus:
-            del utils_cog.no_expire_menus[message_id]
+        # check if poll passed true expire
+        expired = round(time.time()) > true_expire
+        if expired:
+            if message_id in utils_cog.no_expire_menus:
+                del utils_cog.no_expire_menus[message_id]
 
-        await message.edit(embed=embed)
-        await message.clear_reactions()
+            db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ''}})
+            await message.clear_reactions()
 
-        # send message about poll being completed
-        return await channel.send(f'Poll finished: https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}')
+            # send message about poll being completed
+            return await channel.send(
+                f'Poll finished: https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}')
+
+        # run poll timer again if needed
+        elif update_interval:
+            expires = round(time.time()) + round(update_interval)
+            return await utils_cog.create_timer(expires=expires, guild_id=timer['guild_id'], event='anon_poll', extras=timer['extras'])
 
     @commands.command(help='Create a poll. with options adds numbers as reactions, without it just adds thumbs up and down.',
                       usage='poll [-q question] (-o option1 | option2 | ...)/(-o [emote: option], [emote: option], ...)',
@@ -810,9 +838,10 @@ class Utility(commands.Cog):
             'q': '',
             'o': [],
             't': '5m',
-            'o_emotes': {}
+            'o_emotes': {},
+            'u': ''
         }
-        _args = list(filter(lambda a: bool(a), re.split(r' ?-([t|o|q]) ', args)))
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([t|o|q|u]) ', args)))
         split_args = []
         for i in range(int(len(_args)/2)):
             split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
