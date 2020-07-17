@@ -814,7 +814,9 @@ class Leveling(commands.Cog):
         # inform user of boost, if they have it
         boost_multiplier = self.user_boost(data, mem)
         if boost_multiplier > 1:
-            boost_percent = (boost_multiplier - 1) * 100
+            boost_percent = round((boost_multiplier - 1) * 100, 1)
+            if boost_percent.is_integer():
+                boost_percent = round(boost_percent)
             embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
 
         # checks if honours section needs to be added
