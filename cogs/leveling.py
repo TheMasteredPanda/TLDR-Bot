@@ -591,7 +591,7 @@ class Leveling(commands.Cog):
                 if 'left' in user_values:
                     db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{user_id}.left': ''}})
 
-            leaderboard_str += f'***`#{u_rank}`*** - *{member.name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.name}'
+            leaderboard_str += f'***`#{u_rank}`*** - *{member.display_name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.display_name}'
 
             if key[0] in ['p', 'h']:
                 user_role_name = user_values[f'{key[0]}_role']
@@ -606,7 +606,7 @@ class Leveling(commands.Cog):
 
                 role_level = self.user_role_level(branch, data, user_values)
                 progress_percent = self.percent_till_next_level(branch, user_values)
-                leaderboard_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**'
+                leaderboard_str += f'\n**Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
 
             else:
                 rep = user_values['reputation']
@@ -670,7 +670,7 @@ class Leveling(commands.Cog):
             if i != 0 and member == ctx.author:
                 continue
 
-            your_pos_str += f'***`#{user_rank + i}`*** - *{member.name}' if u_id == str(ctx.author.id) else f'`#{user_rank + i}` - {member.name}'
+            your_pos_str += f'***`#{user_rank + i}`*** - *{member.display_name}' if u_id == str(ctx.author.id) else f'`#{user_rank + i}` - {member.display_name}'
             if key[0] in ['p', 'h']:
                 user_role_name = u_val[f'{key[0]}_role']
                 user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
