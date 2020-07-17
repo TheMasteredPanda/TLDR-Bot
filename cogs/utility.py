@@ -4,6 +4,7 @@ import config
 import re
 import random
 import asyncio
+import os
 from cogs.utils import get_member
 from datetime import datetime
 from discord.ext import commands
@@ -986,6 +987,27 @@ class Utility(commands.Cog):
                 return await ctx.send(embed=embed)
             else:
                 return await embed_maker.message(ctx, f'{_cmd} is not a valid command')
+
+    @commands.command(hidden=True, help='View source code of any command',
+                      usage='source (command)', examples=['source', 'source pfp'],
+                      clearance='User', cls=command.Command, aliases=['src'])
+    async def source(self, ctx, *, command=None):
+        u = '\u200b'
+        if not command:
+            return await embed_maker.message(ctx, 'Check out the full sourcecode on GitHub\nhttps://github.com/Hattyot/TLDR-Bot')
+
+        src = f"```py\n{str(__import__('inspect').getsource(self.bot.get_command(command).callback)).replace('```', f'{u}')}```"
+        if len(src) > 2000:
+            cmd = self.bot.get_command(command).callback
+            if not cmd:
+                return await ctx.send("Command not found.")
+            file = cmd.__code__.co_filename
+            location = os.path.relpath(file)
+            total, fl = __import__('inspect').getsourcelines(cmd)
+            ll = fl + (len(total) - 1)
+            return await embed_maker.message(ctx, f"This code was too long for Discord, you can see it instead [on GitHub](https://github.com/Hattyot/TLDR-Bot/blob/master/{location}#L{fl}-L{ll})")
+        else:
+            await ctx.send(src)
 
     @staticmethod
     def get_member(ctx, source):
