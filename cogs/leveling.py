@@ -602,7 +602,7 @@ class Leveling(commands.Cog):
 
             else:
                 rep = user_values['reputation']
-                leaderboard_str += f' | **{rep} Reputation**'
+                leaderboard_str += f' | **{rep} Reputation**\n'
 
             u_rank += 1
 
