@@ -5,7 +5,7 @@ import re
 import random
 import asyncio
 import os
-from cogs.utils import get_member
+from cogs.utils import get_member, get_user_clearance
 from datetime import datetime
 from discord.ext import commands
 from modules import database, command, embed_maker, format_time
@@ -903,20 +903,22 @@ class Utility(commands.Cog):
             else:
                 help_object[cmd.cog_name].append(cmd)
 
-        utils = self.bot.get_cog('Utils')
-        clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
+        clearance = get_user_clearance(ctx.author)
 
         # check if user has special access
-        data = db.server_data.find_one({'guild_id': ctx.guild.id})
-        if 'users' not in data:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
-            data['users'] = {}
-        if 'roles' not in data:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'roles': {}}})
-            data['roles'] = {}
+        access_given = []
+        access_taken = []
+        if 'commands' in data and 'access' in data['commands'] and 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
+            command_data = data['commands']['access']
+            # check if user has special access
+            cmd_access_list = []
+            if str(ctx.author.id) in command_data['users']:
+                cmd_access_list += [c for c in command_data['users'][str(ctx.author.id)]]
+            if set([str(r.id) for r in ctx.author.roles]) & set(command_data['roles'].keys()):
+                cmd_access_list += [command_data['roles'][c] for c in command_data['roles'] if c in [str(r.id) for r in ctx.author.roles]]
 
-        if str(ctx.author.id) not in data['users']:
-            data['users'][str(ctx.author.id)] = []
+            access_given = [c['command'] for c in cmd_access_list if c['type'] == 'give']
+            access_taken = [c['command'] for c in cmd_access_list if c['type'] == 'take']
 
         if _cmd is None:
             embed = discord.Embed(
@@ -929,15 +931,9 @@ class Utility(commands.Cog):
             # get special access commands
             special_access_cmds = []
 
-            # find common roles
-            common = set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys())
-            if common:
-                for r in common:
-                    special_access_cmds += data['roles'][r]
-
             # add special access field
-            if data['users'][str(ctx.author.id)]:
-                special_access_cmds += data['users'][str(ctx.author.id)]
+            if access_given:
+                special_access_cmds += [c for c in access_given]
 
             # remove duplicates
             special_access_cmds = list(dict.fromkeys(special_access_cmds))
@@ -945,6 +941,8 @@ class Utility(commands.Cog):
             for cat in help_object:
                 cat_commands = []
                 for cmd in help_object[cat]:
+                    if cmd.name in access_taken:
+                        continue
                     if cmd.clearance in clearance:
                         cat_commands.append(cmd.name)
 
@@ -970,9 +968,9 @@ class Utility(commands.Cog):
                 if 'commands' in data and 'disabled' in data['commands'] and cmd.name in data['commands']['disabled']:
                     return
 
-                if ctx.command.clearance not in clearance and \
-                   ctx.command.name not in data['users'][str(ctx.author.id)] and \
-                   not set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys()):
+                if access_taken:
+                    return
+                if ctx.command.clearance not in clearance and not cmd in access_given:
                     return
 
                 examples = f' | {prefix}'.join(cmd.examples)
@@ -1008,26 +1006,6 @@ class Utility(commands.Cog):
             return await embed_maker.message(ctx, f"This code was too long for Discord, you can see it instead [on GitHub](https://github.com/Hattyot/TLDR-Bot/blob/master/{location}#L{fl}-L{ll})")
         else:
             await ctx.send(src)
-
-    @staticmethod
-    def get_member(ctx, source):
-        if source is None:
-            return None
-        # check if source is member mention
-        if ctx.message.mentions:
-            member = ctx.message.mentions[0]
-        # Check if source is user id
-        elif source.isdigit():
-            member = discord.utils.find(lambda m: m.id == source, ctx.guild.members)
-        # Check if source is member's name
-        else:
-            regex = re.compile(fr'({source.lower()})')
-            member = discord.utils.find(
-                lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()),
-                ctx.guild.members
-            )
-
-        return member
 
 
 def setup(bot):

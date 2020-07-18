@@ -76,7 +76,15 @@ schemas = {
             # }
         },
         'commands': {
-            'disabled': []
+            'disabled': [],
+            'access': {
+                'users': {
+                    # 'user_id': []
+                },
+                'roles': {
+                    # 'role_id': []
+                }
+            }
         },
         'daily_debates': {
             'topics': [],
@@ -91,16 +99,6 @@ schemas = {
             #     'name': '',
             #     'roles': [{'emote': 'emote', 'role_id': 'role id', 'message': 'msg'}]
             # }
-        },
-        'users': {
-            # 'id': {
-            #     'special_access': []
-            # }
-        },
-        'roles': {
-            # 'id': {
-            #     'special_access': []
-            # }
         }
     },
     'tags': {
@@ -108,5 +106,16 @@ schemas = {
         #     'response': '',
         #     'owner_id': 0
         # }
+    },
+    'commands': {
+        'disabled': [],
+        'access': {
+            'users': {
+                # 'user_id': []
+            },
+            'roles': {
+                # 'role_id': []
+            }
+        }
     }
 }

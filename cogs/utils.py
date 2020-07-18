@@ -21,6 +21,11 @@ class TTLItemCache(TTLCache):
 
 
 async def get_member(ctx, bot, source):
+    if source is None:
+        return None
+    if isinstance(source, int):
+        source = str(source)
+
     member = None
 
     # check if source is member mention
@@ -83,6 +88,21 @@ async def get_member(ctx, bot, source):
             member = members[0]
 
     return member
+
+
+def get_user_clearance(member):
+    permissions = member.guild_permissions
+    clearance = []
+
+    if member.id in config.DEV_IDS:
+        clearance.append('Dev')
+    if permissions.administrator:
+        clearance.append('Admin')
+    if permissions.manage_messages:
+        clearance.append('Mod')
+    clearance.append('User')
+
+    return clearance
 
 
 class Utils(commands.Cog):
@@ -155,25 +175,6 @@ class Utils(commands.Cog):
         asyncio.create_task(self.run_timer(timer_object['guild_id'], timer_object))
 
         return timer_object
-
-    async def get_user_clearance(self, guild_id, member_id):
-        guild = self.bot.get_guild(guild_id)
-        member = guild.get_member(int(member_id))
-        if member is None:
-            member = await guild.fetch_member(int(member_id))
-
-        permissions = member.guild_permissions
-        clearance = []
-
-        if member_id in config.DEV_IDS:
-            clearance.append('Dev')
-        if permissions.administrator:
-            clearance.append('Admin')
-        if permissions.manage_messages:
-            clearance.append('Mod')
-        clearance.append('User')
-
-        return clearance
 
 
 def setup(bot):

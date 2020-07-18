@@ -3,6 +3,7 @@ import os
 import config
 import traceback
 import time
+from cogs.utils import get_user_clearance
 from modules import embed_maker
 from datetime import datetime
 from modules import database
@@ -261,29 +262,38 @@ class TLDR(commands.Bot):
         if ctx.guild is None:
             return
 
-        utils = self.get_cog('Utils')
-        clearance = await utils.get_user_clearance(ctx.guild.id, ctx.author.id)
+        clearance = get_user_clearance(ctx.author)
 
         data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'commands' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands': database.schemas['commands']}})
 
         if 'commands' in data:
+            if 'disabled' not in data['commands']:
+                db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands.disabled': []}})
+                data['commands']['disabled'] = []
+
             disabled_commands = data['commands']['disabled']
             if ctx.command.name in disabled_commands:
                 return await embed_maker.message(ctx, 'This command has been disabled', colour='red')
 
-        if 'users' not in data:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'users': {}}})
-            data['users'] = {}
-        if 'roles' not in data:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'roles': {}}})
-            data['roles'] = {}
+        access_given = []
+        access_taken = []
+        if 'commands' in data and 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
+            command_data = data['commands']['access']
+            # check if user has special access
+            cmd_access_list = []
+            if str(message.author.id) in command_data['users']:
+                cmd_access_list += [c for c in command_data['users'][str(message.author.id)]]
+            if set([str(r.id) for r in ctx.author.roles]) & set(command_data['roles'].keys()):
+                cmd_access_list += [command_data['roles'][c] for c in command_data['roles'] if c in [str(r.id) for r in message.author.roles]]
 
-        if str(message.author.id) not in data['users']:
-            data['users'][str(message.author.id)] = []
+            access_given = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'give']
+            access_taken = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'take']
 
-        if ctx.command.clearance not in clearance and \
-           ctx.command.name not in data['users'][str(message.author.id)] and \
-           not set([str(r.id) for r in ctx.author.roles]) & set(data['roles'].keys()):
+        if access_taken:
+            return await embed_maker.message(ctx, f'Your access to this command has been taken away')
+        if ctx.command.clearance not in clearance and not access_given:
             return
 
         await self.invoke(ctx)

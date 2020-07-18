@@ -5,7 +5,7 @@ import datetime
 import time
 import asyncio
 import config
-from cogs.utils import get_member
+from cogs.utils import get_member, get_user_clearance
 from modules import command, database, embed_maker, format_time
 from discord.ext import commands
 
@@ -569,69 +569,166 @@ class Mod(commands.Cog):
         await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, read_message_history=True)
         return await ctx.channel.send(f'<@{member.id}>')
 
-    @commands.command(help='Grant users access to commands that aren\'t available to users',
-                      usage='command_access [member/role] [action] [command]', clearance='Admin', cls=command.Command,
-                      examples=['command_access @Hattyot add poll', 'command_access Mayor remove anon_poll'])
-    async def command_access(self, ctx, src=None, action=None, cmd=None):
-        if src is None:
+    @commands.command(help='Grant users access to commands that aren\'t available to users or take away their access to a command',
+                      usage='command_access [action/(member/role)] [command] [member/role]', clearance='Admin', cls=command.Command,
+                      examples=['command_access give poll @Hattyot', 'command_access neutral anon_poll Mayor', 'command_access take rep Hattyot', 'command_access Hatty'])
+    async def command_access(self, ctx, action=None, cmd=None, *, member=None):
+        if action is None:
             return await embed_maker.command_error(ctx)
 
-        member = self.get_member(ctx, src)
-        role = discord.utils.find(lambda r: r.name == src, ctx.guild.roles)
-        if role and member is None:
-            mr = 'roles'
-            src = role
-        elif member and role is None:
-            mr = 'users'
-            src = member
-        else:
-            return await embed_maker.command_error(ctx, '[member/role]')
+        async def member_or_role(src):
+            if src is None:
+                return '[member/role]', None
+            member = await get_member(ctx, self.bot, src)
+            role = discord.utils.find(lambda r: r.name.lower() == src.lower(), ctx.guild.roles)
+            if role and member is None:
+                type = 'roles'
+                obj = role
+            elif member and role is None:
+                type = 'users'
+                obj = member
+            else:
+                return '[member/role]', None
+
+            return type, obj
 
         data = db.server_data.find_one({'guild_id': ctx.guild.id})
-        if mr not in data:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {mr: {}}})
-            data[mr] = {}
 
-        if str(src.id) not in data[mr]:
-            data[mr][str(src.id)] = []
+        # check if action is member or role
+        type, obj = None, None
+        if action not in ['give', 'neutral', 'take']:
+            type, obj = await member_or_role(action)
 
-        if action is None and cmd is None:
-            special_access = data[mr][str(src.id)]
-            if not special_access:
-                special_access_str = f'{src} has not special access to commmands'
-            else:
-                special_access_str = f'{src} has special access to: ' + ' '.join([f'|`{cmd}`|' for cmd in special_access])
+        if obj is None:
+            type, obj = await member_or_role(member)
+            if obj is None:
+                if action not in ['give', 'neutral', 'take']:
+                    return await embed_maker.command_error(ctx, '[action/(member/role)]')
+                if cmd is None:
+                    return await embed_maker.command_error(ctx, '[command]')
+                return await embed_maker.command_error(ctx, type)
+        else:
+            access_given = []
+            access_taken = []
+            if 'commands' in data and 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
+                command_data = data['commands']['access']
+                # check if user has special access
+                cmd_access_list = []
+                if str(ctx.author.id) in command_data['users']:
+                    cmd_access_list += [c for c in command_data['users'][str(ctx.author.id)]]
+                if set([str(r.id) for r in ctx.author.roles]) & set(command_data['roles'].keys()):
+                    cmd_access_list += [command_data['roles'][c] for c in command_data['roles'] if c in [str(r.id) for r in ctx.author.roles]]
 
-            return await embed_maker.message(ctx, special_access_str)
+                access_given = [c['command'] for c in cmd_access_list if c['type'] == 'give']
+                access_taken = [c['command'] for c in cmd_access_list if c['type'] == 'take']
 
-        if action not in ['add', 'remove']:
-            return await embed_maker.command_error(ctx, '[action]')
+            access_given_str = ' |'.join([f' `{c}`' for c in access_given])
+            access_taken_str = ' |'.join([f' `{c}`' for c in access_taken])
+            t = 'user' if type == 'users' else 'role'
+            if not access_given_str:
+                access_given_str = f'{t} has no special access to commands'
+            if not access_taken_str:
+                access_taken_str = f'No commands have been taken away from this {t}'
 
-        if cmd is None or self.bot.get_command(cmd) is None:
-            return await embed_maker.command_error(ctx, '[command]')
+            embed_colour = config.EMBED_COLOUR
+            embed = discord.Embed(colour=embed_colour, timestamp=datetime.datetime.now(), description='Command Access')
+            embed.add_field(name='>Access Given', value=access_given_str, inline=False)
+            embed.add_field(name='>Access Taken', value=access_taken_str, inline=False)
+            embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+
+            return await ctx.send(embed=embed)
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'commands' not in data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands': {}}})
+            data['commands'] = {}
+
+        command_data = data['commands']['access']
+        if type not in command_data:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'commands.{type}': {}}})
+            command_data[type] = {}
+
+        if str(obj.id) not in command_data[type]:
+            command_data[type][str(obj.id)] = []
+
+        if action not in ['give', 'neutral', 'take']:
+            return await embed_maker.message(ctx, 'invalid [action/(member/role)]', colour='red')
 
         cmd_obj = self.bot.get_command(cmd)
 
-        if action == 'add':
-            if cmd in data[mr][str(src.id)]:
-                return await embed_maker.message(ctx, f'{src} already has been given access to that command', colour='red')
+        if cmd_obj is None:
+            return await embed_maker.message(ctx, f'{cmd} is not a valid command', colour='red')
 
-            if cmd_obj.clearance == 'Dev':
-                return await embed_maker.message(ctx, 'You can not give people access to dev commands', colour='red')
-            elif cmd_obj.clearance == 'Admin':
-                return await embed_maker.message(ctx, 'You can not give people access to admin commands', colour='red')
+        if cmd_obj.clearance == 'Dev':
+            return await embed_maker.message(ctx, 'You can not give people access to dev commands', colour='red')
+        elif cmd_obj.clearance == 'Admin':
+            return await embed_maker.message(ctx, 'You can not give people access to admin commands', colour='red')
 
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'{mr}.{src.id}': cmd}})
+        can_access_command = True
 
-            return await embed_maker.message(ctx, f'{src} has been granted access to: `{cmd}`')
+        if type == 'users':
+            author_perms = ctx.author.guild_permissions
+            member_perms = obj.guild_permissions
+            if author_perms <= member_perms:
+                return await embed_maker.message(ctx, 'You can not manage command access of people who have the same or more permissions as you')
+            # can user run command
+            member_clearance = get_user_clearance(obj)
+            if cmd_obj.clearance not in member_clearance:
+                can_access_command = False
+        elif type == 'roles':
+            top_author_role = ctx.author.roles[-1]
+            top_author_role_perms = top_author_role.permissions
+            role_perms = obj.permissions
+            if top_author_role_perms <= role_perms:
+                return await embed_maker.message(ctx, 'You can not manage command access of a role which has the same or more permissions as you')
 
-        if action == 'remove':
-            if cmd not in data[mr][str(src.id)]:
-                return await embed_maker.message(ctx, f'{src} does not have access to that command', colour='red')
+        if action == 'give':
+            if can_access_command and type == 'users':
+                return await embed_maker.message(ctx, 'User already has access to that command', colour='red')
 
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'{mr}.{src.id}': cmd}})
+            cmds = [c['command'] for c in command_data[type][str(obj.id)] if c['type'] == 'give']
+            if cmd in cmds:
+                return await embed_maker.message(ctx, f'{obj} already has been given access to that command', colour='red')
 
-            return await embed_maker.message(ctx, f'{src} no longer has access to: `{cmd}`')
+            access_dict = {
+                'command': cmd,
+                'type': 'give'
+            }
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'commands.access.{type}.{obj.id}': access_dict}})
+
+            return await embed_maker.message(ctx, f'{obj} has been granted access to: `{cmd}`')
+
+        elif action == 'neutral':
+            cmds = [c['command'] for c in command_data[type][str(obj.id)]]
+            if cmd not in cmds:
+                return await embed_maker.message(ctx, f'{obj} is already neutral on that command', colour='red')
+
+            cmd_obj = [c for c in command_data[type][str(obj.id)] if c['command'] == cmd]
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'commands.access.{type}.{obj.id}': cmd_obj[0]}})
+
+            return await embed_maker.message(ctx, f'{obj} is now neutral on command `{cmd}`')
+
+        elif action == 'take':
+            if not can_access_command and type == 'users':
+                return await embed_maker.message(ctx, 'User already doesn\'t have access to that command', colour='red')
+
+            cmds = [c['command'] for c in command_data[type][str(obj.id)] if c['type'] == 'take']
+            if cmd in cmds:
+                return await embed_maker.message(ctx, f'{obj} has had their access to that command already taken away', colour='red')
+
+            access_dict = {
+                'command': cmd,
+                'type': 'take'
+            }
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'commands.access.{type}.{obj.id}': access_dict}})
+
+            # take away command_access give if it is there
+            cmds = [c['command'] for c in command_data[type][str(obj.id)] if c['type'] == 'give']
+            if cmd in cmds:
+                cmd_obj = [c for c in command_data[type][str(obj.id)] if c['command'] == cmd]
+                db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'commands.access.{type}.{obj.id}': cmd_obj[0]}})
+
+            return await embed_maker.message(ctx, f'{obj} will now not be able to use: `{cmd}`')
 
     @commands.command(help='see what roles are whitelisted for an emote', usage='emote_roles [emote]',
                       examples=['emote_roles :TldrNewsUK:'], clearance='Mod', cls=command.Command)
