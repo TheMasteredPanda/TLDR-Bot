@@ -583,7 +583,7 @@ class Leveling(commands.Cog):
                 if 'left' in user_values:
                     db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{user_id}.left': ''}})
 
-            leaderboard_str += f'***`#{u_rank}`***\* - *{member.display_name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.display_name}'
+            leaderboard_str += f'***`#{u_rank}`***\* - {member.display_name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.display_name}'
 
             if key[0] in ['p', 'h']:
                 user_role_name = user_values[f'{key[0]}_role']
