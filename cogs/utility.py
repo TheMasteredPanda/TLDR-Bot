@@ -195,10 +195,10 @@ class Utility(commands.Cog):
 
     @commands.command(help='Get bot\'s latency', usage='ping', examples=['ping'], clearance='User', cls=command.Command)
     async def ping(self, ctx):
-        before = time.monotonic()
+        message_created_at = ctx.message.created_at
         message = await ctx.send("Pong")
-        ping = (time.monotonic() - before) * 1000
-        await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping)}ms")
+        ping = (datetime.utcnow() - message_created_at) * 1000
+        await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping.total_seconds())}ms")
 
     @commands.command(help='See someones profile picture', usage='pfp (user)',
                       examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'], clearance='User', cls=command.Command)
