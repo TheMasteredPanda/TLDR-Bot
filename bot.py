@@ -279,7 +279,10 @@ class TLDR(commands.Bot):
 
         access_given = []
         access_taken = []
-        if 'commands' in data and 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
+        if 'access' not in data['commands']:
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands.disabled': {'users': {}, 'roles': {}}}})
+
+        if 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
             command_data = data['commands']['access']
             # check if user has special access
             cmd_access_list = []
