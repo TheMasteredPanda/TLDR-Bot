@@ -229,7 +229,7 @@ class TLDR(commands.Bot):
         #             db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{str(list(range(0, 24))[now.hour - 2])}': ''}})
 
         if message.content.startswith(config.PREFIX):
-            await self.process_commands(message)
+            return await self.process_commands(message)
 
         # Starts leveling process
         levels_cog = self.get_cog('Leveling')
@@ -292,8 +292,9 @@ class TLDR(commands.Bot):
             if set([str(r.id) for r in ctx.author.roles]) & set(command_data['roles'].keys()):
                 cmd_access_list += [command_data['roles'][c] for c in command_data['roles'] if c in [str(r.id) for r in message.author.roles]]
 
-            access_given = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'give']
-            access_taken = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'take']
+            if cmd_access_list:
+                access_given = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'give']
+                access_taken = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'take']
 
         if access_taken:
             return await embed_maker.message(ctx, f'Your access to this command has been taken away')
