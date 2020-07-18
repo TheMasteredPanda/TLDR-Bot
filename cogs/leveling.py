@@ -539,16 +539,8 @@ class Leveling(commands.Cog):
         if branch is None:
             return await embed_maker.command_error(ctx)
 
-        key_switch = {
-            'h': 'hp',
-            'p': 'pp',
-            'r': 'reputation'
-        }
-        branch_switch = {
-            'h': 'honours',
-            'p': 'parliamentary',
-            'r': 'reputation'
-        }
+        key_switch = {'h': 'hp', 'p': 'pp', 'r': 'reputation'}
+        branch_switch = {'h': 'honours', 'p': 'parliamentary', 'r': 'reputation'}
         key = key_switch.get(branch[0], 'pp')
         branch = branch_switch.get(branch[0], 'parliamentary')
 
@@ -591,7 +583,7 @@ class Leveling(commands.Cog):
                 if 'left' in user_values:
                     db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{user_id}.left': ''}})
 
-            leaderboard_str += f'***`#{u_rank}`*** - *{member.display_name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.display_name}'
+            leaderboard_str += f'***`#{u_rank}`**** - *{member.display_name}' if user_id == str(ctx.author.id) else f'`#{u_rank}` - {member.display_name}'
 
             if key[0] in ['p', 'h']:
                 user_role_name = user_values[f'{key[0]}_role']
@@ -611,8 +603,6 @@ class Leveling(commands.Cog):
             else:
                 rep = user_values['reputation']
                 leaderboard_str += f' | **{rep} Reputation**'
-
-            leaderboard_str += '*\n' if user_id == str(ctx.author.id) else '\n'
 
             u_rank += 1
 
