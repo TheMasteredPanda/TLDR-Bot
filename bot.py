@@ -333,8 +333,8 @@ class TLDR(commands.Bot):
         print(f'{self.user} is ready')
 
         # run old timers
-        # utils_cog = self.get_cog('Utils')
-        # await utils_cog.run_old_timers()
+        utils_cog = self.get_cog('Utils')
+        await utils_cog.run_old_timers()
 
         for g in self.guilds:
             # Check if guild documents in collections exist if not, it adds them
