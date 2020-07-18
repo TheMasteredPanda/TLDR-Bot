@@ -281,6 +281,7 @@ class TLDR(commands.Bot):
         access_taken = []
         if 'access' not in data['commands']:
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands.disabled': {'users': {}, 'roles': {}}}})
+            data['commands']['access'] = {'users': {}, 'roles': {}}
 
         if 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
             command_data = data['commands']['access']
@@ -332,8 +333,8 @@ class TLDR(commands.Bot):
         print(f'{self.user} is ready')
 
         # run old timers
-        utils_cog = self.get_cog('Utils')
-        await utils_cog.run_old_timers()
+        # utils_cog = self.get_cog('Utils')
+        # await utils_cog.run_old_timers()
 
         for g in self.guilds:
             # Check if guild documents in collections exist if not, it adds them
