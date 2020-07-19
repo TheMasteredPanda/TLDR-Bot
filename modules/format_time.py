@@ -15,10 +15,9 @@ def seconds(sec, *, accuracy=2):
     ret = []
 
     def add(val, long):
-        if val == 0:
+        if val == 0 or len(ret) >= accuracy:
             return
-        if len(ret) >= accuracy:
-            return
+        long += 's' if val > 1 else ''
         ret.append(f'{val} {long}')
 
     round_toward_zero = math.floor if sec > 0 else math.ceil
@@ -28,19 +27,12 @@ def seconds(sec, *, accuracy=2):
         'minutes': round_toward_zero(sec / 60) % 60,
         'seconds': round_toward_zero(sec / 1) % 60
     }
-    add(math.trunc(parsed['days'] / 365), plural(math.trunc(sec / 365), y, "year"))
-    add(parsed['days'] % 365, plural(sec, d, "day"))
-    add(parsed['hours'], plural(sec, h, "hour"))
-    add(parsed['minutes'], plural(sec, m, "minute"))
-    add(parsed['seconds'], plural(sec, 1, "second"))
+    add(math.trunc(parsed['days'] / 365), "year")
+    add(parsed['days'] % 365, "day")
+    add(parsed['hours'], "hour")
+    add(parsed['minutes'], "minute")
+    add(parsed['seconds'], "second")
     return ' '.join(ret)
-
-
-def plural(sec, n, name):
-    sec_abs = abs(sec)
-    is_plural = (sec_abs >= (n * 1.5))
-    plr = f'{name}s' if is_plural else f'{name}'
-    return plr
 
 
 def parse(string=None):
@@ -98,3 +90,6 @@ def parse(string=None):
         }
         tm += switcher.get(ptype, 0)
     return tm
+
+if __name__ == '__main__':
+    print(seconds(122))
