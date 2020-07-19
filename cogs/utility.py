@@ -428,7 +428,7 @@ class Utility(commands.Cog):
             return await embed_maker.message(ctx, 'You cannot have an empty reminder', colour='red')
 
         reminder = reminder.strip()
-        parsed_time = int(format_time.parse(remind_time_str.strip()))
+        parsed_time = format_time.parse(remind_time_str.strip())
         if parsed_time is None:
             return await embed_maker.command_error(ctx, '[time]')
 
