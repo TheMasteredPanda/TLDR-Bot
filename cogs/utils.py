@@ -61,8 +61,8 @@ async def get_member(ctx, bot, source):
 
             description = 'Found multiple users, which one did you mean? `input digit of user`\n\n'
             for i, user in enumerate(members):
-                description += f'`#{i + 1}` | {user}'
-                description += f' - **Nickname:** {user.nick}\n' if user.nick else '\n'
+                description += f'`#{i + 1}` | {user.display_name}#{user.discriminator}'
+                description += f' - **Username:** {user.name}#{user.discriminator}\n' if user.nick else '\n'
 
             users_embed.description = description
 
