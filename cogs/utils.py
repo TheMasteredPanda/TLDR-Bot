@@ -33,7 +33,7 @@ async def get_member(ctx, bot, source):
         member = ctx.message.mentions[0]
 
     # Check if source is user id
-    elif source.isdigit():
+    elif source.isdigit() and len(source) > 10:
         member = ctx.guild.get_member(int(source))
         if member is None:
             try:
