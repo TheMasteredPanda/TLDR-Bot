@@ -551,6 +551,12 @@ class Leveling(commands.Cog):
         if data is None:
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
+        # find out max page number
+        non_left_users = filter(lambda m: 'left' not in data['users'][m], data['users'])
+        max_page_num = math.ceil(len(list(non_left_users)) / 10)
+        if page > max_page_num:
+            return await embed_maker.message(ctx, 'Exceeded maximum page number', colour='red')
+
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
             [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
@@ -560,26 +566,24 @@ class Leveling(commands.Cog):
         user_index = sorted_users.index(user[0]) if user else None
         user_rank = await self.calculate_user_rank(key, ctx.guild.id, ctx.author.id)
 
-        leaderboard_obj = {}
         utils_cog = self.bot.get_cog('Utils')
 
-        async def construct_lb_obj():
+        async def construct_lb_top(pg):
             leaderboard_str = ''
             u_rank = 1
-            pg = 1
-            limit = 1
+            limit = 10
+            p = 1
+            page_start = 1 + (10 * (pg - 1))
             for i, u in enumerate(sorted_users):
-                if limit == 11:
-                    leaderboard_obj[pg] = leaderboard_str
-                    leaderboard_str = ''
-                    limit = 1
-                    pg += 1
+                if i == limit:
+                    return leaderboard_str
 
                 user_id, user_values = u
 
                 member = ctx.guild.get_member(int(user_id))
                 if member is None:
                     if 'left' in user_values:
+                        limit += 1
                         continue
                     try:
                         member = await ctx.guild.fetch_member(int(user_id))
@@ -590,10 +594,17 @@ class Leveling(commands.Cog):
                         await utils_cog.create_timer(
                             expires=expires, guild_id=ctx.guild.id, event='delete_user_data', extras={'user_id': int(user_id)}
                         )
+                        limit += 1
                         continue
                 else:
                     if 'left' in user_values:
                         db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{user_id}.left': ''}})
+
+                if p < page_start:
+                    u_rank += 1
+                    p += 1
+                    limit += 1
+                    continue
 
                 leaderboard_str += f'**`#{u_rank}`**\* - {member.display_name}' if user_id == str(
                     ctx.author.id) else f'`#{u_rank}` - {member.display_name}'
@@ -603,6 +614,7 @@ class Leveling(commands.Cog):
                     user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
 
                     if not user_role_name:
+                        limit += 1
                         continue
 
                     if user_role is None:
@@ -617,9 +629,6 @@ class Leveling(commands.Cog):
                     leaderboard_str += f' | **{rep} Reputation**\n'
 
                 u_rank += 1
-                limit += 1
-
-            leaderboard_obj[pg] = leaderboard_str
 
         async def construct_lb_your_pos(pg):
             your_pos_str = ''
@@ -692,15 +701,12 @@ class Leveling(commands.Cog):
 
         embed_colour = config.EMBED_COLOUR
 
-        await construct_lb_obj()
-        if page > list(leaderboard_obj.keys())[-1]:
-            return await embed_maker.message(ctx, 'Exceeded max page number', colour='red')
-        leaderboard_str = leaderboard_obj[page]
+        leaderboard_str = await construct_lb_top(page)
 
         description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
 
         leaderboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=description)
-        leaderboard_embed.set_footer(text=f'{ctx.author} | Page {page}/{list(leaderboard_obj.keys())[-1]}', icon_url=ctx.author.avatar_url)
+        leaderboard_embed.set_footer(text=f'{ctx.author} | Page {page}/{max_page_num}', icon_url=ctx.author.avatar_url)
         leaderboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
         # Displays user position under leaderboard and users above and below them if user is below position 10
