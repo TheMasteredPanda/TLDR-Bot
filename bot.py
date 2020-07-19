@@ -229,7 +229,7 @@ class TLDR(commands.Bot):
         #             db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{str(list(range(0, 24))[now.hour - 2])}': ''}})
 
         if message.content.startswith(config.PREFIX):
-            return await self.process_commands(message)
+            await self.process_commands(message)
 
         # Starts leveling process
         levels_cog = self.get_cog('Leveling')
@@ -334,8 +334,8 @@ class TLDR(commands.Bot):
         print(f'{self.user} is ready')
 
         # run old timers
-        utils_cog = self.get_cog('Utils')
-        await utils_cog.run_old_timers()
+        # utils_cog = self.get_cog('Utils')
+        # await utils_cog.run_old_timers()
 
         for g in self.guilds:
             # Check if guild documents in collections exist if not, it adds them
