@@ -90,6 +90,3 @@ def parse(string=None):
         }
         tm += switcher.get(ptype, 0)
     return tm
-
-if __name__ == '__main__':
-    print(seconds(122))
