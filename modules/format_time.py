@@ -8,7 +8,7 @@ w = d * 7
 y = d * 365.25
 
 
-def seconds(sec):
+def seconds(sec, *, accuracy=2):
     if sec < 60:
         return f'{sec} seconds'
 
@@ -17,7 +17,7 @@ def seconds(sec):
     def add(val, long):
         if val == 0:
             return
-        if len(ret) > 1:
+        if len(ret) >= accuracy:
             return
         ret.append(f'{val} {long}')
 

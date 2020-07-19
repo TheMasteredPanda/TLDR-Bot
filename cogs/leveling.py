@@ -694,7 +694,7 @@ class Leveling(commands.Cog):
         now = time()
         if 'rep_timer' in levels_user and now < levels_user['rep_timer']:
             rep_time = levels_user['rep_timer'] - round(time())
-            return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time)}**')
+            return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time, accuracy=3)}**')
 
         if mem is None:
             return await embed_maker.command_error(ctx)
