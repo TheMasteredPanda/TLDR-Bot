@@ -6,6 +6,7 @@ import random
 import asyncio
 import os
 import requests
+from bs4 import BeautifulSoup
 from cogs.utils import get_member, get_user_clearance
 from datetime import datetime
 from discord.ext import commands
@@ -69,12 +70,19 @@ class Utility(commands.Cog):
 
     @commands.command(help='See time in any location in the world', usage='time [location]', examples=['time london'],
                       clearance='User', cls=command.Command, name='time')
-    async def time_in(self, ctx, location=None):
+    async def time_in(self, ctx, *, location=None):
         if location is None:
             return await embed_maker.command_error(ctx)
-
-        response = requests.get(f'https://www.time.is/{location}')
-        print(response.content)
+        headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36'}
+        response = requests.get(f'https://www.time.is/{location}', headers=headers)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        error = soup.find('h1', attrs={'class': 'error'})
+        time = soup.find('div', attrs={'id': 'clock0_bg'}).text
+        msg = soup.find('div', attrs={'id': 'msgdiv'}).text
+        if error:
+            return await embed_maker.message(ctx, 'Invalid loaction', colour='red')
+        else:
+            return await embed_maker.message(ctx, f'{msg}is: `{time}`')
 
     @commands.command(help='see your or other user\'s tags', usage='tags (user)', examples=['tags', 'tags hatty'],
                       clearance='User', cls=command.Command)
