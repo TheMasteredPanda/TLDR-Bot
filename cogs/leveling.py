@@ -553,7 +553,7 @@ class Leveling(commands.Cog):
 
         # find out max page number
         non_left_users = filter(lambda m: 'left' not in data['users'][m], data['users'])
-        max_page_num = math.ceil(len(list(non_left_users)) / 10)
+        max_page_num = math.ceil(len(list(non_left_users)) / 10) - 1
         if page > max_page_num:
             return await embed_maker.message(ctx, 'Exceeded maximum page number', colour='red')
 
