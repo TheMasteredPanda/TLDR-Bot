@@ -5,6 +5,7 @@ import re
 import random
 import asyncio
 import os
+import requests
 from cogs.utils import get_member, get_user_clearance
 from datetime import datetime
 from discord.ext import commands
@@ -66,6 +67,15 @@ class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(help='See time in any location in the world', usage='time [location]', examples=['time london'],
+                      clearance='User', cls=command.Command, name='time')
+    async def time_in(self, ctx, location=None):
+        if location is None:
+            return await embed_maker.command_error(ctx)
+
+        response = requests.get(f'https://www.time.is/{location}')
+        print(response.content)
+
     @commands.command(help='see your or other user\'s tags', usage='tags (user)', examples=['tags', 'tags hatty'],
                       clearance='User', cls=command.Command)
     async def tags(self, ctx, user=None):
@@ -104,7 +114,7 @@ class Utility(commands.Cog):
         tag_data = db.tags.find_one({'guild_id': ctx.guild.id})
         if tag_data is None:
             await self.bot.add_collections(ctx.guild.id, 'tags')
-        tags = [t.lower() for t in tag_data if t != 'guild_id' and t != '_id']
+        tags = [t for t in tag_data if t != 'guild_id' and t != '_id']
         if action not in ['create', 'claim', 'edit', 'remove']:
             tag = action
             tag = await filter_tags(ctx, self.bot, tags, tag)
