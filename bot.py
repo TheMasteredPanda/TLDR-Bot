@@ -459,6 +459,13 @@ class TLDR(commands.Bot):
             except:
                 # Delete user levels data
                 db.levels.update_one({'guild_id': guild_id}, {'$unset': {f'users.{user_id}': ''}})
+                # Delete user boosts
+                db.server_data.update_one({'guild_id': guild.id}, {'$unset': {f'boost.users.{user_id}': ''}})
+                # remove command access data
+                db.server_data.update_one({'guild_id': guild.id}, {'$unset': {f'commands.access.users.{user_id}': ''}})
+                # remove user from watchlist
+                db.server_data.update_one({'guild_id': guild.id}, {'$pull': {f'watchlist.on_list': user_id}})
+                db.server_data.update_one({'guild_id': guild.id}, {'$unset': {f'watchlist.filters.{user_id}': ''}})
 
     async def close(self):
         await super().close()
