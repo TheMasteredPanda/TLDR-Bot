@@ -3,6 +3,7 @@ import os
 import config
 import traceback
 import time
+import re
 from cogs.utils import get_user_clearance
 from modules import embed_maker
 from datetime import datetime
@@ -230,6 +231,38 @@ class TLDR(commands.Bot):
 
         if message.content.startswith(config.PREFIX):
             await self.process_commands(message)
+
+        server_data = db.server_data.find_one({'guild_id': message.guild.id})
+        if 'watchlist' in server_data:
+            if 'filters' not in server_data['watchlist']:
+                db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {'watchlist.filters': {}}})
+                server_data['watchlist']['filters'] = {}
+            filters = server_data['watchlist']['filters']
+            on_list = server_data['watchlist']['on_list']
+            channel_id = server_data['watchlist']['channel_id']
+            if message.author.id in on_list and channel_id:
+                channel = self.get_channel(int(channel_id))
+                if channel:
+                    embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
+                    embed.set_author(name=f'{message.author}', icon_url=message.author.avatar_url)
+                    embed.set_footer(text=f'message id: {message.id}', icon_url=message.guild.icon_url)
+
+                    embed.description = f'{message.content}\n[Link]({message.jump_url})'
+
+                    content = ''
+                    if str(message.author.id) in filters:
+                        for f in filters[str(message.author.id)]:
+                            regex = re.compile(fr'({f})')
+                            match = re.findall(regex, str(message.content))
+                            if match:
+                                content = f'<@{config.MOD_ROLE_ID}> - Filter Match: {f}'
+                                break
+
+
+                    try:
+                        await channel.send(embed=embed, content=content)
+                    except:
+                        pass
 
         # Starts leveling process
         levels_cog = self.get_cog('Leveling')

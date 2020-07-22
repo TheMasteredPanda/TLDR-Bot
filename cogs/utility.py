@@ -1010,7 +1010,7 @@ class Utility(commands.Cog):
     async def source(self, ctx, *, command=None):
         u = '\u200b'
         if not command:
-            return await embed_maker.message(ctx, 'Check out the full sourcecode on GitHub\nhttps://github.com/Hattyot/TLDR-Bot')
+            return await embed_maker.message(ctx, 'Check out the full sourcecode on GitHub\nhttps://github.com/Hattyot/TLDR-Bot/tree/1.5.2')
 
         src = f"```py\n{str(__import__('inspect').getsource(self.bot.get_command(command).callback)).replace('```', f'{u}')}```"
         if len(src) > 2000:
@@ -1021,7 +1021,7 @@ class Utility(commands.Cog):
             location = os.path.relpath(file)
             total, fl = __import__('inspect').getsourcelines(cmd)
             ll = fl + (len(total) - 1)
-            return await embed_maker.message(ctx, f"This code was too long for Discord, you can see it instead [on GitHub](https://github.com/Hattyot/TLDR-Bot/blob/master/{location}#L{fl}-L{ll})")
+            return await embed_maker.message(ctx, f"This code was too long for Discord, you can see it instead [on GitHub](https://github.com/Hattyot/TLDR-Bot/blob/1.5.2/{location}#L{fl}-L{ll})")
         else:
             await ctx.send(src)
 

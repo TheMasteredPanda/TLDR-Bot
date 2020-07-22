@@ -16,6 +16,97 @@ class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(help='add (or remove) a user to the watchlist and log all their messages to a channel. You can also add filters to ping mods when a certain thing is said',
+                      examples=['watchlist add @hattyot', 'watchlist remove @hattyot', 'watchlist set_channel #watchlist', 'watchlist add_filters @hattyot filter1 | filter2'],
+                      clearance='Dev', cls=command.Command, usage='watchlist [action] [user/channel] (extra)')
+    async def watchlist(self, ctx, action=None, src=None, *, filters=None):
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'watchlist' not in data:
+            schema = {'on_list': [], 'channel_id': 0}
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'watchlist': schema}})
+            data['watchlist'] = schema
+        if action is None:
+            on_list = data['watchlist']['on_list']
+            colour = config.EMBED_COLOUR
+            list_embed = discord.Embed(colour=colour, timestamp=datetime.datetime.now())
+            list_embed.set_author(name='Users on the watchlist')
+
+            on_list_str = ''
+            for i, user_id in enumerate(on_list):
+                user = ctx.guild.get_member(int(user_id))
+                if user is None:
+                    try:
+                        user = await ctx.guild.fetch_member(int(user_id))
+                    except:
+                        db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'watchlist.on_list': user_id}})
+                        continue
+                on_list_str += f'`#{i + 1}` - {str(user)}'
+
+            if not on_list_str:
+                list_embed.description = 'Currently no users on the watchlist'
+                return await ctx.send(embed=list_embed)
+            else:
+                list_embed.description = on_list_str
+                return await ctx.send(embed=list_embed)
+
+        if action not in ['add', 'remove', 'add_filters', 'set_channel']:
+            return await embed_maker.command_error(ctx)
+
+        if src is None:
+            return await embed_maker.command_error(ctx)
+
+        server_data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        on_list = server_data['watchlist']['on_list']
+
+        if action == 'add':
+            member = await get_member(ctx, self.bot, src)
+            if member is None:
+                return await embed_maker.message(ctx, 'Invalid member', colour='red')
+
+            if member.id in on_list:
+                return await embed_maker.message(ctx, 'User is already on the list', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'watchlist.on_list': member.id}})
+            return await embed_maker.message(ctx, f'<@{member.id}> has been added to the watchlist', colour='green')
+
+        elif action == 'remove':
+            member = await get_member(ctx, self.bot, src)
+            if member is None:
+                return await embed_maker.message(ctx, 'Invalid member', colour='red')
+
+            if member.id not in on_list:
+                return await embed_maker.message(ctx, 'User is not on the list', colour='red')
+
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'watchlist.on_list': member.id}})
+            return await embed_maker.message(ctx, f'<@{member.id}> has been removed from the watchlist', colour='green')
+
+        elif action == 'add_filters':
+            member = await get_member(ctx, self.bot, src)
+            if member is None:
+                return await embed_maker.message(ctx, 'Invalid member', colour='red')
+
+            if member.id not in on_list:
+                return await embed_maker.message(ctx, 'User is not on the list', colour='red')
+
+            if filters is None:
+                return await embed_maker.command_error('Filters missing')
+
+            all_filters = server_data['watchlist']['filters']
+            split_filters = [f.strip() for f in filters.split('|')]
+            if all_filters:
+                split_filters += all_filters
+
+            db.server_data.update({'guild_id': ctx.guild.id}, {'$set': {f'watchlist.filters.{member.id}': split_filters}})
+            return await embed_maker.message(ctx, f'if member mentions {" or ".join(f"`{f}`" for f in split_filters)} mods will be @\'d', colour='green')
+
+        elif action == 'set_channel':
+            if not ctx.message.channel_mentions:
+                return await embed_maker.message(ctx, 'Invalid channel', colour='red')
+            channel = ctx.message.channel_mentions[0]
+            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'watchlist.channel_id': channel.id}})
+
+            return await embed_maker.message(ctx, f'The watchlist channel has been set to: <#{channel.id}>', colour='green')
+
     @commands.command(help='Warn mods when a channel has a message spike (5 messages in a minute)',
                       usage='message_spike [#channel/disable]', examples=['message_spike #staff', 'message_spike disable'],
                       clearance='Dev', cls=command.Command)

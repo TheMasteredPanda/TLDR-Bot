@@ -68,13 +68,6 @@ schemas = {
         'rep_timer': 0
     },
     'server_data': {
-        'messages': {
-            # 'channel_id': {
-            #     'hour': {
-            #         'minute': 0
-            #     }
-            # }
-        },
         'commands': {
             'disabled': [],
             'access': {
@@ -99,6 +92,13 @@ schemas = {
             #     'name': '',
             #     'roles': [{'emote': 'emote', 'role_id': 'role id', 'message': 'msg'}]
             # }
+        },
+        'watchlist': {
+            'on_list': [],
+            'filters': {
+                # 'user_id': []
+            },
+            'channel_id': 0  # channel id
         }
     },
     'tags': {
