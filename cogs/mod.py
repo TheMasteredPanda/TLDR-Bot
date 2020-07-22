@@ -78,7 +78,9 @@ class Mod(commands.Cog):
                 return await embed_maker.message(ctx, 'User is not on the list', colour='red')
 
             db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'watchlist.on_list': member.id}})
-            if str(member.id) in filters:
+
+            all_filters = server_data['watchlist']['filters']
+            if str(member.id) in all_filters:
                 db.server_data.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'watchlist.filters.{member.id}': ''}})
 
             return await embed_maker.message(ctx, f'<@{member.id}> has been removed from the watchlist', colour='green')
