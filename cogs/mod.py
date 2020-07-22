@@ -18,7 +18,7 @@ class Mod(commands.Cog):
 
     @commands.command(help='add (or remove) a user to the watchlist and log all their messages to a channel. You can also add filters to ping mods when a certain thing is said',
                       examples=['watchlist add @hattyot', 'watchlist remove @hattyot', 'watchlist set_channel #watchlist', 'watchlist add_filters @hattyot filter1 | filter2'],
-                      clearance='Dev', cls=command.Command, usage='watchlist [action] [user/channel] (extra)')
+                      clearance='Admin', cls=command.Command, usage='watchlist [action] [user/channel] (extra)')
     async def watchlist(self, ctx, action=None, src=None, *, filters=None):
         data = db.server_data.find_one({'guild_id': ctx.guild.id})
         if 'watchlist' not in data:
