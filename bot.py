@@ -255,7 +255,7 @@ class TLDR(commands.Bot):
                             regex = re.compile(fr'({f})')
                             match = re.findall(regex, str(message.content))
                             if match:
-                                content = f'<@{config.MOD_ROLE_ID}> - Filter Match: {f}'
+                                content = f'<@&{config.MOD_ROLE_ID}> - Filter Match: `{f}`'
                                 break
 
 
