@@ -65,7 +65,8 @@ schemas = {
             '@_me': False  # setting to check if user wants to be @'d when they level up
         },
         'reputation': 0,
-        'rep_timer': 0
+        'rep_timer': 0,
+        'rep_history': []
     },
     'server_data': {
         'commands': {
