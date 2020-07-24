@@ -16,7 +16,12 @@ db = database.Connection()
 
 
 async def filter_tags(ctx, bot, tags, tag_name):
+    print(tags, tag_name)
     regex = re.compile(fr'({tag_name.lower()})')
+
+    filtered_tags = list(filter(lambda t: t == tag_name, tags))
+    if len(filtered_tags) == 1:
+        return [filtered_tags[0]]
 
     filtered_tags = list(filter(lambda t: t.lower() == tag_name.lower(), tags))
     if not filtered_tags:
