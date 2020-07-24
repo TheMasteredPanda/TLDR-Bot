@@ -720,7 +720,7 @@ class Leveling(commands.Cog):
         await ctx.send(embed=leaderboard_embed)
 
     @commands.command(help='See the history of your reps, who gave you rep points and why', usage='reps (page)',
-                      examples=['reps', 'reps 2'], clearance='User', cls=command.Command, aliases=['reputations', 'rep_history'])
+                      examples=['reps', 'reps 2'], clearance='Dev', cls=command.Command, aliases=['reputations', 'rep_history'])
     async def reps(self, ctx, *, page='1'):
         if not page.isdigit():
             author_clearance = get_user_clearance(ctx.author)
@@ -786,9 +786,9 @@ class Leveling(commands.Cog):
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         levels_user = data['users'][str(ctx.author.id)]
         now = time()
-        # if 'rep_timer' in levels_user and now < levels_user['rep_timer']:
-        #     rep_time = levels_user['rep_timer'] - round(time())
-        #     return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time, accuracy=3)}**')
+        if 'rep_timer' in levels_user and now < levels_user['rep_timer']:
+            rep_time = levels_user['rep_timer'] - round(time())
+            return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time, accuracy=3)}**')
 
         if mem is None:
             return await embed_maker.command_error(ctx)
@@ -810,8 +810,8 @@ class Leveling(commands.Cog):
         if round(diff.total_seconds()) < 86400 * 5:  # 5 days
             return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points', colour='red')
 
-        # if member.id == ctx.author.id:
-        #     return await embed_maker.message(ctx, f'You can\'t give rep points to yourself', colour='red')
+        if member.id == ctx.author.id:
+            return await embed_maker.message(ctx, f'You can\'t give rep points to yourself', colour='red')
 
         if member.bot:
             return await embed_maker.message(ctx, f'You can\'t give rep points to bots', colour='red')
@@ -831,21 +831,21 @@ class Leveling(commands.Cog):
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time()) + 86400  # 24 hours
-        # db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})
 
         # give user rep point
-        # db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.reputation': 1}})
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.reputation': 1}})
 
         # log who author repped
-        # db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.last_rep': member.id}})
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.last_rep': member.id}})
 
-        # log to rep_history
-        rep_history_obj = {
-            'timestamp': now,
-            'user_id': ctx.author.id,
-            'reason': reason
-        }
-        db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'users.{member.id}.rep_history': rep_history_obj}})
+        # # log to rep_history
+        # rep_history_obj = {
+        #     'timestamp': now,
+        #     'user_id': ctx.author.id,
+        #     'reason': reason
+        # }
+        # db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'users.{member.id}.rep_history': rep_history_obj}})
 
         await embed_maker.message(ctx, f'Gave +1 rep to <@{member.id}>')
 
@@ -856,24 +856,24 @@ class Leveling(commands.Cog):
         embed.set_author(name='Rep')
         await member.send(embed=embed)
 
-        # # check if user already has rep boost, if they do, extend it by 30 minutes
-        # if 'boost' in data and str(member.id) in data['boost']['users']:
-        #     boosts = [b for b in data['boost']['users'][str(member.id)] if b['type'] == 'rep']
-        #     if boosts:
-        #         boost_expire = boosts[0]['expires']
-        #         if boost_expire < round(time()) or (boost_expire + 1800) - round(time()) > (3600 * 6):
-        #             expire = round(time()) + (3600 * 6)
-        #         else:
-        #             expire = boost_expire + 1800  # 30 min
-        #         return db.levels.update_one({'guild_id': ctx.guild.id, f'boost.users.{member.id}.type': 'rep'}, {'$set': {f'boost.users.{member.id}.$.expires': expire}})
-        #
-        # # give user 7.5% xp boost for 6 hours
-        # boost_dict = {
-        #     'expires': round(time()) + (3600 * 6),
-        #     'multiplier': 0.075,
-        #     'type': 'rep'
-        # }
-        # db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
+        # check if user already has rep boost, if they do, extend it by 30 minutes
+        if 'boost' in data and str(member.id) in data['boost']['users']:
+            boosts = [b for b in data['boost']['users'][str(member.id)] if b['type'] == 'rep']
+            if boosts:
+                boost_expire = boosts[0]['expires']
+                if boost_expire < round(time()) or (boost_expire + 1800) - round(time()) > (3600 * 6):
+                    expire = round(time()) + (3600 * 6)
+                else:
+                    expire = boost_expire + 1800  # 30 min
+                return db.levels.update_one({'guild_id': ctx.guild.id, f'boost.users.{member.id}.type': 'rep'}, {'$set': {f'boost.users.{member.id}.$.expires': expire}})
+
+        # give user 7.5% xp boost for 6 hours
+        boost_dict = {
+            'expires': round(time()) + (3600 * 6),
+            'multiplier': 0.075,
+            'type': 'rep'
+        }
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
 
     @commands.command(help='Shows your (or someone else\'s) rank and level',
                       usage='rank (member)', examples=['rank', 'rank @Hattyot', 'rank Hattyot'],
