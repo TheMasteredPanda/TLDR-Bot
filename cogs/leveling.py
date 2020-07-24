@@ -633,7 +633,7 @@ class Leveling(commands.Cog):
         async def construct_lb_your_pos(pg):
             your_pos_str = ''
             for i in range(-1, 2):
-                if user_index == pg * 10 and i == -1:
+                if user_rank == pg * 10 and i == -1:
                     continue
 
                 if i == -1:
@@ -710,7 +710,7 @@ class Leveling(commands.Cog):
         leaderboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
         # Displays user position under leaderboard and users above and below them if user is below position 10
-        if user_rank is None or user_rank + 1 <= page * 10:
+        if user_rank is None or user_rank <= page * 10:
             return await ctx.send(embed=leaderboard_embed)
         else:
             your_pos_str = await construct_lb_your_pos(page)
