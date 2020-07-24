@@ -719,9 +719,9 @@ class Leveling(commands.Cog):
 
         lb_msg = await ctx.send(embed=leaderboard_embed)
 
-    @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member]',
-                      examples=['rep @Hattyot'], clearance='User', cls=command.Command, aliases=['reputation'])
-    async def rep(self, ctx, mem=None):
+    @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member] [reason for the rep]',
+                      examples=['rep @Hattyot for being an excellent example in this text'], clearance='User', cls=command.Command, aliases=['reputation'])
+    async def rep(self, ctx, mem=None, *, reason=None):
         # check if user can give rep point
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         levels_user = data['users'][str(ctx.author.id)]
@@ -732,6 +732,9 @@ class Leveling(commands.Cog):
 
         if mem is None:
             return await embed_maker.command_error(ctx)
+
+        if reason is None:
+            return await embed_maker.command_error(ctx, '[reason for the rep]')
 
         member = await get_member(ctx, self.bot, mem)
 
@@ -777,6 +780,13 @@ class Leveling(commands.Cog):
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.last_rep': member.id}})
 
         await embed_maker.message(ctx, f'Gave +1 rep to <@{member.id}>')
+
+        # send receiving user rep reason
+        msg = f'<@{ctx.author.id}> gave you a reputation point because: **"{reason}"**'
+        embed = discord.Embed(colour=config.EMBED_COLOUR, description=msg, timestamp=datetime.now())
+        embed.set_footer(text=f'{ctx.guild.name}', icon_url=ctx.guild.icon_url)
+        embed.set_author(name='Rep')
+        await member.send(embed=embed)
 
         # check if user already has rep boost, if they do, extend it by 30 minutes
         if 'boost' in data and str(member.id) in data['boost']['users']:
