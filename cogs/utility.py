@@ -171,6 +171,9 @@ class Utility(commands.Cog):
             db.tags.update_one({'guild_id': ctx.guild.id}, {'$set': {f'{tag}': tag_obj}})
             return await embed_maker.message(ctx, f'Tag {tag} has been successfully created.', colour='green')
 
+        if tag is None:
+            return await embed_maker.message(ctx, 'Missing tag name', colour='red')
+
         tag = await filter_tags(ctx, self.bot, tags, tag)
         if tag is None:
             return await embed_maker.message(ctx, 'That tag doesn\'t exist', colour='red')
