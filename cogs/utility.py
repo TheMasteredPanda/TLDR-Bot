@@ -454,7 +454,7 @@ class Utility(commands.Cog):
         utils_cog = self.bot.get_cog('Utils')
         await utils_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='reminder', extras={'reminder': reminder, 'member_id': ctx.author.id})
 
-        return await embed_maker.message(ctx, f'Alright, in {format_time.seconds(parsed_time)} I will remind you: {reminder}')
+        return await embed_maker.message(ctx, f'Alright, in {format_time.seconds(parsed_time, accuracy=10)} I will remind you: {reminder}')
 
     @commands.Cog.listener()
     async def on_reminder_timer_over(self, timer):
