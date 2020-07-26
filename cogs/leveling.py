@@ -870,7 +870,7 @@ class Leveling(commands.Cog):
         # give user 7.5% xp boost for 6 hours
         boost_dict = {
             'expires': round(time()) + (3600 * 6),
-            'multiplier': 0.075,
+            'multiplier': 0.1,
             'type': 'rep'
         }
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
