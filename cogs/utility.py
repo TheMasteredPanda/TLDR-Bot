@@ -229,7 +229,7 @@ class Utility(commands.Cog):
     @commands.command(help='See someones profile picture', usage='pfp (user)',
                       examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'], clearance='User', cls=command.Command)
     async def pfp(self, ctx, member=None):
-        member = self.get_member(ctx, member)
+        member = await get_member(ctx, self.bot, member)
         if member is None:
             member = ctx.author
 
