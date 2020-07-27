@@ -5,6 +5,8 @@ import logging
 import psutil
 import urllib.request
 import copy
+import time
+import traceback
 from discord.ext import commands
 from config import DEV_IDS
 from modules import database, command, embed_maker
@@ -35,6 +37,37 @@ def insert_returns(body):
 class Dev(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(hidden=True, help='Time a command', usage='time_cmd [command]', examples=['time_cmd lb'],
+                      clearance='Dev', cls=command.Command)
+    async def time_cmd(self, ctx, *, cmd=None):
+        if cmd is None:
+            return await embed_maker.command_error(ctx)
+
+        cmd_obj = self.bot.get_command(cmd)
+        if cmd_obj is None:
+            return await embed_maker.message(ctx, 'Invalid command', colour='red')
+
+        msg = copy.copy(ctx.message)
+        msg.content = ctx.prefix + cmd
+        new_ctx = await self.bot.get_context(msg, cls=type(ctx))
+
+        start = time.perf_counter()
+        try:
+            await new_ctx.command.invoke(new_ctx)
+        except commands.CommandError:
+            end = time.perf_counter()
+            success = False
+            try:
+                await ctx.send(f'```py\n{traceback.format_exc()}\n```')
+            except discord.HTTPException:
+                pass
+        else:
+            end = time.perf_counter()
+            success = True
+
+        colour='green' if success else 'red'
+        await embed_maker.message(ctx, f'Success: {success} | Time: {(end - start) * 1000:.2f}ms', colour=colour)
 
     @commands.command(hidden=True, help='Run any command as another user', usage='sudo [user] [command]',
                       examples=['sudo hattyot lb'], clearance='Dev', cls=command.Command)
