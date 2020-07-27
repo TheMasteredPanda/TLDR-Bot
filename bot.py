@@ -215,7 +215,8 @@ class TLDR(commands.Bot):
         # checks if message was sent in pms
         if message.guild is None:
             pm_cog = self.get_cog('PrivateMessages')
-            return await pm_cog.process_pm(message)
+            ctx = await self.get_context(message)
+            return await pm_cog.process_pm(ctx)
 
         if message.content.startswith(config.PREFIX):
             await self.process_commands(message)

@@ -14,20 +14,21 @@ class PrivateMessages(commands.Cog):
         self.bot = bot
         # when get __getattribute__ is called, instead of people needing to call pm_help, they can call help
         self.help = self.pm_help
-        self.commands = ['help', 'report_user', 'report_issue', 'appeal_decision']
+        self.commands = ['help', 'report_issue']
 
-    async def process_pm(self, message):
-        cmd, args = self.parse_msg(message)
+    async def process_pm(self, ctx):
+        cmd, args = self.parse_msg(ctx)
         try:
             called_cmd = self.__getattribute__(cmd)
-            return await called_cmd(message, args)
-        except AttributeError:
-            if message.content.startswith(config.PREFIX):
-                return await self.pm_help(message, args)
+            return await called_cmd(ctx, args)
+        except AttributeError as e:
+            print(e)
+            if ctx.message.content.startswith(config.PREFIX):
+                return await self.pm_help(ctx, args)
 
     @staticmethod
-    def parse_msg(message):
-        content = message.content
+    def parse_msg(ctx):
+        content = ctx.message.content
         content_list = content.split(' ')
 
         cmd = content_list[0].replace(config.PREFIX, '')
@@ -74,8 +75,13 @@ class PrivateMessages(commands.Cog):
     @commands.command(dm_only=True, help='Report an issue you have with the server or with a user', usage='report_issue [issue]',
                       examples=['report_issue member hattyot is breaking cg1'], cls=command.Command)
     async def report_issue(self, ctx, issue=None, _=None):
-        if issue is None:
-            return await embed_maker.command_error(ctx)
+        if not issue:
+            command = ctx.command
+            examples_str = '\n'.join(command.examples)
+            description = f'**Description:** {command.help}\n**Usage:** {command.usage}\n**Examples:** {examples_str}'
+            embed = discord.Embed(colour=discord.Colour.orange(), description=description, title=f'>{command.name}', timestamp=datetime.now())
+            embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+            return await ctx.author.send(embed=embed)
 
         embed_colour = config.EMBED_COLOUR
         if len(issue) > 1700:
