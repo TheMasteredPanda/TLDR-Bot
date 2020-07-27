@@ -2,10 +2,10 @@ import discord
 import re
 import requests
 import config
-import random
 import json
 import aiohttp
 import asyncio
+from cogs.utils import get_member
 from wand.image import Image as Wand
 from io import BytesIO
 from modules import command, embed_maker
@@ -18,36 +18,35 @@ class Fun(commands.Cog):
 
     @commands.command(help='put they gay pride flag on your profile picture', usage='pride', examples=['pride'],
                       clearance='User', cls=command.Command)
-    async def pride(self, ctx, source=None):
+    async def pride(self, ctx, *, source=None):
         url = None
-        mem = None
 
         # check for attachments
         if ctx.message.attachments:
             url = ctx.message.attachments[0].url
 
-        # check if source is member
-        if source and ctx.message.mentions:
-            mem = ctx.message.mentions[0]
-        elif source:
-            # check if source is emote
-            emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
-            match = re.findall(emote_regex, source)
-            if match:
-                emote_id = match[0]
-                url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
-            else:
-                # Check if source is member name or id
-                regex = re.compile(fr'({source.lower()})')
-                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
-                if mem is None:
+        if source is None and url is None:
+            url = str(ctx.author.avatar_url)
+            url = url.replace('webp', 'png')
+        elif url is None:
+            # check if source is member
+            mem = await get_member(ctx, self.bot, source)
+            if mem is None or isinstance(mem, str):
+                # check if source is emote
+                emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
+                match = re.findall(emote_regex, source)
+                if match:
+                    emote_id = match[0]
+                    url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
+                else:
+                    # take source as url
                     url = source
+            else:
+                url = str(mem.avatar_url)
+                url = url.replace('webp', 'png')
 
-        if source is None:
-            mem = ctx.author
-
-        if mem and url is None:
-            url = str(mem.avatar_url).replace('webp', 'png')
+        if url is None:
+            return
 
         if config.WEB_API_URL:
             async with aiohttp.ClientSession() as session:
@@ -82,7 +81,7 @@ class Fun(commands.Cog):
 
     async def do_pride(self, ctx, url):
         async with aiohttp.ClientSession() as session:
-            image_task = asyncio.create_task(self.fetch_image(session, f'{config.WEB_API_URL}/pride?img={url}'))
+            image_task = asyncio.create_task(self.fetch_image(session, url))
             content = await image_task
 
         if not content:
@@ -118,46 +117,25 @@ class Fun(commands.Cog):
 
         return buffer
 
-    def get_random_image(self, url, json_key):
-        response = requests.get(url)
-        json_text = response.text.encode("ascii", "ignore").decode('ascii')
-
-        img_url = json.loads(json_text)[json_key]
-        # get image extension
-        split = img_url.split('.')
-        extension = split[-1]
-
-        allowed_extensions = ['jpg', 'jpeg', 'png', 'gif']
-        while extension not in allowed_extensions:
-            return self.get_random_image(url, json_key)
-
-        image_response = requests.get(img_url)
-        image = BytesIO(image_response.content)
-        image.seek(0)
-
-        return image, extension
-
     @commands.command(help='Gets a random dog image', usage='dog', examples=['dog'],
                       clearance='User', cls=command.Command)
     async def dog(self, ctx):
         url = 'https://random.dog/woof.json'
-        image, extension = self.get_random_image(url, 'url')
+        response = requests.get(url)
+        json_text = response.text.encode("ascii", "ignore").decode('ascii')
+        img_url = json.loads(json_text)['url']
 
-        embed = discord.Embed()
-        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        embed.set_image(url=f'attachment://cat.{extension}')
-        return await ctx.send(file=discord.File(fp=image, filename=f'cat.{extension}'), embed=embed)
+        return await ctx.send(img_url)
 
     @commands.command(help='Gets a random cat image', usage='cat', examples=['cat'],
                       clearance='User', cls=command.Command)
     async def cat(self, ctx):
-        url = 'http://aws.random.cat/meow'
-        image, extension = self.get_random_image(url, 'file')
+        url = 'https://api.thecatapi.com/v1/images/search'
+        response = requests.get(url)
+        json_text = response.text.encode("ascii", "ignore").decode('ascii')
+        img_url = json.loads(json_text)[0]['url']
 
-        embed = discord.Embed()
-        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        embed.set_image(url=f'attachment://cat.{extension}')
-        return await ctx.send(file=discord.File(fp=image, filename=f'cat.{extension}'), embed=embed)
+        return await ctx.send(img_url)
 
     @commands.command(help='Gets a random dad joke', usage='dadjoke', examples=['dadjoke'],
                       clearance='User', cls=command.Command)
@@ -171,40 +149,35 @@ class Fun(commands.Cog):
     @commands.command(help='Distort images or peoples profile pictures', usage='distort [image link | @Member]',
                       examples=['disort https://i.imgur.com/75Jr3.jpg', 'distort @Hattyot', 'distort Hattyot'],
                       clearance='User', cls=command.Command)
-    async def distort(self, ctx, source=None):
+    async def distort(self, ctx, *, source=None):
         url = None
-        mem = None
 
         # check for attachments
         if ctx.message.attachments:
             url = ctx.message.attachments[0].url
 
-        # check if source is member
-        if source and ctx.message.mentions:
-            mem = ctx.message.mentions[0]
-        elif source:
-            # check if source is emote
-            emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
-            match = re.findall(emote_regex, source)
-            if match:
-                emote_id = match[0]
-                url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
-            else:
-                # Check if source is member name or id
-                regex = re.compile(fr'({source.lower()})')
-                mem = discord.utils.find(lambda m: re.findall(regex, m.name.lower()) or re.findall(regex, m.display_name.lower()) or m.id == source, ctx.guild.members)
-                if mem is None:
+        if source is None and url is None:
+            url = str(ctx.author.avatar_url)
+            url = url.replace('webp', 'png')
+        elif url is None:
+            # check if source is member
+            mem = await get_member(ctx, self.bot, source)
+            if mem is None or isinstance(mem, str):
+                # check if source is emote
+                emote_regex = re.compile(r'<:[a-zA-Z0-9_]+:([0-9]+)>$')
+                match = re.findall(emote_regex, source)
+                if match:
+                    emote_id = match[0]
+                    url = f'https://cdn.discordapp.com/emojis/{emote_id}.png'
+                else:
+                    # take source as url
                     url = source
+            else:
+                url = str(mem.avatar_url)
+                url = url.replace('webp', 'png')
 
-        if source is None:
-            mem = ctx.author
-
-        # Choose a random member
-        if source == 'random':
-            mem = random.choice(ctx.guild.members)
-
-        if mem and url is None:
-            url = str(mem.avatar_url).replace('webp', 'png')
+        if url is None:
+            return
 
         if config.WEB_API_URL:
             async with aiohttp.ClientSession() as session:

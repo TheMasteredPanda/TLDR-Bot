@@ -1,6 +1,8 @@
 import discord
 import config
 import re
+import math
+from cogs.utils import get_member, get_user_clearance
 from datetime import datetime
 from time import time
 from discord.ext import commands
@@ -65,7 +67,7 @@ class Leveling(commands.Cog):
         err = ''
         suc = ''
         if source_type == 'role' and 'roles' in data['boost']:
-            if str(boost_remove.id) in data['boost']['roles']:
+            if str(boost_remove.id) in data['boost']['roles'] and data['boost']['roles'][str(boost_remove.id)]:
                 db.levels.update_one(
                     {'guild_id': ctx.guild.id},
                     {'$unset': {f'boost.roles.{boost_remove.id}': ''}}
@@ -81,7 +83,7 @@ class Leveling(commands.Cog):
                     err = 'No boost is active for everyone'
 
         elif source_type == 'user' and 'users' in data['boost']:
-            if str(boost_remove.id) in data['boost']['users']:
+            if str(boost_remove.id) in data['boost']['users'] and data['boost']['users'][str(boost_remove.id)]:
                 latest_boost = data['boost']['users'][f'{boost_remove.id}'][-1]
                 db.levels.update_one(
                     {'guild_id': ctx.guild.id},
@@ -435,16 +437,13 @@ class Leveling(commands.Cog):
         new_hp = amount + user_hp
 
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.hp': new_hp}})
-        print(levels_user)
         levels_user['hp'] = new_hp
-        print(levels_user)
 
         await embed_maker.message(
             ctx, f'**{member.name}** has been awarded **{amount} honours points**',
             colour='green'
         )
         if levels_user['hp'] == 0:
-            print('here')
             leveling_routes = data['leveling_routes']
 
             # gets the name of the first honours role
@@ -493,11 +492,17 @@ class Leveling(commands.Cog):
         return await embed_maker.message(ctx, msg, colour=colour)
 
     @commands.command(help='See current leveling routes', usage='leveling_routes',
-                      examples=['leveling_routes'], clearance='User', cls=command.Command)
+                      examples=['leveling_routes'], clearance='User', cls=command.Command, aliases=['ranks'])
     async def leveling_routes(self, ctx, branch='parliamentary'):
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         if data is None:
             data = self.bot.add_collections(ctx.guild.id, 'levels')
+
+        branch_switch = {
+            'h': 'honours',
+            'p': 'parliamentary'
+        }
+        branch = branch_switch.get(branch[0], 'parliamentary')
 
         leveling_routes = data['leveling_routes']
         embed_colour = config.EMBED_COLOUR
@@ -531,149 +536,289 @@ class Leveling(commands.Cog):
                       usage='leaderboard (branch)', aliases=['lb'],
                       examples=['leaderboard parliamentary', 'leaderboard honours'], clearance='User',
                       cls=command.Command)
-    async def leaderboard(self, ctx, branch='parliamentary'):
+    async def leaderboard(self, ctx, branch='parliamentary', page=1):
         if branch is None:
             return await embed_maker.command_error(ctx)
 
-        branch = 'honours' if branch in ['h', 'honours'] else 'parliamentary'
-        pre = 'h' if branch == 'honours' else 'p'
+        key_switch = {'h': 'hp', 'p': 'pp', 'r': 'reputation'}
+        branch_switch = {'h': 'honours', 'p': 'parliamentary', 'r': 'reputation'}
+        key = key_switch.get(branch[0], 'pp')
+        if branch.isdigit():
+            page = int(branch)
+        branch = branch_switch.get(branch[0], 'parliamentary')
 
-        # creates pipeline that reduces data to only user id and key
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         if data is None:
             data = self.bot.add_collections(ctx.guild.id, 'levels')
 
+        # find out max page number
+        non_left_users = filter(lambda m: 'left' not in data['users'][m], data['users'])
+        max_page_num = math.ceil(len(list(non_left_users)) / 10) - 1
+        if page > max_page_num:
+            return await embed_maker.message(ctx, 'Exceeded maximum page number', colour='red')
+
         # Sorts users and takes out people who's pp or hp is 0
         sorted_users = sorted(
-            [(u, data['users'][u]) for u in data['users'] if f'{pre}p' in data['users'][u] and data['users'][u][f'{pre}p'] > 0],
-            key=lambda x: x[1][f'{pre}p'], reverse=True
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
+            key=lambda x: x[1][key], reverse=True
         )
         user = [u for u in sorted_users if u[0] == str(ctx.author.id)]
         user_index = sorted_users.index(user[0]) if user else None
+        user_rank = await self.calculate_user_rank(key, ctx.guild.id, ctx.author.id)
 
-        embed_colour = config.EMBED_COLOUR
-        leaderboard_str = ''
+        utils_cog = self.bot.get_cog('Utils')
 
-        for i, u in enumerate(sorted_users):
-            if i == 10:
-                break
+        async def construct_lb_top(pg):
+            leaderboard_str = ''
+            u_rank = 1
+            limit = 10
+            p = 1
+            page_start = 1 + (10 * (pg - 1))
+            for i, u in enumerate(sorted_users):
+                if i == limit:
+                    return leaderboard_str
 
-            user_id, user_values = u
-            user_role_name = user_values[f'{pre}_role']
-            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+                user_id, user_values = u
 
-            if user_role_name is None:
-                i -= 1
-                continue
+                member = ctx.guild.get_member(int(user_id))
+                if member is None:
+                    if 'left' in user_values:
+                        limit += 1
+                        continue
+                    try:
+                        member = await ctx.guild.fetch_member(int(user_id))
+                    except:
+                        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{user_id}.left': True}})
 
-            if user_role is None:
-                user_role = await ctx.guild.create_role(name=user_role_name)
+                        expires = int(time()) + (86400 * 5)  # 5 days
+                        await utils_cog.create_timer(
+                            expires=expires, guild_id=ctx.guild.id, event='delete_user_data', extras={'user_id': int(user_id)}
+                        )
+                        limit += 1
+                        continue
+                else:
+                    if 'left' in user_values:
+                        db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{user_id}.left': ''}})
 
-            member = ctx.guild.get_member(int(user_id))
-            if member is None:
-                try:
-                    member = await ctx.guild.fetch_member(int(user_id))
-                except:
-                    i -= 1
+                if p < page_start:
+                    u_rank += 1
+                    p += 1
+                    limit += 1
                     continue
 
-            role_level = self.user_role_level(branch, data, user_values)
-            progress_percent = self.percent_till_next_level(branch, user_values)
+                leaderboard_str += f'**`#{u_rank}`**\* - {member.display_name}' if user_id == str(
+                    ctx.author.id) else f'`#{u_rank}` - {member.display_name}'
 
-            if user_id == str(ctx.author.id):
-                leaderboard_str += f'***`#{i + 1}`*** - *{member.name}' \
-                                   f' | **Level {role_level}** <@&{user_role.id}>' \
-                                   f' | Progress: **{progress_percent}%***\n'
-            else:
-                leaderboard_str += f'`#{i + 1}` - {member.name}' \
-                                   f' | **Level {role_level}** <@&{user_role.id}>' \
-                                   f' | Progress: **{progress_percent}%**\n'
+                if key[0] in ['p', 'h']:
+                    user_role_name = user_values[f'{key[0]}_role']
+                    user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+
+                    if not user_role_name:
+                        limit += 1
+                        continue
+
+                    if user_role is None:
+                        user_role = await ctx.guild.create_role(name=user_role_name)
+
+                    role_level = self.user_role_level(branch, data, user_values)
+                    progress_percent = self.percent_till_next_level(branch, user_values)
+                    leaderboard_str += f'\n**Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n\n'
+
+                else:
+                    rep = user_values['reputation']
+                    leaderboard_str += f' | **{rep} Reputation**\n'
+
+                u_rank += 1
+
+        async def construct_lb_your_pos(pg):
+            your_pos_str = ''
+            for i in range(-1, 2):
+                if user_rank == pg * 10 and i == -1:
+                    continue
+
+                if i == -1:
+                    for j in range(user_index - 1, 0, -1):
+                        u_id, u_val = sorted_users[j]
+
+                        member = ctx.guild.get_member(int(u_id))
+                        if member is None:
+                            if 'left' in u_val:
+                                continue
+                            try:
+                                await ctx.guild.fetch_member(int(u_id))
+                            except:
+                                continue
+                        else:
+                            if 'left' in u_val:
+                                db.levels.update_one({'guild_id': data['guild_id']},
+                                                     {'$unset': {f'users.{u_id}.left': ''}})
+                        break
+                elif i == 0:
+                    member = ctx.author
+                    u_id, u_val = sorted_users[user_index]
+                elif i == 1:
+                    for k in range(user_index + 1, len(sorted_users)):
+                        u_id, u_val = sorted_users[k]
+
+                        member = ctx.guild.get_member(int(u_id))
+                        if member is None:
+                            if 'left' in u_val:
+                                continue
+                            try:
+                                await ctx.guild.fetch_member(int(u_id))
+                            except:
+                                continue
+                        else:
+                            if 'left' in u_val:
+                                db.levels.update_one({'guild_id': data['guild_id']},
+                                                     {'$unset': {f'users.{u_id}.left': ''}})
+                        break
+
+                if i != 0 and member == ctx.author:
+                    continue
+
+                your_pos_str += f'**`#{user_rank + i}`**\* - {member.display_name}' if u_id == str(
+                    ctx.author.id) else f'`#{user_rank + i}` - {member.display_name}'
+                if key[0] in ['p', 'h']:
+                    user_role_name = u_val[f'{key[0]}_role']
+                    user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
+
+                    if not user_role_name:
+                        continue
+
+                    if user_role is None:
+                        user_role = await ctx.guild.create_role(name=user_role_name)
+
+                    role_level = self.user_role_level(branch, data, u_val)
+                    progress_percent = self.percent_till_next_level(branch, u_val)
+                    your_pos_str += f' | **Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
+
+                else:
+                    rep = u_val['reputation']
+                    your_pos_str += f' | **{rep} Reputation**\n'
+
+            return your_pos_str
+
+        embed_colour = config.EMBED_COLOUR
+
+        leaderboard_str = await construct_lb_top(page)
 
         description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
 
         leaderboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=description)
-        leaderboard_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+        leaderboard_embed.set_footer(text=f'{ctx.author} | Page {page}/{max_page_num}', icon_url=ctx.author.avatar_url)
         leaderboard_embed.set_author(name=f'{branch.title()} Leaderboard', icon_url=ctx.guild.icon_url)
 
         # Displays user position under leaderboard and users above and below them if user is below position 10
-        if user_index is None or user_index <= 9:
+        if user_rank is None or user_rank <= page * 10:
             return await ctx.send(embed=leaderboard_embed)
-
-        your_pos_str = ''
-        for i in range(-1, 2):
-            if user_index == 10 and i == -1:
-                continue
-
-            user_id, user_values = sorted_users[user_index + i]
-            u_obj = ctx.guild.get_member(int(user_id))
-            if u_obj is None:
-                try:
-                    u_obj = await ctx.guild.fetch_member(int(user_id))
-                except:
-                    i -= 1
-                    continue
-
-            user_role_name = user_values[f'{pre}_role']
-            user_role = discord.utils.find(lambda r: r.name == user_role_name, ctx.guild.roles)
-
-            if user_role_name is None:
-                i -= 1
-                continue
-
-            if user_role is None:
-                user_role = await ctx.guild.create_role(name=user_role_name)
-
-            role_level = self.user_role_level(branch, data, user_values)
-            progress_percent = self.percent_till_next_level(branch, user_values)
-
-            if user_id == str(ctx.author.id):
-                your_pos_str += f'***`#{user_index + 1 + i}`*** - *{u_obj.name}' \
-                                f' | **Level {role_level}** <@&{user_role.id}>' \
-                                f' | Progress: **{progress_percent}%***\n'
-            else:
-                your_pos_str += f'`#{user_index + 1 + i}` - {u_obj.name}' \
-                                f' | **Level {role_level}** <@&{user_role.id}>' \
-                                f' | Progress: **{progress_percent}%**\n'
+        else:
+            your_pos_str = await construct_lb_your_pos(page)
 
         leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
 
         await ctx.send(embed=leaderboard_embed)
 
-    @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member]',
-                      examples=['rep @Hattyot'], clearance='User', cls=command.Command)
-    async def rep(self, ctx, mem=None):
-        if mem is None:
-            # todo: if user has rep timer send info about when they can send the next one otherwise send default command_error embed
-            return await embed_maker.command_error(ctx)
-
-        if ctx.message.mentions:
-            member = ctx.message.mentions[0]
+    @commands.command(help='See the history of your reps, who gave you rep points and why', usage='reps (page)',
+                      examples=['reps', 'reps 2'], clearance='Dev', cls=command.Command, aliases=['reputations', 'rep_history'])
+    async def reps(self, ctx, *, page='1'):
+        if not page.isdigit():
+            author_clearance = get_user_clearance(ctx.author)
+            if 'Mod' in author_clearance:
+                split_pg = page.split(' ')
+                name = ' '.join(split_pg[:-1])
+                if not name:
+                    name = page
+                member = await get_member(ctx, self.bot, name)
+                if member is None or isinstance(member, str):
+                    return await embed_maker.command_error(ctx, '(page)')
+                else:
+                    split_pg = page.split(' ')
+                    page = int(split_pg[-1]) if split_pg[-1].isdigit() else 1
+            else:
+                return await embed_maker.command_error(ctx, '(page)')
         else:
-            return await embed_maker.command_error(ctx, '[member]')
+            member = ctx.author
+            page = int(page)
 
-        # check if user has been in server for more than 7 days
-        now = datetime.now()
-        joined_at = ctx.author.joined_at
-        diff = now - joined_at
-        diff_seconds = round(diff.total_seconds())
+        data = db.levels.find_one({'guild_id': ctx.guild.id})
+        if 'rep_history' not in data['users'][f'{member.id}']:
+            db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{member.id}.rep_history': []}})
+            data['users'][f'{member.id}']['rep_history'] = []
+        rep_history = data['users'][f'{member.id}']['rep_history']
+        max_page_num = math.ceil(len(rep_history) / 10)
 
-        if diff_seconds < 86400 * 7:  # 7 days
-            return await embed_maker.message(ctx, f'You need to be on this server for at least 7 days to give rep points')
+        if page > max_page_num:
+            return await embed_maker.message(ctx, 'Exceeded maximum page number', colour='red')
 
-        if member.id == ctx.author.id:
-            return await embed_maker.message(ctx, f'You can\'t give rep points to yourself')
+        rep_history_embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
+        rep_history_embed.set_footer(text=f'Page {page}/{max_page_num}', icon_url=ctx.author.avatar_url)
+        rep_history_embed.set_author(name=f'Reputation History - {member}', icon_url=ctx.guild.icon_url)
 
-        if member.bot:
-            return await embed_maker.message(ctx, f'You can\'t give rep points to bots')
+        limit = 10
+        p = 1
+        page_start = 1 + (10 * (page - 1))
+        rep_history_str = ''
+        for i, r in enumerate(rep_history):
+            if i == limit:
+                break
+            rep_giver_id = r['user_id']
 
+            if p < page_start:
+                p += 1
+                limit += 1
+                continue
+
+            rep_reason = r['reason']
+            rep_history_str += f'`#{i + 1}`: +1 rep from <@{rep_giver_id}>\nReason: **"{rep_reason}"**\n'
+
+        if not rep_history_str:
+            rep_history_str = 'Your rep history is empty :\('
+
+        rep_history_embed.description = rep_history_str
+
+        return await ctx.send(embed=rep_history_embed)
+
+    @commands.command(help='Show someone you respect them by giving them a reputation point', usage='rep [member] [reason for the rep]',
+                      examples=['rep @Hattyot for being an excellent example in this text'], clearance='User', cls=command.Command, aliases=['reputation'])
+    async def rep(self, ctx, mem=None, *, reason=None):
         # check if user can give rep point
         data = db.levels.find_one({'guild_id': ctx.guild.id})
         levels_user = data['users'][str(ctx.author.id)]
         now = time()
-        if 'rep_timer' in levels_user:
-            if now < levels_user['rep_timer']:
-                rep_time = levels_user['rep_timer'] - round(time())
-                return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time)}**')
+        if 'rep_timer' in levels_user and now < levels_user['rep_timer']:
+            rep_time = levels_user['rep_timer'] - round(time())
+            return await embed_maker.message(ctx, f'You can give someone a reputation point again in **{format_time.seconds(rep_time, accuracy=3)}**')
+
+        if mem is None:
+            return await embed_maker.command_error(ctx)
+
+        if reason is None:
+            return await embed_maker.command_error(ctx, '[reason for the rep]')
+
+        member = await get_member(ctx, self.bot, mem)
+
+        if member is None:
+            return await embed_maker.command_error(ctx, '[member]')
+        elif isinstance(member, str):
+            return await embed_maker.message(ctx, member, colour='red')
+
+        # check if user has been in server for more than 5 days
+        now_datetime = datetime.now()
+        joined_at = ctx.author.joined_at
+        diff = now_datetime - joined_at
+        if round(diff.total_seconds()) < 86400 * 5:  # 5 days
+            return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points', colour='red')
+
+        if member.id == ctx.author.id:
+            return await embed_maker.message(ctx, f'You can\'t give rep points to yourself', colour='red')
+
+        if member.bot:
+            return await embed_maker.message(ctx, f'You can\'t give rep points to bots', colour='red')
+
+        # check last rep
+        if 'last_rep' in levels_user and int(levels_user['last_rep']) == member.id:
+            return await embed_maker.message(ctx, f'You can\'t give rep to the same person twice in a row', colour='red')
 
         # check if member is in database
         if str(member.id) not in data['users']:
@@ -686,30 +831,62 @@ class Leveling(commands.Cog):
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time()) + 86400  # 24 hours
-        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})  # 24 hours
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$set': {f'users.{ctx.author.id}.rep_timer': expire}})
 
         # give user rep point
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{member.id}.reputation': 1}})
 
-        # give user 5% xp boost for an hour
+        # log who author repped
+        db.levels.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'users.{ctx.author.id}.last_rep': member.id}})
+
+        # # log to rep_history
+        # rep_history_obj = {
+        #     'timestamp': now,
+        #     'user_id': ctx.author.id,
+        #     'reason': reason
+        # }
+        # db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'users.{member.id}.rep_history': rep_history_obj}})
+
+        await embed_maker.message(ctx, f'Gave +1 rep to <@{member.id}>')
+
+        # send receiving user rep reason
+        msg = f'<@{ctx.author.id}> gave you a reputation point because: **"{reason}"**'
+        embed = discord.Embed(colour=config.EMBED_COLOUR, description=msg, timestamp=datetime.now())
+        embed.set_footer(text=f'{ctx.guild.name}', icon_url=ctx.guild.icon_url)
+        embed.set_author(name='Rep')
+        await member.send(embed=embed)
+
+        # check if user already has rep boost, if they do, extend it by 30 minutes
+        if 'boost' in data and str(member.id) in data['boost']['users']:
+            boosts = [b for b in data['boost']['users'][str(member.id)] if b['type'] == 'rep']
+            if boosts:
+                boost_expire = boosts[0]['expires']
+                if boost_expire < round(time()) or (boost_expire + 1800) - round(time()) > (3600 * 6):
+                    expire = round(time()) + (3600 * 6)
+                else:
+                    expire = boost_expire + 1800  # 30 min
+                return db.levels.update_one({'guild_id': ctx.guild.id, f'boost.users.{member.id}.type': 'rep'}, {'$set': {f'boost.users.{member.id}.$.expires': expire}})
+
+        # give user 7.5% xp boost for 6 hours
         boost_dict = {
-            'expires': round(time()) + 3600,  # one hour
-            'multiplier': 0.05
+            'expires': round(time()) + (3600 * 6),
+            'multiplier': 0.1,
+            'type': 'rep'
         }
         db.levels.update_one({'guild_id': ctx.guild.id}, {'$push': {f'boost.users.{member.id}': boost_dict}})
-
-        return await embed_maker.message(ctx, f'Gave +1 rep to <@{member.id}>')
 
     @commands.command(help='Shows your (or someone else\'s) rank and level',
                       usage='rank (member)', examples=['rank', 'rank @Hattyot', 'rank Hattyot'],
                       clearance='User', cls=command.Command)
-    async def rank(self, ctx, member=None):
+    async def rank(self, ctx, *, member=None):
         if member is None:
             mem = ctx.author
         else:
-            mem = self.get_member(ctx, member)
+            mem = await get_member(ctx, self.bot, member)
             if mem is None:
                 return await embed_maker.command_error(ctx)
+            elif isinstance(mem, str):
+                return await embed_maker.message(ctx, mem, colour='red')
 
         if mem.bot:
             return await embed_maker.message(ctx, 'No bots allowed >:(', colour='red')
@@ -737,7 +914,9 @@ class Leveling(commands.Cog):
         # inform user of boost, if they have it
         boost_multiplier = self.user_boost(data, mem)
         if boost_multiplier > 1:
-            boost_percent = round((boost_multiplier - 1) * 100)
+            boost_percent = round((boost_multiplier - 1) * 100, 1)
+            if boost_percent.is_integer():
+                boost_percent = round(boost_percent)
             embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
 
         # checks if honours section needs to be added
@@ -746,13 +925,13 @@ class Leveling(commands.Cog):
             member_h_level = self.user_role_level('honours', data, levels_user)
             h_role_name = levels_user['h_role']
             h_role_obj = discord.utils.find(lambda r: r.name == h_role_name, ctx.guild.roles)
-            h_rank = self.calculate_user_rank('hp', ctx.guild.id, mem.id)
-
+            h_rank = await self.calculate_user_rank('hp', ctx.guild.id, mem.id)
+        
             if h_role_name is not None:
                 if h_role_obj is None:
                     member_h_role = await ctx.guild.create_role(name=h_role_name)
                     await mem.add_roles(member_h_role)
-
+        
                 hp_progress = self.percent_till_next_level('honours', levels_user)
                 hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role_obj.id}>' \
                            f' | Progress: **{hp_progress}%**'
@@ -762,8 +941,7 @@ class Leveling(commands.Cog):
         member_p_level = self.user_role_level('parliamentary', data, levels_user)
         p_role_name = levels_user['p_role']
         p_role_obj = discord.utils.find(lambda r: r.name == p_role_name, ctx.guild.roles)
-        p_rank = self.calculate_user_rank('pp', ctx.guild.id, mem.id)
-
+        p_rank = await self.calculate_user_rank('pp', ctx.guild.id, mem.id)
         if p_role_obj is None:
             member_p_role = await ctx.guild.create_role(name=p_role_name)
             await mem.add_roles(member_p_role)
@@ -775,7 +953,7 @@ class Leveling(commands.Cog):
         # add reputation section if user has rep
         if 'reputation' in levels_user and levels_user['reputation'] > 0:
             rep = levels_user['reputation']
-            rep_rank = self.calculate_user_rank('reputation', ctx.guild.id, mem.id)
+            rep_rank = await self.calculate_user_rank('reputation', ctx.guild.id, mem.id)
             rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
             embed.add_field(name='>Reputation', value=rep_value, inline=False)
 
@@ -915,20 +1093,42 @@ class Leveling(commands.Cog):
 
         return percent
 
-    @staticmethod
-    def calculate_user_rank(key, guild_id, user_id):
-        # creates pipeline that reduces data to only user id and key
-        pipeline = [
-            {'$match': {'guild_id': guild_id}},
-            {"$project": {"users": {"$objectToArray": "$users"}}},
-            {"$project": {'_id': 0, 'users.k': 1, f"users.v.{key}": 1}},
-            {"$project": {"users": {"$arrayToObject": "$users"}}},
-        ]
-        data = list(db.levels.aggregate(pipeline))[0]
-        data['users'] = {k: v for k, v in data['users'].items() if v}
-        sorted_users = sorted(data['users'].items(), key=lambda x: x[1][key], reverse=True)
-        user = [u for u in sorted_users if u[0] == str(user_id)]
-        return sorted_users.index(user[0]) + 1
+    async def calculate_user_rank(self, key, guild_id, user_id, return_mem=False):
+        data = db.levels.find_one({'guild_id': int(guild_id)})
+        if data is None:
+            data = self.bot.add_collections(int(guild_id), 'levels')
+
+        # Sorts users and takes out people who's pp or hp is 0
+        sorted_users = sorted(
+            [(u, data['users'][u]) for u in data['users'] if key in data['users'][u] and data['users'][u][key] > 0],
+            key=lambda x: x[1][key], reverse=True
+        )
+
+        guild = self.bot.get_guild(int(guild_id))
+        u_rank = 1
+        for u in sorted_users:
+            u_id, u_vals = u
+            member = guild.get_member(int(u_id))
+            if member is None:
+                if 'left' in u_vals:
+                    continue
+
+                try:
+                    await guild.fetch_member(int(u_id))
+                except:
+                    db.levels.update_one({'guild_id': guild_id}, {'$set': {f'users.{u_id}.left': True}})
+                    continue
+            else:
+                if 'left' in u_vals:
+                    db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{u_id}.left': ''}})
+
+            if int(u_id) == int(user_id):
+                if return_mem:
+                    return u_rank, member
+
+                return u_rank
+
+            u_rank += 1
 
     @staticmethod
     def get_member(ctx, source):
@@ -995,10 +1195,8 @@ class Leveling(commands.Cog):
             return await self.level_up(message, message.author, 'honours', data)
 
     async def process_message(self, message):
-        print('test')
         if cooldown_expired(pp_cooldown, message.guild.id, message.author.id, 60):
             pp_add = randint(15, 25)
-            print('pp_add')
             data = db.levels.find_one({'guild_id': message.guild.id})
             if data is None:
                 data = self.bot.add_collections(message.guild.id, 'levels')
@@ -1018,9 +1216,11 @@ class Leveling(commands.Cog):
                 pp_add = round(pp_add * boost_multiplier)
 
             levels_user = data['users'][str(message.author.id)]
-            print(levels_user['pp'])
+            # check if 'left' tag is left in user
+            if 'left' in levels_user:
+                db.levels.update_one({'guild_id': message.guild.id}, {'$unset': {f'users.{message.author.id}.left': ''}})
+                del levels_user['left']
             levels_user['pp'] += pp_add
-            print(levels_user['pp'])
             db.levels.update_one(
                 {'guild_id': message.guild.id},
                 {'$set': {f'users.{message.author.id}.pp': levels_user['pp']}}

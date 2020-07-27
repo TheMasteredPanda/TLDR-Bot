@@ -3,7 +3,7 @@ import config
 
 
 class Connection:
-    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets', 'server_data']
+    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets', 'server_data', 'tags']
 
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -13,6 +13,7 @@ class Connection:
         self.polls = self.db['polls']
         self.tickets = self.db['tickets']
         self.server_data = self.db['server_data']
+        self.tags = self.db['tags']
 
 
 # Default schemas for databases
@@ -64,9 +65,21 @@ schemas = {
             '@_me': False  # setting to check if user wants to be @'d when they level up
         },
         'reputation': 0,
-        'rep_timer': 0
+        'rep_timer': 0,
+        'rep_history': []
     },
     'server_data': {
+        'commands': {
+            'disabled': [],
+            'access': {
+                'users': {
+                    # 'user_id': []
+                },
+                'roles': {
+                    # 'role_id': []
+                }
+            }
+        },
         'daily_debates': {
             'topics': [],
             'time': '',
@@ -81,15 +94,29 @@ schemas = {
             #     'roles': [{'emote': 'emote', 'role_id': 'role id', 'message': 'msg'}]
             # }
         },
-        'users': {
-            # 'id': {
-            #     'special_access': []
-            # }
-        },
-        'roles': {
-            # 'id': {
-            #     'special_access': []
-            # }
+        'watchlist': {
+            'on_list': [],
+            'filters': {
+                # 'user_id': []
+            },
+            'channel_id': 0  # channel id
+        }
+    },
+    'tags': {
+        # 'tag name': {
+        #     'response': '',
+        #     'owner_id': 0
+        # }
+    },
+    'commands': {
+        'disabled': [],
+        'access': {
+            'users': {
+                # 'user_id': []
+            },
+            'roles': {
+                # 'role_id': []
+            }
         }
     }
 }

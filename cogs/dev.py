@@ -36,7 +36,7 @@ class Dev(commands.Cog):
 
     @commands.command(hidden=True, help='Reload an extension, so you dont have to restart the bot',
                       usage='reload_extension [ext]', examples=['reload_extension cogs.levels'],
-                      clearance='Dev', cls=command.Command)
+                      clearance='Dev', cls=command.Command, aliases=['re'])
     @commands.check(is_dev)
     async def reload_extension(self, ctx, ext):
         if ext in self.bot.extensions.keys():
@@ -77,11 +77,46 @@ class Dev(commands.Cog):
         result = (await eval(f"{fn_name}()", env))
         await ctx.send(result)
 
-    @commands.command(hidden=True, help='Kill the bot', usage='kill_bot',
-                      examples=['kill_bot'], clearance='Dev', cls=command.Command)
+    @commands.command(hidden=True, help='Kill the bot', usage='kill_bot', examples=['kill_bot'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def kill_bot(self):
         await self.bot.close()
+
+    @commands.command(hidden=True, help='Disable a command', usage='disable_command', examples=['disable_command'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def disable_command(self, ctx, cmd=None):
+        if command is None:
+            return await embed_maker.command_error(ctx)
+
+        if self.bot.get_command(cmd) is None:
+            return await embed_maker.command_error(ctx, '[command]')
+
+        cmd_obj = self.bot.get_command(cmd)
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'commands' in data and cmd_obj.name in data['commands']['disabled']:
+            return await embed_maker.message(ctx, f'{cmd} is already disabled', colour='red')
+
+        db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'commands.disabled': cmd_obj.name}})
+        return await embed_maker.message(ctx, f'{cmd} has been disabled', colour='green')
+
+    @commands.command(hidden=True, help='Enable a command', usage='enable_command', examples=['enable_command'], clearance='Dev', cls=command.Command)
+    @commands.check(is_dev)
+    async def enable_command(self, ctx, cmd=None):
+        if command is None:
+            return await embed_maker.command_error(ctx)
+
+        if self.bot.get_command(cmd) is None:
+            return await embed_maker.command_error(ctx, '[command]')
+
+        cmd_obj = self.bot.get_command(cmd)
+
+        data = db.server_data.find_one({'guild_id': ctx.guild.id})
+        if 'commands' not in data and cmd_obj.name not in data['commands']['disabled']:
+            return await embed_maker.message(ctx, f'{cmd} is already enabled', colour='red')
+
+        db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'commands.disabled': cmd_obj.name}})
+        return await embed_maker.message(ctx, f'{cmd} has been enabled', colour='green')
 
     # adds anglorex resource usage monitor
     @commands.command(hidden=True, help='monitors bot resource usage', usage='resrc_usage',
