@@ -4,10 +4,12 @@ import config
 import logging
 import psutil
 import urllib.request
+import copy
 from discord.ext import commands
 from config import DEV_IDS
 from modules import database, command, embed_maker
 from datetime import datetime
+from cogs.utils import get_member
 
 db = database.Connection()
 logger = logging.getLogger(__name__)
@@ -33,6 +35,27 @@ def insert_returns(body):
 class Dev(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(hidden=True, help='Run any command as another user', usage='sudo [user] [command]',
+                      examples=['sudo hattyot lb'], clearance='Dev', cls=command.Command)
+    async def sudo(self, ctx, user=None, *, cmd=None):
+        if user is None or cmd is None:
+            return await embed_maker.command_error(ctx)
+
+        member = await get_member(ctx, self.bot, user)
+        if member is None:
+            return await embed_maker.message(ctx, 'Invalid user', colour='red')
+
+        cmd_obj = self.bot.get_command(cmd)
+        if cmd_obj is None:
+            return await embed_maker.message(ctx, 'Invalid command', colour='red')
+
+        msg = copy.copy(ctx.message)
+        msg.channel = ctx.channel
+        msg.author = member
+        msg.content = config.PREFIX + cmd
+        new_ctx = await self.bot.get_context(msg, cls=type(ctx))
+        await self.bot.invoke(new_ctx)
 
     @commands.command(hidden=True, help='Reload an extension, so you dont have to restart the bot',
                       usage='reload_extension [ext]', examples=['reload_extension cogs.levels'],
