@@ -6,6 +6,7 @@ import random
 import asyncio
 import os
 import requests
+import googletrans
 from bs4 import BeautifulSoup
 from cogs.utils import get_member, get_user_clearance
 from datetime import datetime
@@ -18,6 +19,28 @@ db = database.Connection()
 class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+
+    @commands.command(help='translate text to english', usage='translate [text]', examples=['translate tere'],
+                      clearance='User', cls=command.Command)
+    async def translate(self, ctx, *, text=None):
+        if text is None:
+            return await embed_maker.command_error(ctx)
+
+        loop = self.bot.loop
+        trans = googletrans.Translator()
+        try:
+            ret = await loop.run_in_executor(None, trans.translate, text)
+        except Exception as e:
+            return await embed_maker.message(ctx, f'An error occurred: {e.__class__.__name__}: {e}', colour='red')
+
+        embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
+        src = googletrans.LANGUAGES.get(ret.src, '(auto-detected)').title()
+        dest = googletrans.LANGUAGES.get(ret.dest, 'Unknown').title()
+        embed.set_author(name='Translated', icon_url=ctx.guild.icon_url)
+        embed.add_field(name=f'From {src}', value=ret.origin, inline=False)
+        embed.add_field(name=f'To {dest}', value=ret.text, inline=False)
+        embed.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        await ctx.send(embed=embed)
 
     @commands.command(help='See time in any location in the world', usage='time [location]', examples=['time london'],
                       clearance='User', cls=command.Command, name='time')
