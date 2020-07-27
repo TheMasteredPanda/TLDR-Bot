@@ -35,7 +35,7 @@ class Leveling(commands.Cog):
         self.bot = bot
 
     @commands.command(help='see how many messages you need to send to level up', usage='msg_lvl_up', examples=['msg_lvl_up'],
-                      clearance='Mod', cls=command.Command, aliases=['mlu'])
+                      clearance='User', cls=command.Command, aliases=['mlu'])
     async def msg_lvl_up(self, ctx):
         min_pp_gain = 15
         max_pp_gain = 25
