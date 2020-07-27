@@ -178,6 +178,9 @@ class TLDR(commands.Bot):
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
         traceback_text = ''.join(lines)
 
+        if ctx.command.name == 'eval':
+            return await ctx.send(f'```{exception}```')
+
         print(traceback_text)
         print(exception)
 
