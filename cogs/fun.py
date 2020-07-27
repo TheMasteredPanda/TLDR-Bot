@@ -5,6 +5,7 @@ import config
 import json
 import aiohttp
 import asyncio
+import os.path
 from cogs.utils import get_member
 from wand.image import Image as Wand
 from io import BytesIO
@@ -16,8 +17,7 @@ class Fun(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='put they gay pride flag on your profile picture', usage='pride', examples=['pride'],
-                      clearance='User', cls=command.Command)
+    @commands.command(help='put they gay pride flag on your profile picture', usage='pride', examples=['pride'], clearance='User', cls=command.Command)
     async def pride(self, ctx, *, source=None):
         url = None
 
@@ -80,6 +80,11 @@ class Fun(commands.Cog):
         return await ctx.send(file=discord.File(fp=image, filename=f'pride.{extension}'), embed=embed)
 
     async def do_pride(self, ctx, url):
+        # check if pride image exists
+        exists = os.path.isfile('./images/pride.png')
+        if not exists:
+            return await embed_maker.message(ctx, 'Missing local pride image', colour='red')
+
         async with aiohttp.ClientSession() as session:
             image_task = asyncio.create_task(self.fetch_image(session, url))
             content = await image_task

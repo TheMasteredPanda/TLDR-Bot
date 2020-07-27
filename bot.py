@@ -1,13 +1,12 @@
 import discord
 import os
 import config
-import traceback
-import time
 import re
+import traceback
+from time import time
+from datetime import  datetime
+from modules import database, embed_maker
 from cogs.utils import get_user_clearance
-from modules import embed_maker
-from datetime import datetime
-from modules import database
 from discord.ext import commands
 
 db = database.Connection()
@@ -27,100 +26,151 @@ class TLDR(commands.Bot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
-    async def on_raw_reaction_add(self, payload):
+    async def on_message_delete(self, message):
+        # delete reaction menu if message is reaction menu
+        db.reaction_menus.find_one_and_delete({'guild_id': message.guild.id, 'message_id': message.id})
+
+    async def on_raw_reaction_remove(self, payload):
         guild_id = payload.guild_id
+        if not guild_id:
+            return
         guild = self.get_guild(int(guild_id))
 
         channel_id = payload.channel_id
         channel = guild.get_channel(int(channel_id))
 
         message_id = payload.message_id
+
+        # check if message is reaction_menu
+        reaction_menu_data = db.reaction_menus.find_one({'guild_id': int(guild_id), 'message_id': message_id})
+        if not reaction_menu_data:
+            return
+
         message = await channel.fetch_message(int(message_id))
 
         user_id = payload.user_id
         user = guild.get_member(user_id)
         if user is None:
             user = await guild.fetch_member(user_id)
-
-        emote = payload.emoji.name
-
-        # polls
-        utils_cog = self.get_cog('Utils')
-        if message_id in utils_cog.menus:
-            menu = utils_cog.menus
-        elif message_id in utils_cog.no_expire_menus:
-            menu = utils_cog.no_expire_menus
-        else:
-            # role menus
-            data = db.server_data.find_one({'guild_id': user.guild.id})
-            if 'role_menus' not in data:
-                data['role_menus'] = {}
-            role_menus = data['role_menus']
-            if str(message.id) in role_menus:
-                role_menu = role_menus[str(message.id)]
-                rl = [rl for rl in role_menu['roles'] if rl['emote'] == emote]
-                if rl:
-                    role = discord.utils.find(lambda r: r.id == int(rl[0]['role_id']), user.guild.roles)
-                    await user.add_roles(role)
-
-                    msg = f'{rl[0]["message"]}'
-                    embed_colour = config.EMBED_COLOUR
-                    embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
-                    embed.set_author(name='Role Given')
-                    embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
-
-                    return await user.send(embed=embed)
-
-            else:
-                return
-
-        if payload.emoji.is_custom_emoji():
-            emote = f'<:{payload.emoji.name}:{payload.emoji.id}>'
 
         if user.bot:
             return
 
-        if emote in menu[message_id]:
-            await message.remove_reaction(payload.emoji, user)
+        emote = payload.emoji.name
+        if payload.emoji.is_custom_emoji():
+            emote = f'<:{payload.emoji.name}:{payload.emoji.id}>'
 
-            channel = self.get_channel(channel_id)
-            message = await channel.fetch_message(message_id)
-            func = menu[message_id][emote]
-            await func(user, message, payload.emoji)
+        if 'role_menu_name' in reaction_menu_data and emote in reaction_menu_data['roles']:
+            roles = reaction_menu_data['roles']
+            role_id = roles[emote]['role_id']
+            role = discord.utils.find(lambda r: r.id == int(role_id), user.guild.roles)
+            if not role:
+                # delete role from roles if role_id is invalid and update role menu
+                db.reaction_menus.update_one({'guild_id': guild_id, 'message_id': message_id}, {'$unset': {f'roles.{emote}': ''}})
+                del roles[emote]
 
-    async def on_raw_reaction_remove(self, payload):
+                # delete message if last role has been removed
+                if not roles:
+                    return await message.delete()
+
+                embed_colour = config.EMBED_COLOUR
+                embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+                embed.set_author(name=f'Role Menu: {reaction_menu_data["role_menu_name"]}')
+                embed.set_footer(icon_url=guild.icon_url)
+                description = 'React to give yourself a role\n'
+
+                for emoji in roles:
+                    description += f'\n{emoji}: `{roles[emoji]["message"]}`'
+
+                return await message.edit(embed=embed)
+
+            await user.remove_roles(role)
+
+            msg = f'Role Taken: {emote}: `{reaction_menu_data["roles"][emote]["message"]}`'
+            embed_colour = config.EMBED_COLOUR
+            embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
+            embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
+
+            return await user.send(embed=embed)
+
+    async def on_raw_reaction_add(self, payload):
         guild_id = payload.guild_id
+        if not guild_id:
+            return
         guild = self.get_guild(int(guild_id))
 
         channel_id = payload.channel_id
         channel = guild.get_channel(int(channel_id))
-
         message_id = payload.message_id
-        message = await channel.fetch_message(int(message_id))
 
+        # check if message is reaction_menu
+        reaction_menu_data = db.reaction_menus.find_one({'guild_id': int(guild_id), 'message_id': message_id})
+        if not reaction_menu_data:
+            return
+
+        message = await channel.fetch_message(int(message_id))
         user_id = payload.user_id
         user = guild.get_member(user_id)
         if user is None:
             user = await guild.fetch_member(user_id)
 
+        if user.bot:
+            return
+
         emote = payload.emoji.name
+        if payload.emoji.is_custom_emoji():
+            emote = f'<:{payload.emoji.name}:{payload.emoji.id}>'
 
-        data = db.server_data.find_one({'guild_id': user.guild.id})
-        role_menus = data['role_menus']
-        if str(message.id) in role_menus:
-            role_menu = role_menus[str(message.id)]
-            rl = [rl for rl in role_menu['roles'] if rl['emote'] == emote]
-            if rl:
-                role = discord.utils.find(lambda r: r.id == int(rl[0]['role_id']), user.guild.roles)
-                await user.remove_roles(role)
+        # react menu is role menu
+        if 'role_menu_name' in reaction_menu_data and emote in reaction_menu_data['roles']:
+            roles = reaction_menu_data['roles']
+            role_id = roles[emote]['role_id']
+            role = discord.utils.find(lambda r: r.id == int(role_id), user.guild.roles)
+            if not role:
+                # delete role from roles if role_id is invalid and update role menu
+                db.reaction_menus.update_one({'guild_id': guild_id, 'message_id': message_id}, {'$unset': {f'roles.{emote}': ''}})
+                del roles[emote]
 
-                msg = f'{rl[0]["message"]}'
+                # delete message if last role has been removed
+                if not roles:
+                    return await message.delete()
+
                 embed_colour = config.EMBED_COLOUR
-                embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
-                embed.set_author(name='Role Roved')
-                embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
+                embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+                embed.set_author(name=f'Role Menu: {reaction_menu_data["role_menu_name"]}')
+                embed.set_footer(icon_url=guild.icon_url)
+                description = 'React to give yourself a role\n'
 
+                for emoji in roles:
+                    description += f'\n{emoji}: `{roles[emoji]["message"]}`'
+
+                return await message.edit(embed=embed)
+
+            await user.add_roles(role)
+            msg = f'Role Given: {emote}: `{reaction_menu_data["roles"][emote]["message"]}`'
+            embed_colour = config.EMBED_COLOUR
+            embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
+            embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
+
+            return await user.send(embed=embed)
+
+        elif 'poll' in reaction_menu_data and emote in reaction_menu_data['poll']:
+            await message.remove_reaction(payload.emoji, user)
+
+            embed_colour = config.EMBED_COLOUR
+            embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+            embed.set_footer(text=f'{guild.name}', icon_url=guild.icon_url)
+            embed.title = f'**"{reaction_menu_data["question"]}"**'
+
+            if user.id in reaction_menu_data['voted']:
+                embed.description = f'You have already voted'
                 return await user.send(embed=embed)
+
+            db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$inc': {f'poll.{emote}': 1}})
+            db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$push': {f'voted': user.id}})
+
+            embed.description = f'Your vote has been counted towards: {emote}'
+            return await user.send(embed=embed)
 
     async def on_command_error(self, ctx, exception):
         trace = exception.__traceback__
@@ -132,7 +182,7 @@ class TLDR(commands.Bot):
         print(exception)
 
         # send special message to user if bot lacks perms to send message in channel
-        if isinstance(exception.original, discord.errors.Forbidden):
+        if hasattr(exception, 'original') and isinstance(exception.original, discord.errors.Forbidden):
             await ctx.author.send('It appears that I am not allowed to send messages in that channel')
 
         # send error message to certain channel in a guild if error happens during bot runtime
@@ -159,121 +209,47 @@ class TLDR(commands.Bot):
         if message.author.bot:
             return
 
-        # just checks if message was sent in pms
+        # checks if message was sent in pms
         if message.guild is None:
             pm_cog = self.get_cog('PrivateMessages')
             return await pm_cog.process_pm(message)
 
-        # collect message data
-        # data = db.server_data.find_one({'guild_id': message.guild.id})
-        # if 'message_spike' in data:
-        #     if 'messages' not in data:
-        #         db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {'messages': {}}})
-        #         data['messages'] = {}
-        #
-        #     message_data = data['messages']
-        #     now = datetime.now()
-        #     if str(message.channel.id) not in message_data:
-        #         db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
-        #         message_data[f'{message.channel.id}'] = {}
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'] = {}
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute + 1}'] = 0
-        #     if str(now.hour) not in message_data[f'{message.channel.id}']:
-        #         db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'] = {}
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute + 1}'] = 0
-        #     if str(now.minute) not in message_data[f'{message.channel.id}'][f'{now.hour}']:
-        #         db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute}'] = 1
-        #         message_data[f'{message.channel.id}'][f'{now.hour}'][f'{now.minute + 1}'] = 0
-        #
-        #     db.server_data.update_one({'guild_id': message.guild.id}, {'$inc': {f'messages.{message.channel.id}.{now.hour}.{now.minute}': 1}})
-        #
-        #     for i in range(1, 6):
-        #         previous_minute = now.minute - i
-        #         if previous_minute < 0:
-        #             previous_minute = str(list(range(0, 60))[now.minute - i])
-        #             previous_hour = str(list(range(0, 24))[now.hour - 1])
-        #         else:
-        #             previous_hour = str(now.hour)
-        #         if str(previous_minute) not in message_data[f'{message.channel.id}'][f'{previous_hour}']:
-        #             db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {f'messages.{message.channel.id}.{previous_hour}.{previous_minute}': 0}})
-        #             message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{previous_minute}'] = 0
-        #
-        #         # return if message count went over the limit previous minute
-        #         previous_min_msg_count = message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{previous_minute}']
-        #         if previous_min_msg_count >= 1:
-        #             break
-        #
-        #         current_min_msg_count = message_data[f'{message.channel.id}'][f'{previous_hour}'][f'{now.minute}']
-        #         if current_min_msg_count == 3:
-        #             channel_id = data['message_spike']['channel']
-        #             channel = message.guild.get_channel(int(channel_id))
-        #
-        #             msg = f'<#{message.channel.id}> is experiencing a message spike'
-        #             embed_colour = config.EMBED_COLOUR
-        #             embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
-        #             embed.set_footer(text=f'{message.guild.name}', icon_url=message.guild.icon_url)
-        #             await channel.send(embed=embed)
-        #             break
-        #
-        #         previous_minute = now.minute - i
-        #         previous_hour = str(list(range(0, 24))[now.hour - 1]) if previous_minute < 0 else str(now.hour)
-        #
-        #         # do a bit of cleanup so the database doesnt get too filled
-        #         if str(list(range(0, 60))[now.minute - 6]) in message_data[f'{message.channel.id}'][f'{previous_hour}']:
-        #             db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{previous_hour}.{str(list(range(0, 60))[now.minute - 6])}': ''}})
-        #
-        #         if str(list(range(0, 24))[now.hour - 2]) in message_data[f'{message.channel.id}']:
-        #             db.server_data.update_one({'guild_id': message.guild.id}, {'$unset': {f'messages.{message.channel.id}.{str(list(range(0, 24))[now.hour - 2])}': ''}})
-
         if message.content.startswith(config.PREFIX):
             await self.process_commands(message)
 
-        server_data = db.server_data.find_one({'guild_id': message.guild.id})
-        if 'watchlist' in server_data:
-            if 'filters' not in server_data['watchlist']:
-                db.server_data.update_one({'guild_id': message.guild.id}, {'$set': {'watchlist.filters': {}}})
-                server_data['watchlist']['filters'] = {}
-            filters = server_data['watchlist']['filters']
-            on_list = server_data['watchlist']['on_list']
-            channel_id = server_data['watchlist']['channel_id']
-            if message.author.id in on_list and channel_id:
-                channel = self.get_channel(int(channel_id))
-                if channel:
-                    embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
-                    embed.set_author(name=f'{message.author}', icon_url=message.author.avatar_url)
-                    embed.set_footer(text=f'message id: {message.id}', icon_url=message.guild.icon_url)
+        watchlist = db.watchlist.find_one({'guild_id': message.guild.id, 'user_id': message.author.id})
+        watchlist_data = db.watchlist_data.find_one({'guild_id': message.guild.id})
+        if watchlist and watchlist_data:
+            filters = watchlist['filters']
+            channel_id = watchlist_data['channel_id']
+            channel = self.get_channel(int(channel_id))
+            if channel:
+                embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
+                embed.set_author(name=f'{message.author}', icon_url=message.author.avatar_url)
+                embed.set_footer(text=f'message id: {message.id}', icon_url=message.guild.icon_url)
 
-                    embed.description = f'{message.content}\n[Link]({message.jump_url})'
+                embed.description = f'{message.content}\n[Link]({message.jump_url})'
 
-                    content = ''
-                    if str(message.author.id) in filters:
-                        for f in filters[str(message.author.id)]:
-                            regex = re.compile(fr'({f})')
-                            match = re.findall(regex, str(message.content))
-                            if match:
-                                content = f'<@&{config.MOD_ROLE_ID}> - Filter Match: `{f}`'
-                                break
+                content = ''
+                for f in filters:
+                    regex = re.compile(fr'({f})')
+                    match = re.findall(regex, str(message.content))
+                    if match:
+                        content = f'<@&{config.MOD_ROLE_ID}> - Filter Match: `{f}`'
+                        break
 
-
-                    try:
-                        await channel.send(embed=embed, content=content)
-                    except:
-                        pass
+                await channel.send(embed=embed, content=content)
 
         # Starts leveling process
         levels_cog = self.get_cog('Leveling')
         await levels_cog.process_message(message)
 
         # honours leveling
-        data = db.levels.find_one({'guild_id': message.guild.id})
-        if data is None:
-            data = self.add_collections(message.guild.id, 'tickets')
+        leveling_data = db.leveling_data.find_one({'guild_id': message.guild.id}, {'honours_channels': 1})
+        if leveling_data is None:
+            leveling_data = self.add_collections(message.guild.id, 'leveling_data')
 
-        honours_channels = data['honours_channels']
+        honours_channels = leveling_data['honours_channels']
         if message.channel.id in honours_channels:
             await levels_cog.process_hp_message(message)
 
@@ -288,53 +264,55 @@ class TLDR(commands.Bot):
 
     async def process_commands(self, message):
         ctx = await self.get_context(message)
-
         if ctx.command is None:
             return
 
-        if ctx.guild is None:
+        user_clearance = get_user_clearance(ctx.author)
+
+        command_data = db.commands.find_one({'guild_id': message.guild.id, 'command_name': ctx.command.name})
+        if command_data is None:
+            command_data = {
+                'guild_id': ctx.guild.id,
+                'command_name': ctx.command.name,
+                'disabled': 0,
+                'user_access': {},
+                'role_access': {}
+            }
+
+        # user access overwrites role access
+        user_access = command_data['user_access']
+        role_access = command_data['role_access']
+
+        access_to_command_given = False
+        access_to_command_taken = False
+
+        # check user_access
+        if user_access:
+            access_to_command_given = f'{ctx.author.id}' in user_access and user_access[f'{ctx.author.id}'] == 'give'
+            access_to_command_taken = f'{ctx.author.id}' in user_access and user_access[f'{ctx.author.id}'] == 'take'
+
+        # check role access
+        if role_access:
+            role_access_matching_role_ids = set([str(r.id) for r in ctx.author.roles]) & set(role_access.keys())
+            if role_access_matching_role_ids:
+                # sort role by permission
+                roles = [ctx.guild.get_role(int(r_id)) for r_id in role_access_matching_role_ids]
+                sorted_roles = sorted(roles, key=lambda r: r.permissions)
+                if sorted_roles:
+                    role = sorted_roles[-1]
+                    access_to_command_given = access_to_command_given or f'{role.id}' in role_access and role_access[f'{role.id}'] == 'give'
+                    access_to_command_taken = access_to_command_taken or f'{role.id}' in role_access and role_access[f'{role.id}'] == 'take'
+
+        if ctx.command.clearance not in user_clearance and not access_to_command_given:
             return
 
-        clearance = get_user_clearance(ctx.author)
+        if access_to_command_taken:
+            return await embed_maker.message(ctx, f'Your access to this command has been taken away', colour='red')
 
-        data = db.server_data.find_one({'guild_id': ctx.guild.id})
-        if 'commands' not in data:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands': database.schemas['commands']}})
+        if command_data['disabled'] and ctx.author.id not in config.DEV_IDS:
+            return await embed_maker.message(ctx, 'This command has been disabled', colour='red')
 
-        if 'commands' in data:
-            if 'disabled' not in data['commands']:
-                db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands.disabled': []}})
-                data['commands']['disabled'] = []
-
-            disabled_commands = data['commands']['disabled']
-            if ctx.command.name in disabled_commands:
-                return await embed_maker.message(ctx, 'This command has been disabled', colour='red')
-
-        access_given = []
-        access_taken = []
-        if 'access' not in data['commands']:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'commands.disabled': {'users': {}, 'roles': {}}}})
-            data['commands']['access'] = {'users': {}, 'roles': {}}
-
-        if 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
-            command_data = data['commands']['access']
-            # check if user has special access
-            cmd_access_list = []
-            if str(message.author.id) in command_data['users']:
-                cmd_access_list += [c for c in command_data['users'][str(message.author.id)]]
-            if set([str(r.id) for r in ctx.author.roles]) & set(command_data['roles'].keys()):
-                cmd_access_list += [command_data['roles'][c] for c in command_data['roles'] if c in [str(r.id) for r in message.author.roles]]
-
-            if cmd_access_list:
-                access_given = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'give']
-                access_taken = ctx.command.name in [c['command'] for c in cmd_access_list if c['type'] == 'take']
-
-        if access_taken:
-            return await embed_maker.message(ctx, f'Your access to this command has been taken away')
-        if ctx.command.clearance not in clearance and not access_given:
-            return
-
-        await self.invoke(ctx)
+        return await self.invoke(ctx)
 
     async def on_guild_join(self, guild):
         self.add_collections(guild.id)
@@ -342,7 +320,7 @@ class TLDR(commands.Bot):
     @staticmethod
     def add_collections(guild_id, col=None):
         return_doc = None
-        collections = ['levels', 'timers', 'polls', 'tickets', 'server_data', 'tags']
+        collections = ['leveling_data', 'watchlist_data', 'daily_debates']
         for c in collections:
             collection = db.__getattribute__(c)
             doc = collection.find_one({'guild_id': guild_id})
@@ -375,15 +353,15 @@ class TLDR(commands.Bot):
             self.add_collections(g.id)
 
             # start daily debate timer if it doesnt exist
-            timer_data = db.timers.find_one({'guild_id': g.id})
-            daily_debate_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'daily_debate' or timer['event'] == 'daily_debate_final']
+            daily_debate_timer = db.timers.find_one({'guild_id': g.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
             if not daily_debate_timer:
-                # calculates time until next debate -1 hour
-                daily_debate_data = db.server_data.find_one({'guild_id': g.id})
-
-                dd_time = daily_debate_data['daily_debates']['time']
-                dd_channel = daily_debate_data['daily_debates']['channel']
-                if not dd_time or not dd_channel:
+                # calculates time until next debate
+                daily_debate_data = db.daily_debates.find_one({'guild_id': g.id})
+                if not daily_debate_data:
+                    return
+                dd_time = daily_debate_data['time']
+                dd_channel_id = daily_debate_data['channel_id']
+                if not dd_time or not dd_channel_id:
                     return
 
                 mod_cog = self.get_cog('Mod')
@@ -391,24 +369,21 @@ class TLDR(commands.Bot):
 
     @staticmethod
     async def on_member_join(member):
-        data = db.levels.find_one({'guild_id': member.guild.id})
-        if str(member.id) in data['users']:
+        leveling_user = db.leveling_users.find_one({'guild_id': member.guild.id, 'user_id': member.id})
+        if leveling_user:
             # delete timer
-            timer_data = db.timers.find_one({'guild_id': member.guild.id})
-            delete_timer = [timer for timer in timer_data['timers'] if timer['event'] == 'delete_user_data' and int(timer['extras']['user_id']) == int(member.id)]
-            timer_id = delete_timer[0]['id']
-            db.timers.update_one({'guild_id': member.guild.id}, {'$pull': {'timers': {'id': timer_id}}})
+            db.timers.find_one_and_delete({'guild_id': member.guild.id, 'event': 'delete_user_data', 'extras.user_id': member.id})
 
             # give user data back
-            levels_user = data['users'][f'{member.id}']
-            if 'left' in levels_user:
-                db.levels.update_one({'guild_id': data['guild_id']}, {'$unset': {f'users.{member.id}.left': ''}})
+            if 'left' in leveling_user:
+                db.leveling_users.update_one({'guild_id': member.guild.id, 'user_id': member.id}, {'$unset': {f'left': ''}})
 
-            leveling_routes = data['leveling_routes']
+            leveling_data = db.leveling_data.find_one({'guild_id': member.guild.id}, {'leveling_routes': 1})
+            leveling_routes = leveling_data['leveling_routes']
             parliamentary_route = leveling_routes['parliamentary']
             honours_route = leveling_routes['honours']
 
-            user_p_role = [role for role in parliamentary_route if role[0] == levels_user['p_role']]
+            user_p_role = [role for role in parliamentary_route if role[0] == leveling_user['p_role']]
             user_p_role_index = parliamentary_route.index(user_p_role[0])
 
             # add old parliamentary roles to user
@@ -420,8 +395,8 @@ class TLDR(commands.Bot):
 
                 await member.add_roles(role_obj)
 
-            if levels_user['h_role']:
-                user_h_role = [role for role in honours_route if role[0] == levels_user['h_role']]
+            if leveling_user['h_role']:
+                user_h_role = [role for role in honours_route if role[0] == leveling_user['h_role']]
                 user_h_role_index = honours_route.index(user_h_role[0])
 
                 # add old honours roles to user
@@ -437,15 +412,12 @@ class TLDR(commands.Bot):
         if member.bot:
             return
 
-        db.levels.update_one({'guild_id': member.guild.id}, {'$set': {f'users.{member.id}.left': True}})
+        db.leveling_data.update_one({'guild_id': member.guild.id, 'user_id': member.id}, {'$set': {'left': True}})
 
         # Delete user data after 5 days
         utils_cog = self.get_cog('Utils')
-        expires = int(time.time()) + (86400 * 5)  # 5 days
-        await utils_cog.create_timer(
-            expires=expires, guild_id=member.guild.id, event='delete_user_data',
-            extras={'user_id': member.id}
-        )
+        expires = int(time()) + (86400 * 5)  # 5 days
+        await utils_cog.create_timer(expires=expires, guild_id=member.guild.id, event='delete_user_data', extras={'user_id': member.id})
 
     async def on_delete_user_data_timer_over(self, timer):
         guild_id = timer['guild_id']
@@ -458,14 +430,13 @@ class TLDR(commands.Bot):
                 await guild.fetch_member(int(user_id))
             except:
                 # Delete user levels data
-                db.levels.update_one({'guild_id': guild_id}, {'$unset': {f'users.{user_id}': ''}})
+                db.leveling_users.delete_one({'guild_id': guild_id, 'user_id': user_id})
                 # Delete user boosts
-                db.server_data.update_one({'guild_id': guild.id}, {'$unset': {f'boost.users.{user_id}': ''}})
+                db.boosts.delete_many({'guild_id': guild.id, 'user_id': user_id})
                 # remove command access data
-                db.server_data.update_one({'guild_id': guild.id}, {'$unset': {f'commands.access.users.{user_id}': ''}})
+                db.commands.update_many({'guild_id': guild.id}, {'$unset': {f'user_access.{user_id}': ''}})
                 # remove user from watchlist
-                db.server_data.update_one({'guild_id': guild.id}, {'$pull': {f'watchlist.on_list': user_id}})
-                db.server_data.update_one({'guild_id': guild.id}, {'$unset': {f'watchlist.filters.{user_id}': ''}})
+                db.watchlist.delete_one({'guild_id': guild.id, 'user_id': user_id})
 
     async def close(self):
         await super().close()

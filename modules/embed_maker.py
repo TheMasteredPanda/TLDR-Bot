@@ -8,7 +8,7 @@ def get_colour(colour):
         'red': discord.Colour.red(),
         'orange': discord.Colour.orange(),
         'green': discord.Colour.green(),
-    }.get(colour, 0x00a6ad)
+    }.get(colour, config.EMBED_COLOUR)
 
 
 async def message(ctx, msg, *, title=None, footer=None, colour=None):

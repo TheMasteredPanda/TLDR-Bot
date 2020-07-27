@@ -15,60 +15,6 @@ from modules import database, command, embed_maker, format_time
 db = database.Connection()
 
 
-async def filter_tags(ctx, bot, tags, tag_name):
-    print(tags, tag_name)
-    regex = re.compile(fr'({tag_name.lower()})')
-
-    filtered_tags = list(filter(lambda t: t == tag_name, tags))
-    if len(filtered_tags) == 1:
-        return [filtered_tags[0]]
-
-    filtered_tags = list(filter(lambda t: t.lower() == tag_name.lower(), tags))
-    if not filtered_tags:
-        regex = re.compile(fr'({tag_name.lower()})')
-        filtered_tags = list(filter(lambda t: re.findall(regex, t.lower()), tags))
-        if len(filtered_tags) > 10:
-            return 'Too many tag matches'
-
-    tag = None
-    if len(filtered_tags) > 1:
-        embed_colour = config.EMBED_COLOUR
-        tag_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
-        tag_embed.set_author(name=f'Tags')
-        tag_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
-
-        description = 'Found multiple tags, which one did you mean? `input digit of tag`\n\n'
-        for i, tag in enumerate(filtered_tags):
-            description += f'`#{i + 1}` | {tag}\n'
-
-        tag_embed.description = description
-
-        await ctx.send(embed=tag_embed)
-
-        def user_check(m):
-            return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id
-
-        try:
-            tag_message = await bot.wait_for('message', check=user_check, timeout=20)
-        except asyncio.TimeoutError:
-            return 'Tag Timeout'
-
-        index = tag_message.content
-        if index.isdigit() and len(filtered_tags) >= int(index) - 1 >= 0:
-            tag = filtered_tags[int(index) - 1]
-        elif not index.isdigit():
-            return 'Input is not a number'
-        elif int(index) - 1 > len(filtered_tags) or int(index) - 1 < 0:
-            return 'Input number out of range'
-
-    elif len(filtered_tags) == 1:
-        tag = filtered_tags[0]
-    else:
-        return None
-
-    return [tag]
-
-
 class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -82,142 +28,12 @@ class Utility(commands.Cog):
         response = requests.get(f'https://www.time.is/{location}', headers=headers)
         soup = BeautifulSoup(response.content, 'html.parser')
         error = soup.find('h1', attrs={'class': 'error'})
-        time = soup.find('div', attrs={'id': 'clock0_bg'}).text
+        location_time = soup.find('div', attrs={'id': 'clock0_bg'}).text
         msg = soup.find('div', attrs={'id': 'msgdiv'}).text
         if error:
             return await embed_maker.message(ctx, 'Invalid loaction', colour='red')
         else:
-            return await embed_maker.message(ctx, f'{msg}is: `{time}`')
-
-    @commands.command(help='see your or other user\'s tags', usage='tags (user)', examples=['tags', 'tags hatty'],
-                      clearance='User', cls=command.Command)
-    async def tags(self, ctx, user=None):
-        if user is None:
-            member = ctx.author
-        else:
-            member = await get_member(ctx, self.bot, user)
-            if member is None:
-                return await embed_maker.command_error(ctx, '(user)')
-            elif isinstance(member, str):
-                return await embed_maker.message(ctx, member, colour='red')
-
-        tag_data = db.tags.find_one({'guild_id': ctx.guild.id})
-        user_tags = [t for t in tag_data if t != 'guild_id' and t != '_id' and tag_data[t]['owner_id'] == member.id]
-
-        desc = ''
-        if not user_tags:
-            desc = 'This user has no tags'
-        else:
-            for i, tag in enumerate(user_tags):
-                desc += f'`#{i + 1}`: {tag}\n'
-
-        embed_colour = config.EMBED_COLOUR
-        tag_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=desc)
-        tag_embed.set_author(name=f'{str(member)} - Tags')
-        tag_embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
-
-        return await ctx.send(embed=tag_embed)
-
-    @commands.command(help='Create and use tags for common responses', usage='tag [action/tag] "(tag name)" (response)',
-                      examples=['tag create "vc" We don\'t want to have VCs', 'tag vc', 'tag claim vc', 'tag edit "vc" We don\'t have VCs', 'tag delete vc'], clearance='User', cls=command.Command)
-    async def tag(self, ctx, action=None, tag=None, *, response=None):
-        if action is None:
-            return await embed_maker.command_error(ctx)
-
-        tag_data = db.tags.find_one({'guild_id': ctx.guild.id})
-        if tag_data is None:
-            await self.bot.add_collections(ctx.guild.id, 'tags')
-        tags = [t for t in tag_data if t != 'guild_id' and t != '_id']
-        if action not in ['create', 'claim', 'edit', 'remove']:
-            tag = action
-            tag = await filter_tags(ctx, self.bot, tags, tag)
-            if tag is None:
-                return await embed_maker.message(ctx, 'That tag doesn\'t exist', colour='red')
-            elif isinstance(tag, str):
-                return await embed_maker.message(ctx, tag, colour='red')
-            else:
-                tag = tag[0]
-
-            response = tag_data[tag]['response']
-            owner_id = tag_data[tag]['owner_id']
-            owner = await get_member(ctx, self.bot, str(owner_id))
-
-            if owner is None or isinstance(owner, str):
-                response += '\n\n This tag is unclaimed'
-
-            return await ctx.send(response)
-
-        elif action.lower() == 'create':
-            if response is None:
-                # check for attachment
-                if ctx.message.attachments:
-                    response = ctx.message.attachments[0].url
-                else:
-                    return await embed_maker.command_error(ctx, '(response)')
-            # max tags by user is 10, check this limit, if user is staff, limit does not apply
-            user_tags = [t for t in tag_data if t != 'guild_id' and t != '_id' and tag_data[t]['owner_id'] == ctx.author.id]
-            permissions = ctx.channel.permissions_for(ctx.author)
-            if len(user_tags) >= 10 and not permissions.manage_messages:
-                return await embed_maker.message(ctx, 'You\'ve reached your tag limit, the maximum amount of tags that one user can have is 10.', colour='red')
-
-            if tag in ['guild_id', '_id', 'create', 'edit', 'claim', 'remove']:
-                return await embed_maker.message(ctx, 'That tag name is forbidden', colour='red')
-
-            # check if tag already exists
-            if tag in tag_data:
-                return await embed_maker.message(ctx, 'A tag by that name already exists', colour='red')
-
-            tag_obj = {'response': response, 'owner_id': ctx.author.id}
-            db.tags.update_one({'guild_id': ctx.guild.id}, {'$set': {f'{tag}': tag_obj}})
-            return await embed_maker.message(ctx, f'Tag {tag} has been successfully created.', colour='green')
-
-        if tag is None:
-            return await embed_maker.message(ctx, 'Missing tag name', colour='red')
-
-        tag = await filter_tags(ctx, self.bot, tags, tag)
-        if tag is None:
-            return await embed_maker.message(ctx, 'That tag doesn\'t exist', colour='red')
-        elif isinstance(tag, str):
-            return await embed_maker.message(ctx, tag, colour='red')
-        else:
-            tag = tag[0]
-
-        owner_id = tag_data[tag]['owner_id']
-
-        if action.lower() == 'claim':
-            # check if tag owner is still in server
-            owner = await get_member(ctx, self.bot, str(owner_id))
-            if isinstance(owner, discord.Member):
-                return await embed_maker.message(ctx, 'You can\'t claim a tag if the tag\'s owner is still in the server')
-            else:
-                db.tags.update_one({'guild_id': ctx.guild.id}, {'$set': {f'{tag}.owner_id': ctx.author.id}})
-                return await embed_maker.message(ctx, f'You are the new owner of tag `{tag}`', colour='green')
-        elif action.lower() == 'edit':
-            if response is None:
-                # check for attachment
-                if ctx.message.attachments:
-                    response = ctx.message.attachments[0].url
-                else:
-                    return await embed_maker.command_error(ctx, '(response)')
-
-            # check if user is owner of tag
-            if owner_id != ctx.author.id:
-                return await embed_maker.message(ctx, 'You are not the owner of this tag', colour='red')
-
-            new_tag_obj = {
-                'response': response,
-                'owner_id': ctx.author.id
-            }
-            db.tags.update_one({'guild_id': ctx.guild.id}, {'$set': {f'{tag}': new_tag_obj}})
-            return await embed_maker.message(ctx, f'Tag `{tag}` has been successfully edited.', colour='green')
-
-        elif action.lower() == 'remove':
-            # check if user is owner of tag
-            if owner_id != ctx.author.id:
-                return await embed_maker.message(ctx, 'You are not the owner of this tag', colour='red')
-
-            db.tags.update_one({'guild_id': ctx.guild.id}, {'$unset': {f'{tag}': ''}})
-            return await embed_maker.message(ctx, f'Tag `{tag}` has been successfully removed.', colour='green')
+            return await embed_maker.message(ctx, f'{msg}is: `{location_time}`')
 
     @commands.command(help='Get bot\'s latency', usage='ping', examples=['ping'], clearance='User', cls=command.Command)
     async def ping(self, ctx):
@@ -229,7 +45,7 @@ class Utility(commands.Cog):
     @commands.command(help='See someones profile picture', usage='pfp (user)',
                       examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'], clearance='User', cls=command.Command)
     async def pfp(self, ctx, member=None):
-        member = self.get_member(ctx, member)
+        member = await get_member(ctx, self.bot, member)
         if member is None:
             member = ctx.author
 
@@ -238,8 +54,7 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
-    @commands.command(help='See info about a user', usage='userinfo (user)', examples=['userinfo', 'userinfo Hattyot'],
-                      clearance='User', cls=command.Command)
+    @commands.command(help='See info about a user', usage='userinfo (user)', examples=['userinfo', 'userinfo Hattyot'], clearance='User', cls=command.Command)
     async def userinfo(self, ctx, *, user=None):
         if user is None:
             member = ctx.author
@@ -261,10 +76,10 @@ class Utility(commands.Cog):
         embed.add_field(name='\u200b', value='\u200b')
         created_at = datetime.now() - member.created_at
         created_at_seconds = created_at.total_seconds()
-        embed.add_field(name='Account Created', value=f'{member.created_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(created_at_seconds)} Ago')
+        embed.add_field(name='Account Created', value=f'{member.created_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(created_at_seconds, accuracy=10)} Ago')
         joined_at = datetime.now() - member.joined_at
         joined_at_seconds = joined_at.total_seconds()
-        embed.add_field(name='Joined Server', value=f'{member.joined_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(joined_at_seconds)} Ago')
+        embed.add_field(name='Joined Server', value=f'{member.joined_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(joined_at_seconds, accuracy=10)} Ago')
         embed.add_field(name='\u200b', value='\u200b')
         embed.add_field(name='Status', value=str(member.status), inline=False)
 
@@ -282,14 +97,13 @@ class Utility(commands.Cog):
 
         args = self.parse_role_menu_args(args)
         role_menu_name = args['n']
+        if not role_menu_name:
+            return await embed_maker.message(ctx, 'Missing role menu name', colour='red')
         role_name = args['r']
         emote = args['e']
         message = args['m']
 
-        data = db.server_data.find_one({'guild_id': ctx.guild.id})
-        if 'role_menus' not in data:
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_menus': {}}})
-            data['role_menus'] = {}
+        role_menu_data = db.reaction_menus.find_one({'guild_id': ctx.guild.id, 'role_menu_name': role_menu_name})
 
         embed_colour = config.EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
@@ -298,83 +112,87 @@ class Utility(commands.Cog):
         description = 'React to give yourself a role\n'
 
         if emote and role_menu_name and not role_name and not message:
-            role_menu = [rm_id for rm_id in data['role_menus'] if data['role_menus'][rm_id]['name'] == role_menu_name and data['role_menus'][rm_id]['channel_id'] == ctx.channel.id]
-            if not role_menu:
-                return await embed_maker.message(ctx, f'Couldn\'t find a role menu by the name: {role_menu_name}', colour='red')
-
-            msg_id = role_menu[0]
-            role_menu = data['role_menus'][msg_id]
-            emote_in_menu = [r for r in role_menu['roles'] if r['emote'] == emote]
+            if not role_menu_data:
+                return await embed_maker.message(ctx, f'I couldn\'t find a role menu by the name: `{role_menu_name}`', colour='red')
+            msg_id = role_menu_data['message_id']
+            emote_in_menu = emote in role_menu_data['roles'].keys()
             if not emote_in_menu:
                 return await embed_maker.message(ctx, f'That role menu does not contain that emote', colour='red')
 
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'role_menus.{msg_id}.roles': emote_in_menu[0]}})
-            role_menu['roles'].remove(emote_in_menu[0])
+            db.reaction_menus.update_one({'guild_id': ctx.guild.id, 'role_menu_name': role_menu_name}, {'$unset': {f'roles': emote}})
+            del role_menu_data['roles'][emote]
 
-            channel_id = role_menu['channel_id']
+            channel_id = role_menu_data['channel_id']
             channel = ctx.guild.get_channel(int(channel_id))
+            if channel is None:
+                db.reaction_menus.find_one_and_delete({'guild_id': ctx.guild.id, 'role_menu_name': role_menu_name})
+                return await embed_maker.message(ctx, f'Role menu has an invalid channel id, role menu `{role_menu_name}` has been deleted from the database')
+
             message = await channel.fetch_message(msg_id)
             await message.add_reaction(emote)
-            roles = role_menu['roles']
+            roles = role_menu_data['roles']
 
-            # delete message if last one is removed
+            # delete message if last role has been removed
             if not roles:
                 await message.delete()
                 return await ctx.message.delete(delay=2000)
 
-            for r in roles:
-                description += f'\n{r["emote"]}: `{r["message"]}`'
+            for emoji in roles:
+                description += f'\n{emoji}: `{roles[emoji]["message"]}`'
 
             embed.description = description
             await message.edit(embed=embed)
 
             return await ctx.message.delete(delay=2000)
 
-        if not role_menu_name or not role_name or not emote or not message:
+        if not role_name or not emote or not message:
             return await embed_maker.message(ctx, 'One or more of the required values is missing', colour='red')
 
         role = discord.utils.find(lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles)
         if role is None:
-            return await embed_maker.message(ctx, 'Invalid Role', colour='red')
+            return await embed_maker.message(ctx, f'I couldn\'t find a role by the name: `{role_name}`', colour='red')
 
         if role.permissions.manage_messages:
             return await embed_maker.message(ctx, 'Role Permissions are too high', colour='red')
 
-        in_database = [rm for rm in data['role_menus'] if data['role_menus'][rm]['name'] == role_menu_name and data['role_menus'][rm]['channel_id'] == ctx.channel.id]
-
         rl_obj = {
-            'emote': emote,
             'role_id': role.id,
             'message': message
         }
 
-        if not in_database:
-            new_role_menu_obj = {
-                'channel_id': ctx.channel.id,
-                'name': role_menu_name,
-                'roles': [rl_obj]
-            }
+        if not role_menu_data:
             description += f'\n{emote}: `{message}`'
             embed.description = description
             msg = await ctx.send(embed=embed)
             await msg.add_reaction(emote)
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'role_menus.{msg.id}': new_role_menu_obj}})
+
+            new_role_menu_doc = {
+                'guild_id': ctx.guild.id,
+                'role_menu_name': role_menu_name,
+                'message_id': msg.id,
+                'channel_id': ctx.channel.id,
+                'roles': {
+                    emote: rl_obj
+                }
+            }
+            db.reaction_menus.insert_one(new_role_menu_doc)
         else:
-            message_id = in_database[0]
-            role_menu = data['role_menus'][str(message_id)]
-            emote_duplicate = [r['emote'] for r in data['role_menus'][str(message_id)]['roles'] if r['emote'] == emote]
+            emote_duplicate = emote in role_menu_data['roles'].keys()
             if emote_duplicate:
                 return await embed_maker.message(ctx, 'Duplicate emote', colour='red')
 
-            db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'role_menus.{message_id}.roles': rl_obj}})
-            role_menu['roles'].append(rl_obj)
-            channel_id = role_menu['channel_id']
+            db.reaction_menus.update_one({'guild_id': ctx.guild.id, 'role_menu_name': role_menu_name}, {'$set': {f'roles.{emote}': rl_obj}})
+            role_menu_data['roles'][emote] = rl_obj
+
+            message_id = role_menu_data['message_id']
+            channel_id = role_menu_data['channel_id']
             channel = ctx.guild.get_channel(int(channel_id))
             message = await channel.fetch_message(message_id)
             await message.add_reaction(emote)
-            roles = role_menu['roles']
-            for r in roles:
-                description += f'\n{r["emote"]}: `{r["message"]}`'
+
+            roles = role_menu_data['roles']
+            for emoji in roles:
+                description += f'\n{emoji}: `{roles[emoji]["message"]}`'
 
             embed.description = description
             await message.edit(embed=embed)
@@ -389,25 +207,16 @@ class Utility(commands.Cog):
             'e': '',
             'm': ''
         }
-        _args = list(filter(lambda a: bool(a), re.split(r' ?-([n|r|e|m]) ', args)))
-        split_args = []
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([nrem]) ', args)))
         for i in range(int(len(_args) / 2)):
-            split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
-
-        for v in split_args:
-            tup = tuple(map(str.strip, v.split(' ', 1)))
-            if len(tup) <= 1:
-                continue
-            key, value = tup
-            result[key] = value
+            result[args[i + (i * 1)]] = _args[i + (i + 1)]
 
         return result
 
     @commands.command(help='See the list of your current reminders', usage='reminders (action) (reminder index)',
-                      examples=['reminders', 'reminders remove kill demons'], clearance='User', cls=command.Command)
+                      examples=['reminders', 'reminders remove 1'], clearance='User', cls=command.Command)
     async def reminders(self, ctx, action=None, *, index=None):
-        timer_data = db.timers.find_one({'guild_id': ctx.guild.id})
-        user_reminders = [timer for timer in timer_data['timers'] if timer['event'] == 'reminder' and timer['extras']['member_id'] == ctx.author.id]
+        user_reminders = [reminder for reminder in db.timers.find({'guild_id': ctx.guild.id, 'event': 'reminder', 'extras.member_id': ctx.author.id})]
         if action is None:
             if not user_reminders:
                 msg = 'You currently have no reminders'
@@ -418,6 +227,7 @@ class Utility(commands.Cog):
                     msg += f'`#{i + 1}` - {r["extras"]["reminder"]} in **{format_time.seconds(expires)}**\n'
 
             return await embed_maker.message(ctx, msg)
+
         elif action not in ['remove']:
             return await embed_maker.command_error(ctx, '(action)')
         elif index is None or int(index) <= 0 or int(index) > len(user_reminders):
@@ -439,6 +249,7 @@ class Utility(commands.Cog):
         remind_time_str = ''
         for i, r in enumerate(reminder.split(' ')):
             if format_time.parse(r) is not None:
+                # check if current parsed time is smaller than the last, so user cant just do 10h 10h 10h
                 if remind_times:
                     prev_remind_time = remind_times[i - 1]
                     if prev_remind_time <= format_time.parse(r):
@@ -618,28 +429,16 @@ class Utility(commands.Cog):
 
     @staticmethod
     def parse_giveaway_args(args):
-        result = {
-            'i': '',
-            'w': 1,
-            't': '24h',
-            'r': ''
-        }
-        _args = list(filter(lambda a: bool(a), re.split(r' ?-([i|w|t|r]) ', args)))
-        split_args = []
-        for i in range(int(len(_args) / 2)):
-            split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
+        result = {'i': '', 'w': 1, 't': '24h', 'r': ''}
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([iwtr]) ', args)))
 
-        for v in split_args:
-            tup = tuple(map(str.strip, v.split(' ', 1)))
-            if len(tup) <= 1:
-                continue
-            key, value = tup
-            result[key] = value
+        for i in range(int(len(_args) / 2)):
+            result[args[i + (i * 1)]] = _args[i + (i + 1)]
 
         return result
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [-q question] (-o option1, option2, ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d) (-u update interval)',
+                      usage='anon_poll [-q question] (-o option1 | option2 | ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d) (-u update interval)',
                       examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
@@ -672,7 +471,7 @@ class Utility(commands.Cog):
             err = 'Invalid update interval time'
         else:
             update_interval = format_time.parse(update_interval)
-            if update_interval < 30:
+            if update_interval and update_interval < 30:
                 err = 'Update interval can\'t be smaller than 30 seconds'
 
         if err:
@@ -697,33 +496,9 @@ class Utility(commands.Cog):
             embed.description = description
 
         poll_msg = await ctx.send(embed=embed)
-
-        embed_colour = config.EMBED_COLOUR
-        embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
-        embed.set_footer(text=f'{ctx.guild.name}', icon_url=ctx.guild.icon_url)
-        embed.title = f'**"{question}"**'
-
-        async def count(user, msg, emote):
-            if msg.id != poll_msg.id:
-                return
-
-            data = db.polls.find_one({'guild_id': ctx.guild.id})
-            if str(user.id) in data['polls'][str(msg.id)]:
-
-                voted = data['polls'][str(msg.id)][str(user.id)]['voted']
-                print(voted)
-                if voted:
-                    embed.description = f'You have already voted'
-                    return await user.send(embed=embed)
-
-            db.polls.update_one({'guild_id': ctx.guild.id}, {'$inc': {f'polls.{msg.id}.{emote.name}': 1}})
-            db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{msg.id}.{user.id}.voted': True}})
-
-            embed.description = f'Your vote has been counted towards: {emote}'
-            return await user.send(embed=embed)
-
-        poll = dict.fromkeys(emotes, 0)
-        buttons = dict.fromkeys(emotes, count)
+        # add reactions to message
+        for e in emotes:
+            await poll_msg.add_reaction(e)
 
         utils_cog = self.bot.get_cog('Utils')
         if update_interval:
@@ -734,7 +509,6 @@ class Utility(commands.Cog):
         extras = {
             'message_id': poll_msg.id,
             'channel_id': poll_msg.channel.id,
-            'question': question,
             'options': dict(zip(emotes, options)),
             'update_interval': 0,
             'true_expire': 0
@@ -744,9 +518,15 @@ class Utility(commands.Cog):
             extras['true_expire'] = round(time.time()) + poll_time
 
         await utils_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='anon_poll', extras=extras)
-        await utils_cog.new_no_expire_menu(poll_msg, buttons)
 
-        db.polls.update_one({'guild_id': ctx.guild.id}, {'$set': {f'polls.{poll_msg.id}': poll}})
+        reaction_menu_doc = {
+            'guild_id': ctx.guild.id,
+            'message_id': poll_msg.id,
+            'question': question,
+            'voted': [],
+            'poll': dict.fromkeys(emotes, 0)
+        }
+        db.reaction_menus.insert_one(reaction_menu_doc)
 
         return await ctx.message.delete(delay=3)
 
@@ -759,24 +539,22 @@ class Utility(commands.Cog):
         update_interval = timer['extras']['update_interval']
         true_expire = timer['extras']['true_expire']
 
-        data = db.polls.find_one({'guild_id': guild_id})
-
-        if str(message_id) not in data['polls']:
+        poll_data = db.reaction_menus.find_one({'guild_id': guild_id, 'message_id': message_id})
+        if not poll_data:
             return
 
-        question = timer['extras']['question']
-        poll = data['polls'][str(message_id)]
-        emote_count = poll
+        question = poll_data['question']
         channel = self.bot.get_channel(channel_id)
         message = await channel.fetch_message(message_id)
-        total_emotes = sum([v for v in emote_count.values() if isinstance(v, int)])
-        description = f'**"{question}"**\n\n'
+        poll = poll_data['poll']
+        total_emotes = sum([v for v in poll.values() if isinstance(v, int)])
 
+        description = f'**"{question}"**\n\n'
         if total_emotes == 0:
             # just incase nobody participated
-            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **0%**' for emote, emote_count in emote_count.items() if emote in options)
+            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **0%**' for emote, emote_count in poll.items() if emote in options)
         else:
-            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in emote_count.items() if emote in options)
+            description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in poll.items() if emote in options)
 
         old_embed = message.embeds[0].to_dict()
         embed = message.embeds[0]
@@ -794,10 +572,7 @@ class Utility(commands.Cog):
         # check if poll passed true expire
         expired = round(time.time()) > true_expire
         if expired:
-            if message_id in utils_cog.no_expire_menus:
-                del utils_cog.no_expire_menus[message_id]
-
-            db.polls.update_one({'guild_id': guild_id}, {'$unset': {f'polls.{message_id}': ''}})
+            db.reaction_menus.find_one_and_delete({'guild_id': guild_id, 'message_id': message_id})
             await message.clear_reactions()
 
             # send message about poll being completed
@@ -868,17 +643,9 @@ class Utility(commands.Cog):
             'o_emotes': {},
             'u': ''
         }
-        _args = list(filter(lambda a: bool(a), re.split(r' ?-([t|o|q|u]) ', args)))
-        split_args = []
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([toqu]) ', args)))
         for i in range(int(len(_args)/2)):
-            split_args.append(f'{_args[i + (i * 1)]} {_args[i + (i + 1)]}')
-
-        for a in split_args:
-            tup = tuple(map(str.strip, a.split(' ', 1)))
-            if len(tup) <= 1:
-                continue
-            key, value = tup
-            result[key] = value
+            result[args[i + (i * 1)]] = _args[i + (i + 1)]
 
         if result['o']:
             result['o'] = [r.strip() for r in result['o'].split('|')]
@@ -901,25 +668,70 @@ class Utility(commands.Cog):
 
         return result
 
-    @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'],
-                      clearance='User', cls=command.Command)
+    @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'], clearance='User', cls=command.Command)
     async def help(self, ctx, _cmd=None):
         embed_colour = config.EMBED_COLOUR
         prefix = config.PREFIX
         all_commands = self.bot.commands
         help_object = {}
-        data = db.server_data.find_one({'guild_id': ctx.guild.id})
 
+        user_clearance = get_user_clearance(ctx.author)
         for cmd in all_commands:
             if hasattr(cmd, 'dm_only'):
                 continue
 
-            if 'commands' in data and 'disabled' in data['commands'] and cmd.name in data['commands']['disabled']:
+            command_data = db.commands.find_one({'guild_id': ctx.guild.id, 'command_name': cmd.name})
+            if not command_data:
+                command_data = {
+                    'guild_id': ctx.guild.id,
+                    'command_name': cmd.name,
+                    'disabled': 0,
+                    'user_access': {},
+                    'role_access': {}
+                }
+
+            user_access = command_data['user_access']
+            role_access = command_data['role_access']
+
+            access_to_command_given = False
+            access_to_command_taken = False
+
+            # check user_access
+            if user_access:
+                access_to_command_given = f'{ctx.author.id}' in user_access and user_access[f'{ctx.author.id}'] == 'give'
+                access_to_command_taken = f'{ctx.author.id}' in user_access and user_access[f'{ctx.author.id}'] == 'take'
+
+            # check role access
+            if role_access:
+                role_access_matching_role_ids = set([str(r.id) for r in ctx.author.roles]) & set(role_access.keys())
+                if role_access_matching_role_ids:
+                    # sort role by permission
+                    roles = [ctx.guild.get_role(int(r_id)) for r_id in role_access_matching_role_ids]
+                    sorted_roles = sorted(roles, key=lambda r: r.permissions)
+                    if sorted_roles:
+                        role = sorted_roles[-1]
+                        access_to_command_given = access_to_command_given or f'{role.id}' in role_access and role_access[f'{role.id}'] == 'give'
+                        access_to_command_taken = access_to_command_taken or f'{role.id}' in role_access and role_access[f'{role.id}'] == 'take'
+
+            if cmd.clearance not in user_clearance and not access_to_command_given:
                 continue
 
+            if access_to_command_taken:
+                continue
+
+            if command_data['disabled'] and ctx.author.id not in config.DEV_IDS:
+                continue
+
+            if access_to_command_given:
+                if 'Special Access' not in help_object:
+                    help_object['Special Access'] = [cmd]
+                else:
+                    help_object['Special Access'].append(cmd)
+
             # Check if cog is levels and if cmd requires mod perms
-            if cmd.cog_name == 'Leveling' and 'Leveling - Staff' not in help_object:
+            if cmd.cog_name == 'Leveling' and 'Leveling - Staff' not in help_object and cmd.clearance != 'User':
                 help_object['Leveling - Staff'] = []
+                continue
             if cmd.cog_name == 'Leveling' and cmd.clearance != 'User':
                 help_object['Leveling - Staff'].append(cmd)
                 continue
@@ -929,60 +741,27 @@ class Utility(commands.Cog):
             else:
                 help_object[cmd.cog_name].append(cmd)
 
-        clearance = get_user_clearance(ctx.author)
-
-        # check if user has special access
-        access_given = []
-        access_taken = []
-        if 'commands' in data and 'access' in data['commands'] and 'users' in data['commands']['access'] and 'roles' in data['commands']['access']:
-            command_data = data['commands']['access']
-            # check if user has special access
-            cmd_access_list = []
-            if str(ctx.author.id) in command_data['users']:
-                cmd_access_list += [c for c in command_data['users'][str(ctx.author.id)]]
-            if set([str(r.id) for r in ctx.author.roles]) & set(command_data['roles'].keys()):
-                cmd_access_list += [command_data['roles'][c] for c in command_data['roles'] if c in [str(r.id) for r in ctx.author.roles]]
-
-            access_given = [c['command'] for c in cmd_access_list if c['type'] == 'give']
-            access_taken = [c['command'] for c in cmd_access_list if c['type'] == 'take']
-
         if _cmd is None:
             embed = discord.Embed(
                 colour=embed_colour, timestamp=datetime.now(),
                 description=f'**Prefix** : `{prefix}`\nFor additional info on a command, type `{prefix}help [command]`'
             )
-            embed.set_author(name=f'Help - {clearance[0]}', icon_url=ctx.guild.icon_url)
+            embed.set_author(name=f'Help - {user_clearance[0]}', icon_url=ctx.guild.icon_url)
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
 
-            # get special access commands
-            special_access_cmds = []
+            # categories are listed in a list so they come out sorted instead of in a random order
+            categories = ['Dev', 'Mod', 'Leveling - Staff', 'Settings', 'Leveling', 'Utility', 'Fun']
+            for cat in categories:
+                if cat not in help_object:
+                    continue
+                # i need special access to be last
+                if cat == 'Special Access':
+                    continue
 
-            # add special access field
-            if access_given:
-                special_access_cmds += [c for c in access_given]
+                embed.add_field(name=f'>{cat}', value=" \| ".join([f'`{c}`' for c in help_object[cat]]), inline=False)
 
-            # remove duplicates
-            special_access_cmds = list(dict.fromkeys(special_access_cmds))
-
-            for cat in help_object:
-                cat_commands = []
-                for cmd in help_object[cat]:
-                    if cmd.name in access_taken:
-                        continue
-                    if cmd.clearance in clearance:
-                        cat_commands.append(cmd.name)
-
-                if cat_commands:
-                    # remove command from special_access_cmds if user already has access to it
-                    common = set(special_access_cmds) & set(cat_commands)
-                    if common:
-                        for r in common:
-                            special_access_cmds.remove(r)
-
-                    embed.add_field(name=f'>{cat}', value=" \| ".join([f'`{c}`' for c in cat_commands]), inline=False)
-
-            if special_access_cmds:
-                embed.add_field(name=f'>Special Access', value=" \| ".join([f'`{c}`' for c in special_access_cmds]), inline=False)
+            if 'Special Access' in help_object:
+                embed.add_field(name=f'>Special Access', value=" \| ".join([f'`{c}`' for c in help_object['Special Access']]), inline=False)
 
             return await ctx.send(embed=embed)
         else:
@@ -991,13 +770,8 @@ class Utility(commands.Cog):
                 if cmd.hidden:
                     return
 
-                if 'commands' in data and 'disabled' in data['commands'] and cmd.name in data['commands']['disabled']:
-                    return
-
-                if access_taken:
-                    return
-                if ctx.command.clearance not in clearance and not cmd in access_given:
-                    return
+                if cmd.cog_name not in help_object or cmd not in help_object[cmd.cog_name]:
+                    return await embed_maker.message(ctx, f'{_cmd} is not a valid command')
 
                 examples = f' | {prefix}'.join(cmd.examples)
                 cmd_help = f"""
@@ -1014,13 +788,21 @@ class Utility(commands.Cog):
 
     @commands.command(hidden=True, help='View source code of any command',
                       usage='source (command)', examples=['source', 'source pfp'],
-                      clearance='User', cls=command.Command, aliases=['src'])
+                      clearance='Dev', cls=command.Command, aliases=['src'])
     async def source(self, ctx, *, command=None):
         u = '\u200b'
         if not command:
             return await embed_maker.message(ctx, 'Check out the full sourcecode on GitHub\nhttps://github.com/Hattyot/TLDR-Bot/tree/1.5.2')
 
+        # pull source code
         src = f"```py\n{str(__import__('inspect').getsource(self.bot.get_command(command).callback)).replace('```', f'{u}')}```"
+        # replace @commands.command() section
+        src = '```py\n' + re.split(r'@commands.command(.*?)\)\n', src, 1, flags=re.DOTALL | re.MULTILINE)[-1]
+        # pull back indentation
+        new_src = ''
+        for line in src.splitlines():
+            new_src += f"{line.replace('    ', '', 1)}\n"
+        src = new_src
         if len(src) > 2000:
             cmd = self.bot.get_command(command).callback
             if not cmd:

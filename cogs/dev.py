@@ -74,7 +74,11 @@ class Dev(commands.Cog):
         }
         exec(compile(parsed, filename="<ast>", mode="exec"), env)
 
-        result = (await eval(f"{fn_name}()", env))
+        result = repr(await eval(f"{fn_name}()", env))
+        # return done if result is empty, so it doesnt cause empty message error
+        if result == '':
+            result = 'Done'
+
         await ctx.send(result)
 
     @commands.command(hidden=True, help='Kill the bot', usage='kill_bot', examples=['kill_bot'], clearance='Dev', cls=command.Command)
@@ -88,16 +92,25 @@ class Dev(commands.Cog):
         if command is None:
             return await embed_maker.command_error(ctx)
 
-        if self.bot.get_command(cmd) is None:
+        cmd_obj = self.bot.get_command(cmd)
+        if cmd_obj is None:
             return await embed_maker.command_error(ctx, '[command]')
 
-        cmd_obj = self.bot.get_command(cmd)
+        command_data = db.commands.find_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name})
+        if command_data is None:
+            command_data = {
+                'guild_id': ctx.guild.id,
+                'command_name': cmd_obj.name,
+                'disabled': 0,
+                'user_access': {},
+                'role_access': {}
+            }
+            db.commands.insert_one(command_data)
 
-        data = db.server_data.find_one({'guild_id': ctx.guild.id})
-        if 'commands' in data and cmd_obj.name in data['commands']['disabled']:
+        if command_data['disabled']:
             return await embed_maker.message(ctx, f'{cmd} is already disabled', colour='red')
 
-        db.server_data.update_one({'guild_id': ctx.guild.id}, {'$push': {'commands.disabled': cmd_obj.name}})
+        db.commands.update_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name}, {'$set': {'disabled': 1}})
         return await embed_maker.message(ctx, f'{cmd} has been disabled', colour='green')
 
     @commands.command(hidden=True, help='Enable a command', usage='enable_command', examples=['enable_command'], clearance='Dev', cls=command.Command)
@@ -106,24 +119,36 @@ class Dev(commands.Cog):
         if command is None:
             return await embed_maker.command_error(ctx)
 
-        if self.bot.get_command(cmd) is None:
+        cmd_obj = self.bot.get_command(cmd)
+        if cmd_obj is None:
             return await embed_maker.command_error(ctx, '[command]')
 
-        cmd_obj = self.bot.get_command(cmd)
+        command_data = db.commands.find_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name})
+        if command_data is None:
+            command_data = {
+                'guild_id': ctx.guild.id,
+                'command_name': cmd_obj.name,
+                'disabled': 0,
+                'user_access': {},
+                'role_access': {}
+            }
+            db.commands.insert_one(command_data)
 
-        data = db.server_data.find_one({'guild_id': ctx.guild.id})
-        if 'commands' not in data and cmd_obj.name not in data['commands']['disabled']:
+        if not command_data['disabled']:
             return await embed_maker.message(ctx, f'{cmd} is already enabled', colour='red')
 
-        db.server_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {'commands.disabled': cmd_obj.name}})
-        return await embed_maker.message(ctx, f'{cmd} has been enabled', colour='green')
+        db.commands.update_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name}, {'$set': {'disabled': 0}})
+        command_data['disabled'] = 0
+        await embed_maker.message(ctx, f'{cmd} has been enabled', colour='green')
+
+        # check if all data is default, if it is delete the data from db
+        if not command_data['disabled'] and not command_data['user_access'] and not command_data['role_access']:
+            db.commands.find_one_and_delete({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name})
 
     # adds anglorex resource usage monitor
-    @commands.command(hidden=True, help='monitors bot resource usage', usage='resrc_usage',
-                      examples=['resrc_usage'], clearance='Dev', cls=command.Command)
+    @commands.command(hidden=True, help='monitors bot resource usage', usage='resource_usage', examples=['resource_usage'], clearance='Dev', cls=command.Command)
     @commands.check(is_dev)
     async def resource_usage(self, ctx):
-        prefix = config.PREFIX
         embed_colour = config.EMBED_COLOUR
         external_ip = urllib.request.urlopen('https://api.ipify.org/').read().decode('utf8')
         disk_usage = psutil.disk_usage('/')
