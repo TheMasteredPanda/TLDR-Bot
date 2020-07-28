@@ -260,7 +260,6 @@ class Mod(commands.Cog):
             )
 
         args = self.parse_dd_args(arg)
-        print(args)
         topic = args['t']
         topic_author_arg = args['ta']
         topic_options_arg = args['o']
