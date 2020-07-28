@@ -668,7 +668,7 @@ class Utility(commands.Cog):
         }
         _args = list(filter(lambda a: bool(a), re.split(r' ?-([toqu]) ', args)))
         for i in range(int(len(_args)/2)):
-            result[args[i + (i * 1)]] = _args[i + (i + 1)]
+            result[_args[i + (i * 1)]] = _args[i + (i + 1)]
 
         if result['o']:
             result['o'] = [r.strip() for r in result['o'].split('|')]
