@@ -148,7 +148,16 @@ class Mod(commands.Cog):
                     if topic_author:
                         topics_str += f'**Topic Author:** {str(topic_author)}\n'
 
-            return await embed_maker.message(ctx, msg=topics_str)
+            dd_time = daily_debates_data['time'] if daily_debates_data['time'] else 'Not set'
+            dd_channel = f'<#{daily_debates_data["channel_id"]}>' if daily_debates_data['channel_id'] else 'Not set'
+            dd_poll_channel = f'<#{daily_debates_data["poll_channel_id"]}>' if daily_debates_data['poll_channel_id'] else 'Not set'
+            dd_role = f'<@&{daily_debates_data["role_id"]}>' if daily_debates_data['role_id'] else 'Not set'
+
+            embed = discord.Embed(title='Daily Debates', colour=config.EMBED_COLOUR, description=topics_str, timestamp=datetime.datetime.now())
+            embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+            embed.add_field(name='Attributes', value=f'Time: {dd_time}\nChannel: {dd_channel}\nPoll Channel: {dd_poll_channel}\nRole: {dd_role}')
+
+            return await ctx.send(embed=embed)
 
         if arg is None:
             return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
@@ -185,6 +194,10 @@ class Mod(commands.Cog):
             return await embed_maker.message(ctx, f'Daily debates will now be announced every day at <#{channel_id}>')
 
         if action == 'set_poll_channel':
+            if arg == 'None':
+                db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
+                return await embed_maker.message(ctx, f'daily debates poll channel has been disabled')
+
             if not ctx.message.channel_mentions:
                 return await embed_maker.message(ctx, 'Invalid channel mention', colour='red')
 
@@ -193,6 +206,10 @@ class Mod(commands.Cog):
             return await embed_maker.message(ctx, f'Daily debate polls will now be sent every day to <#{channel_id}>')
 
         if action == 'set_role':
+            if arg == 'None':
+                db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
+                return await embed_maker.message(ctx, f'daily debates role has been disabled')
+
             role = discord.utils.find(lambda r: r.name.lower() == arg.lower(), ctx.guild.roles)
             if not role:
                 return await embed_maker.message(ctx, 'Invalid role name', colour='red')
@@ -343,8 +360,8 @@ class Mod(commands.Cog):
         daily_debate_data = db.daily_debates.find_one({'guild_id': guild_id})
         topic_data = daily_debate_data['topics'][0]
         topic = topic_data['topic']
-        topic_options = topic['topic_options']
-        topic_author_id = topic['topic_author_id']
+        topic_options = topic_data['topic_options']
+        topic_author_id = topic_data['topic_author_id']
         topic_author = await self.bot.fetch_user(int(topic_author_id)) if topic_author_id else None
 
         dd_time = daily_debate_data['time']
