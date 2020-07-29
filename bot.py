@@ -84,6 +84,9 @@ class TLDR(commands.Bot):
 
                 return await message.edit(embed=embed)
 
+            if role not in user.roles:
+                return
+            
             await user.remove_roles(role)
 
             msg = f'Role Taken: {emote}: `{reaction_menu_data["roles"][emote]["message"]}`'
@@ -376,7 +379,7 @@ class TLDR(commands.Bot):
         leveling_user = db.leveling_users.find_one({'guild_id': member.guild.id, 'user_id': member.id})
         if leveling_user:
             # delete timer
-            db.timers.find_one_and_delete({'guild_id': member.guild.id, 'event': 'delete_user_data', 'extras.user_id': member.id})
+            db.timers.delete_one({'guild_id': member.guild.id, 'event': 'delete_user_data', 'extras.user_id': member.id})
 
             # give user data back
             if 'left' in leveling_user:
