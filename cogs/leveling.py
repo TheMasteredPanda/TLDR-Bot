@@ -909,7 +909,7 @@ class Leveling(commands.Cog):
                       usage='rank (member)', examples=['rank', 'rank @Hattyot', 'rank Hattyot'],
                       clearance='User', cls=command.Command)
     async def rank(self, ctx, *, member=None):
-        if member is None:
+        if member is None or member == '-v':
             mem = ctx.author
         else:
             mem = await get_member(ctx, self.bot, member)
@@ -955,8 +955,25 @@ class Leveling(commands.Cog):
                     await mem.add_roles(member_h_role)
 
                 hp_progress = self.percent_till_next_level('honours', leveling_user)
-                hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role.id}>' \
-                           f' | Progress: **{hp_progress}%**'
+                # verbose option
+                if member == '-v':
+                    hp = leveling_user['hp']
+                    totoal_h_level = leveling_user['h_level']
+                    hp_till_next_level = (totoal_h_level + 1) * 1000
+                    hp_needed = hp_till_next_level - hp
+                    avg_msg_needed = math.ceil(hp_needed / 20)
+                    hp_value = f"""
+                    **Rank:** `#{h_rank}`
+                    **Role:** <@&{h_role.id}>
+                    **Role Level:** {member_h_level}
+                    **Total Level:** {totoal_h_level}
+                    **Points:** {hp}/{hp_till_next_level} 
+                    **Progress:** {hp_progress}%
+                    **Mlu:**: {avg_msg_needed}
+                    """
+                else:
+                    hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role.id}> | Progress: **{hp_progress}%**'
+
                 embed.add_field(name='>Honours', value=hp_value, inline=False)
 
         # add parliamentary section
@@ -969,14 +986,45 @@ class Leveling(commands.Cog):
             await mem.add_roles(member_p_role)
 
         pp_progress = self.percent_till_next_level('parliamentary', leveling_user)
-        pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{p_role.id}> | Progress: **{pp_progress}%**'
+        # verbose option
+        if member == '-v':
+            pp = int(leveling_user['pp'])
+            total_p_level = int(leveling_user['p_level'])
+            pp_till_next_level = round(5 / 6 * (total_p_level + 1) * (2 * (total_p_level + 1) * (total_p_level + 1) + 27 * (total_p_level + 1) + 91))
+            pp_needed = pp_till_next_level - pp
+            avg_msg_needed = math.ceil(pp_needed / 20)
+            pp_value = f"""
+            **Rank:** `#{p_rank}`
+            **Role:** <@&{p_role.id}>
+            **Role Level:** {member_p_level}
+            **Total Level:** {total_p_level}
+            **Points:** {pp}/{pp_till_next_level} 
+            **Progress:** {pp_progress}%
+            **Mlu:**: {avg_msg_needed}
+            """
+        else:
+            pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{p_role.id}> | Progress: **{pp_progress}%**'
+
         embed.add_field(name='>Parliamentary', value=pp_value, inline=False)
 
         # add reputation section if user has rep
         if 'reputation' in leveling_user and leveling_user['reputation'] > 0:
             rep = leveling_user['reputation']
             rep_rank = await self.calculate_user_rank('reputation', ctx.guild, leveling_user)
-            rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
+            last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user['last_rep'] else 'None'
+            rep_time = leveling_user['rep_timer']
+            rep_again = format_time.seconds(rep_time, accuracy=3) if rep_time > round(time()) else '0 seconds'
+            # verbose option
+            if member == '-v':
+                rep_value = f"""
+                **Rank:** `#{rep_rank}`
+                **Points:** {rep}
+                **Last Rep:** {last_rep}
+                **Rep Timer:** {rep_again}
+                """
+            else:
+                rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
+
             embed.add_field(name='>Reputation', value=rep_value, inline=False)
 
         return await ctx.send(embed=embed)
