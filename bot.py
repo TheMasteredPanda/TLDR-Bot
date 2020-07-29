@@ -28,7 +28,7 @@ class TLDR(commands.Bot):
 
     async def on_message_delete(self, message):
         # delete reaction menu if message is reaction menu
-        db.reaction_menus.find_one_and_delete({'guild_id': message.guild.id, 'message_id': message.id})
+        db.reaction_menus.delete_one({'guild_id': message.guild.id, 'message_id': message.id})
 
     async def on_raw_reaction_remove(self, payload):
         guild_id = payload.guild_id

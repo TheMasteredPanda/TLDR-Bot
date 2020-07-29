@@ -148,7 +148,7 @@ class Utility(commands.Cog):
             channel_id = role_menu_data['channel_id']
             channel = ctx.guild.get_channel(int(channel_id))
             if channel is None:
-                db.reaction_menus.find_one_and_delete({'guild_id': ctx.guild.id, 'role_menu_name': role_menu_name})
+                db.reaction_menus.delete_one({'guild_id': ctx.guild.id, 'role_menu_name': role_menu_name})
                 return await embed_maker.message(ctx, f'Role menu has an invalid channel id, role menu `{role_menu_name}` has been deleted from the database')
 
             message = await channel.fetch_message(msg_id)
@@ -595,7 +595,7 @@ class Utility(commands.Cog):
         # check if poll passed true expire
         expired = round(time.time()) > true_expire
         if expired:
-            db.reaction_menus.find_one_and_delete({'guild_id': guild_id, 'message_id': message_id})
+            db.reaction_menus.delete_one({'guild_id': guild_id, 'message_id': message_id})
             await message.clear_reactions()
 
             # send message about poll being completed

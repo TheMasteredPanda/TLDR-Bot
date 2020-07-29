@@ -37,7 +37,7 @@ class Mod(commands.Cog):
                     try:
                         user = await ctx.guild.fetch_member(int(user_id))
                     except:
-                        db.watchlist.find_one_and_delete({'guild_id': ctx.guild.id, 'user_id': user_id})
+                        db.watchlist.delete_one({'guild_id': ctx.guild.id, 'user_id': user_id})
                         continue
                 on_list_str += f'`#{i + 1}` - {str(user)}\n'
                 watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': user_id}, {'filters': 1})
@@ -99,7 +99,7 @@ class Mod(commands.Cog):
             if watchlist_user is None:
                 return await embed_maker.message(ctx, 'User is not on the list', colour='red')
 
-            db.watchlist.find_one_and_delete({'guild_id': ctx.guild.id, 'user_id': member.id})
+            db.watchlist.delete_one({'guild_id': ctx.guild.id, 'user_id': member.id})
 
             return await embed_maker.message(ctx, f'<@{member.id}> has been removed from the watchlist', colour='green')
 
@@ -180,7 +180,7 @@ class Mod(commands.Cog):
             # cancel old timer if active
             daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
             if daily_debate_timer:
-                db.timers.find_one_and_delete({'_id': ObjectId(daily_debate_timer['_id'])})
+                db.timers.delete_one({'_id': ObjectId(daily_debate_timer['_id'])})
                 return await self.start_daily_debate_timer(ctx.guild.id, arg)
             else:
                 return
@@ -610,7 +610,7 @@ class Mod(commands.Cog):
             # check if all data is default, if it is delete the data from db
             del command_data[f'{type}_access'][f'{obj.id}']
             if not command_data['disabled'] and not command_data['user_access'] and not command_data['role_access']:
-                db.commands.find_one_and_delete(filter)
+                db.commands.delete_one(filter)
 
         elif action == 'take':
             if not can_access_command and type == 'users':

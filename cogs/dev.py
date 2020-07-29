@@ -199,7 +199,7 @@ class Dev(commands.Cog):
 
         # check if all data is default, if it is delete the data from db
         if not command_data['disabled'] and not command_data['user_access'] and not command_data['role_access']:
-            db.commands.find_one_and_delete({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name})
+            db.commands.delete_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name})
 
     # adds anglorex resource usage monitor
     @commands.command(hidden=True, help='monitors bot resource usage', usage='resource_usage', examples=['resource_usage'], clearance='Dev', cls=command.Command)

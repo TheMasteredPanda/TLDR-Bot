@@ -83,7 +83,7 @@ class Leveling(commands.Cog):
         err = ''
         suc = ''
         if source_type == 'role' and boost_data:
-            db.boosts.find_one_and_delete({'guild_id': ctx.guild.id, f'{source_type}_id': boost_remove.id})
+            db.boosts.delete_one({'guild_id': ctx.guild.id, f'{source_type}_id': boost_remove.id})
             if source != '@everyone':
                 suc = f'Removed <@&{boost_remove.id}>\'s boost'
             else:
@@ -96,7 +96,7 @@ class Leveling(commands.Cog):
 
         if source_type == 'user' and boost_data:
             latest_boost = boost_data[-1]
-            db.boosts.find_one_and_delete({'_id': ObjectId(latest_boost['_id'])})
+            db.boosts.delete_one({'_id': ObjectId(latest_boost['_id'])})
             suc = f'Removed latest boost given to <@{boost_remove.id}>'
         else:
             err = f'User <@{boost_remove.id}> has no active boosts'
@@ -131,7 +131,7 @@ class Leveling(commands.Cog):
         for i, boost in enumerate(boost_data):
             expires = boost["expires"]
             if expires < round(time()):
-                db.boosts.find_one_and_delete({'_id': ObjectId(boost['_id'])})
+                db.boosts.delete_one({'_id': ObjectId(boost['_id'])})
                 continue
             multiplier = boost["multiplier"]
             percent = 100 - abs(round((multiplier - 1) * 100, 1))
@@ -190,7 +190,7 @@ class Leveling(commands.Cog):
         if source_type == 'role' and boost_data:
             expires = boost_data["expires"]
             if boost_data["expires"] <= time():
-                db.boosts.find_one_and_delete({'_id': ObjectId(boost_data['_id'])})
+                db.boosts.delete_one({'_id': ObjectId(boost_data['_id'])})
 
             multiplier = boost_data["multiplier"]
             percent = 100 - abs(round((multiplier - 1) * 100, 1))

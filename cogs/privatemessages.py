@@ -136,7 +136,7 @@ class PrivateMessages(commands.Cog):
         ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
         if ctx.channel.category == ticket_category:
             await ctx.channel.delete()
-            db.tickets.find_one_and_delete({'guild_id': ctx.guild.id, 'ticket_channel_id': ctx.channel.id})
+            db.tickets.delete_one({'guild_id': ctx.guild.id, 'ticket_channel_id': ctx.channel.id})
         else:
             return await embed_maker.message(ctx, 'Invalid ticket channel')
 
