@@ -787,6 +787,13 @@ class Leveling(commands.Cog):
                       examples=['rep @Hattyot for being an excellent example in this text'], clearance='User',
                       cls=command.Command, aliases=['reputation'])
     async def rep(self, ctx, mem=None, *, reason=None):
+        # check if user has been in server for more than 2 days
+        now_datetime = datetime.now()
+        joined_at = ctx.author.joined_at
+        diff = now_datetime - joined_at
+        if round(diff.total_seconds()) < 86400 * 2:  # 2 days
+            return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points', colour='red')
+
         # check if user can give rep point
         leveling_user = db.leveling_users.find_one({'guild_id': ctx.guild.id, 'user_id': ctx.author.id})
         now = time()
@@ -806,13 +813,6 @@ class Leveling(commands.Cog):
             return await embed_maker.command_error(ctx, '[member]')
         elif isinstance(member, str):
             return await embed_maker.message(ctx, member, colour='red')
-
-        # check if user has been in server for more than 5 days
-        now_datetime = datetime.now()
-        joined_at = ctx.author.joined_at
-        diff = now_datetime - joined_at
-        if round(diff.total_seconds()) < 86400 * 5:  # 5 days
-            return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points', colour='red')
 
         if member.id == ctx.author.id:
             return await embed_maker.message(ctx, f'You can\'t give rep points to yourself', colour='red')
@@ -849,7 +849,11 @@ class Leveling(commands.Cog):
         embed = discord.Embed(colour=config.EMBED_COLOUR, description=msg, timestamp=datetime.now())
         embed.set_footer(text=f'{ctx.guild.name}', icon_url=ctx.guild.icon_url)
         embed.set_author(name='Rep')
-        await member.send(embed=embed)
+        # add a try because bot might not be able to dm member
+        try:
+            await member.send(embed=embed)
+        except:
+            pass
 
         # check if user already has rep boost, if they do, extend it by 30 minutes
         boost = db.boosts.find_one({'guild_id': ctx.guild.id, 'user_id': member.id, 'type': 'rep'})
