@@ -1242,7 +1242,11 @@ class Leveling(commands.Cog):
         role_amount = len(all_roles)
 
         # Get role index
-        role_obj = [role for role in all_roles if role[0] == user_role][0]
+        role_obj = [role for role in all_roles if role[0] == user_role]
+        if not role_obj:
+            return 0
+        else:
+            role_obj = role_obj[0]
         role_index = all_roles.index(role_obj)
 
         up_to_current_role = all_roles[:role_index + 1]
