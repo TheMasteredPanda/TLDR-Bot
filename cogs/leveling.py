@@ -34,23 +34,6 @@ class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='see how many messages you need to send to level up', usage='msg_lvl_up', examples=['msg_lvl_up'],
-                      clearance='User', cls=command.Command, aliases=['mlu'])
-    async def msg_lvl_up(self, ctx):
-        min_pp_gain = 15
-        max_pp_gain = 25
-
-        leveling_user = db.leveling_users.find_one({'guild_id': ctx.guild.id, 'user_id': ctx.author.id})
-        user_p_level = leveling_user['p_level']
-        user_pp = leveling_user['pp']
-
-        pp_to = 5 / 6 * (user_p_level + 1) * (2 * (user_p_level + 1) * (user_p_level + 1) + 27 * (user_p_level + 1) + 91)
-        pp_needed = pp_to - user_pp
-
-        avg_msg_needed = math.ceil(pp_needed / ((min_pp_gain + max_pp_gain) / 2))
-
-        return await embed_maker.message(ctx, f'You need to send about **{avg_msg_needed}** messages to level up!\n\n')
-
     @commands.command(help='remove latest boost from user or remove boost from role',
                       usage='remove_boost [user/role/everyone]',
                       examples=['remove_boost Hattyot', 'remove_boost Mayor', 'remove_boost everyone'],
