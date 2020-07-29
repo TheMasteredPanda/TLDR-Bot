@@ -1012,7 +1012,7 @@ class Leveling(commands.Cog):
             rep = leveling_user['reputation']
             rep_rank = await self.calculate_user_rank('reputation', ctx.guild, leveling_user)
             last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user['last_rep'] else 'None'
-            rep_time = leveling_user['rep_timer']
+            rep_time = leveling_user['rep_timer'] - round(time())
             rep_again = format_time.seconds(rep_time, accuracy=3) if rep_time > round(time()) else '0 seconds'
             # verbose option
             if member == '-v':
