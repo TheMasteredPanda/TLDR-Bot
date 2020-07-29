@@ -792,7 +792,7 @@ class Leveling(commands.Cog):
         joined_at = ctx.author.joined_at
         diff = now_datetime - joined_at
         if round(diff.total_seconds()) < 86400 * 2:  # 2 days
-            return await embed_maker.message(ctx, f'You need to be on this server for at least 5 days to give rep points', colour='red')
+            return await embed_maker.message(ctx, f'You need to be on this server for at least 2 days to give rep points', colour='red')
 
         # check if user can give rep point
         leveling_user = db.leveling_users.find_one({'guild_id': ctx.guild.id, 'user_id': ctx.author.id})
