@@ -465,7 +465,7 @@ class Mod(commands.Cog):
         ticket_channel = await ctx.guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
         await ticket_channel.send(embed=ticket_embed)
 
-    @commands.command(help='Give user access to ticket', usage='get_user', examples=['get_user'], clearance='Mod', cls=command.Command)
+    @commands.command(help='Give user access to ticket', usage='get_user [user]', examples=['get_user hattyot'], clearance='Mod', cls=command.Command)
     async def get_user(self, ctx, member=None):
         if member is None:
             return await embed_maker.command_error(ctx)
