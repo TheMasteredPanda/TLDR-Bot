@@ -228,9 +228,6 @@ class TLDR(commands.Bot):
             ctx = await self.get_context(message)
             return await pm_cog.process_pm(ctx)
 
-        if message.content.startswith(config.PREFIX):
-            await self.process_commands(message)
-
         watchlist = db.watchlist.find_one({'guild_id': message.guild.id, 'user_id': message.author.id})
         watchlist_data = db.watchlist_data.find_one({'guild_id': message.guild.id})
         if watchlist and watchlist_data:
@@ -253,6 +250,9 @@ class TLDR(commands.Bot):
                         break
 
                 await channel.send(embed=embed, content=content)
+
+        if message.content.startswith(config.PREFIX):
+            return await self.process_commands(message)
 
         # Starts leveling process
         levels_cog = self.get_cog('Leveling')
