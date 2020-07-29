@@ -51,7 +51,10 @@ class TLDR(commands.Bot):
         user_id = payload.user_id
         user = guild.get_member(user_id)
         if user is None:
-            user = await guild.fetch_member(user_id)
+            try:
+                user = await guild.fetch_member(user_id)
+            except:
+                return
 
         if user.bot:
             return
@@ -425,6 +428,25 @@ class TLDR(commands.Bot):
         utils_cog = self.get_cog('Utils')
         expires = int(time()) + (86400 * 5)  # 5 days
         await utils_cog.create_timer(expires=expires, guild_id=member.guild.id, event='delete_user_data', extras={'user_id': member.id})
+
+        # remove user reactions from role menus
+        role_menus = db.reaction_menus.find({'guild_id': member.guild.id, 'role_menu_name': {'$exists': True}})
+        member_role_ids = [r.id for r in member.roles]
+        for rm in role_menus:
+            for emote in rm['roles']:
+                if rm['roles'][emote]['role_id'] in member_role_ids:
+                    channel = self.get_channel(rm['channel_id'])
+                    if not channel:
+                        continue
+
+                    message = await channel.fetch_message(rm['message_id'])
+                    if not message:
+                        continue
+
+                    try:
+                        await message.remove_reaction(emote, member)
+                    except:
+                        continue
 
     async def on_delete_user_data_timer_over(self, timer):
         guild_id = timer['guild_id']
