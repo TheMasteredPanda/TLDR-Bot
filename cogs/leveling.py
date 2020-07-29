@@ -288,7 +288,7 @@ class Leveling(commands.Cog):
                 result['p'] = perks
                 continue
 
-            result[args[i + (i * 1)]] = _args[i + (i + 1)]
+            result[_args[i + (i * 1)]] = _args[i + (i + 1)]
 
         return result
 
@@ -496,7 +496,7 @@ class Leveling(commands.Cog):
 
         _args = list(filter(lambda a: bool(a), re.split(r' ?-(b|r|l|nr|nl) ', args)))
         for i in range(int(len(_args) / 2)):
-            result[args[i + (i * 1)]] = _args[i + (i + 1)]
+            result[_args[i + (i * 1)]] = _args[i + (i + 1)]
 
         return result
 
