@@ -37,16 +37,12 @@ class TLDR(commands.Bot):
         guild = self.get_guild(int(guild_id))
 
         channel_id = payload.channel_id
-        channel = guild.get_channel(int(channel_id))
-
         message_id = payload.message_id
 
         # check if message is reaction_menu
         reaction_menu_data = db.reaction_menus.find_one({'guild_id': int(guild_id), 'message_id': message_id})
         if not reaction_menu_data:
             return
-
-        message = await channel.fetch_message(int(message_id))
 
         user_id = payload.user_id
         user = guild.get_member(user_id)
@@ -74,6 +70,8 @@ class TLDR(commands.Bot):
 
                 # delete message if last role has been removed
                 if not roles:
+                    channel = guild.get_channel(int(channel_id))
+                    message = await channel.fetch_message(int(message_id))
                     return await message.delete()
 
                 embed_colour = config.EMBED_COLOUR
@@ -85,6 +83,8 @@ class TLDR(commands.Bot):
                 for emoji in roles:
                     description += f'\n{emoji}: `{roles[emoji]["message"]}`'
 
+                channel = guild.get_channel(int(channel_id))
+                message = await channel.fetch_message(int(message_id))
                 return await message.edit(embed=embed)
 
             if role not in user.roles:
@@ -106,7 +106,6 @@ class TLDR(commands.Bot):
         guild = self.get_guild(int(guild_id))
 
         channel_id = payload.channel_id
-        channel = guild.get_channel(int(channel_id))
         message_id = payload.message_id
 
         # check if message is reaction_menu
@@ -114,7 +113,6 @@ class TLDR(commands.Bot):
         if not reaction_menu_data:
             return
 
-        message = await channel.fetch_message(int(message_id))
         user_id = payload.user_id
         user = guild.get_member(user_id)
         if user is None:
@@ -139,6 +137,8 @@ class TLDR(commands.Bot):
 
                 # delete message if last role has been removed
                 if not roles:
+                    channel = guild.get_channel(int(channel_id))
+                    message = await channel.fetch_message(int(message_id))
                     return await message.delete()
 
                 embed_colour = config.EMBED_COLOUR
@@ -150,6 +150,8 @@ class TLDR(commands.Bot):
                 for emoji in roles:
                     description += f'\n{emoji}: `{roles[emoji]["message"]}`'
 
+                channel = guild.get_channel(int(channel_id))
+                message = await channel.fetch_message(int(message_id))
                 return await message.edit(embed=embed)
 
             await user.add_roles(role)
@@ -161,6 +163,8 @@ class TLDR(commands.Bot):
             return await user.send(embed=embed)
 
         elif 'poll' in reaction_menu_data and emote in reaction_menu_data['poll']:
+            channel = guild.get_channel(int(channel_id))
+            message = await channel.fetch_message(int(message_id))
             await message.remove_reaction(payload.emoji, user)
 
             embed_colour = config.EMBED_COLOUR
