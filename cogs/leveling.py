@@ -1013,7 +1013,8 @@ class Leveling(commands.Cog):
             embed.add_field(name='>Reputation', value=rep_value, inline=False)
 
         # add settings field
-        embed.add_field(name='>Settings', value=f'**@_me:** {at_me}', inline=False)
+        if member == '-v':
+            embed.add_field(name='>Settings', value=f'**@_me:** {at_me}', inline=False)
 
         return await ctx.send(embed=embed)
 
