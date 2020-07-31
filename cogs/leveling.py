@@ -945,6 +945,8 @@ class Leveling(commands.Cog):
                 boost_percent = round(boost_percent)
             embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
 
+        at_me = leveling_user['settings']['@_me']
+
         # checks if honours section needs to be added
         member_hp = leveling_user['hp']
         if member_hp > 0:
@@ -966,7 +968,7 @@ class Leveling(commands.Cog):
                     hp_till_next_level = (totoal_h_level + 1) * 1000
                     hp_needed = hp_till_next_level - hp
                     avg_msg_needed = math.ceil(hp_needed / 20)
-                    hp_value = f'**Rank:** `#{h_rank}`\n**Role:** <@&{h_role.id}>\n**Role Level:** {member_h_level}\n**Total Level:** {totoal_h_level}\n**Points:** {hp}/{hp_till_next_level}\n**Progress:** {hp_progress}%\n**Mlu:**: {avg_msg_needed}'
+                    hp_value = f'**Rank:** `#{h_rank}`\n**Role:** <@&{h_role.id}>\n**Role Level:** {member_h_level}\n**Total Level:** {totoal_h_level}\n**Points:** {hp}/{hp_till_next_level}\n**Progress:** {hp_progress}%\n**Mlu:** {avg_msg_needed}'
                 else:
                     hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role.id}> | Progress: **{hp_progress}%**'
 
@@ -989,7 +991,7 @@ class Leveling(commands.Cog):
             pp_till_next_level = round(5 / 6 * (total_p_level + 1) * (2 * (total_p_level + 1) * (total_p_level + 1) + 27 * (total_p_level + 1) + 91))
             pp_needed = pp_till_next_level - pp
             avg_msg_needed = math.ceil(pp_needed / 20)
-            pp_value = f'**Rank:** `#{p_rank}`\n**Role:** <@&{p_role.id}>\n**Role Level:** {member_p_level}\n**Total Level:** {total_p_level}\n**Points:** {pp}/{pp_till_next_level}\n**Progress:** {pp_progress}%\n**Mlu:**: {avg_msg_needed}'
+            pp_value = f'**Rank:** `#{p_rank}`\n**Role:** <@&{p_role.id}>\n**Role Level:** {member_p_level}\n**Total Level:** {total_p_level}\n**Points:** {pp}/{pp_till_next_level}\n**Progress:** {pp_progress}%\n**Mlu:** {avg_msg_needed}'
         else:
             pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{p_role.id}> | Progress: **{pp_progress}%**'
 
@@ -1009,6 +1011,9 @@ class Leveling(commands.Cog):
                 rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
 
             embed.add_field(name='>Reputation', value=rep_value, inline=False)
+
+        # add settings field
+        embed.add_field(name='>Settings', value=f'**@_me:** {at_me}', inline=False)
 
         return await ctx.send(embed=embed)
 
