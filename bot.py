@@ -170,16 +170,16 @@ class TLDR(commands.Bot):
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
             embed.set_footer(text=f'{guild.name}', icon_url=guild.icon_url)
-            embed.title = f'**"{reaction_menu_data["question"]}"**'
+            description = f'**"{reaction_menu_data["question"]}"**'
 
             if user.id in reaction_menu_data['voted']:
-                embed.description = f'You have already voted'
+                embed.description = f'{description}\nYou have already voted'
                 return await user.send(embed=embed)
 
             db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$inc': {f'poll.{emote}': 1}})
             db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$push': {f'voted': user.id}})
 
-            embed.description = f'Your vote has been counted towards: {emote}'
+            embed.description = f'{description}\nYour vote has been counted towards: {emote}'
             return await user.send(embed=embed)
 
     async def on_command_error(self, ctx, exception):
@@ -359,8 +359,8 @@ class TLDR(commands.Bot):
         print(f'{self.user} is ready')
 
         # run old timers
-        utils_cog = self.get_cog('Utils')
-        await utils_cog.run_old_timers()
+        # utils_cog = self.get_cog('Utils')
+        # await utils_cog.run_old_timers()
 
         for g in self.guilds:
             # Check if guild documents in collections exist if not, it adds them
