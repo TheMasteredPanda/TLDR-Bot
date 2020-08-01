@@ -28,6 +28,8 @@ class TLDR(commands.Bot):
 
     async def on_message_delete(self, message):
         # delete reaction menu if message is reaction menu
+        if message.guild is None:
+            return
         db.reaction_menus.delete_one({'guild_id': message.guild.id, 'message_id': message.id})
 
     async def on_raw_reaction_remove(self, payload):
@@ -174,13 +176,15 @@ class TLDR(commands.Bot):
 
             if user.id in reaction_menu_data['voted']:
                 embed.description = f'{description}\nYou have already voted'
-                return await user.send(embed=embed)
+                msg = await user.send(embed=embed)
+                return await msg.delete(delay=20)
 
             db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$inc': {f'poll.{emote}': 1}})
             db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$push': {f'voted': user.id}})
 
             embed.description = f'{description}\nYour vote has been counted towards: {emote}'
-            return await user.send(embed=embed)
+            msg = await user.send(embed=embed)
+            return await msg.delete(delay=20)
 
     async def on_command_error(self, ctx, exception):
         trace = exception.__traceback__
