@@ -485,7 +485,7 @@ class Utility(commands.Cog):
         if question == '' or options == '':
             err = 'Empty arg'
 
-        if len(options) > 9:
+        if (len(options) > 9 and not option_emotes) or (option_emotes and len(options) > 15):
             err = 'Too many options'
         if len(options) < 2:
             err = 'Too few options'
@@ -525,7 +525,7 @@ class Utility(commands.Cog):
 
         utils_cog = self.bot.get_cog('Utils')
         if update_interval:
-            expires = round(time.time()) + round(update_interval)
+            expires = 0
         else:
             expires = round(time.time()) + round(poll_time)
 
@@ -584,7 +584,7 @@ class Utility(commands.Cog):
         embed.description = description
         embed.timestamp = datetime.fromtimestamp(true_expire)
         if update_interval:
-            embed.set_footer(text=f'Updates every {format_time.seconds(update_interval)} | Ends at')
+            embed.set_footer(text=f'Results updated every {format_time.seconds(update_interval)} | Ends at')
         else:
             embed.set_footer(text='Ended at')
 
@@ -683,6 +683,12 @@ class Utility(commands.Cog):
                 if oe:
                     e, o = oe[0]
                     e = e.strip()
+                    if e.isdigit():
+                        # check if outside emote
+                        outside_emote_data = db.outside_emotes.find_one({'emote_id': str(e)})
+                        if outside_emote_data:
+                            e = outside_emote_data['emote']
+
                     result['o_emotes'][e] = o
                     continue
 

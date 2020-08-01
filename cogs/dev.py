@@ -38,6 +38,26 @@ class Dev(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(hidden=True, help='test', usage='test', examples=['test'], clearance='Dev', cls=command.Command)
+    async def test(self, ctx, *, test=None):
+        return await ctx.send('<:lib:739015380839694377>')
+
+    @commands.command(hidden=True, help='Add custom emote from outside the server to list of usable emotes by the bot, use emotes by using emote\'s id, usable only in poll commands',
+                      usage='add_outside_emote', examples=['add_outside_emote <:lib:739015380839694377>'], clearance='Dev', cls=command.Command)
+    async def add_outside_emote(self, ctx, *, emote=None):
+        if emote is None:
+            return embed_maker.command_error(ctx)
+
+        emote = emote.replace('::', ':')
+        emote_id = emote.rsplit(':', 1)[-1].replace('>', '')
+        emote_doc = {
+            'emote': emote,
+            'emote_id': emote_id
+        }
+        db.outside_emotes.insert_one(emote_doc)
+
+        return await ctx.send(f'Added {emote} to list')
+
     @commands.command(hidden=True, help='Time a command', usage='time_cmd [command]', examples=['time_cmd lb'],
                       clearance='Dev', cls=command.Command)
     async def time_cmd(self, ctx, *, cmd=None):
