@@ -998,9 +998,9 @@ class Leveling(commands.Cog):
         embed.add_field(name='>Parliamentary', value=pp_value, inline=False)
 
         # add reputation section if user has rep
-        if 'reputation' in leveling_user and leveling_user['reputation'] > 0:
-            rep = leveling_user['reputation']
-            rep_rank = await self.calculate_user_rank('reputation', ctx.guild, leveling_user)
+        if 'reputation' in leveling_user and leveling_user['reputation'] > 0 or member == '-v':
+            rep = leveling_user['reputation'] if 'reputation' in leveling_user else '0'
+            rep_rank = await self.calculate_user_rank('reputation', ctx.guild, leveling_user) if 'reputation' in leveling_user and leveling_user['reputation'] > 0 else 'None'
             last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user['last_rep'] else 'None'
             rep_time = leveling_user['rep_timer'] - round(time())
             rep_again = format_time.seconds(rep_time, accuracy=3) if rep_time > 0 else '0 seconds'
