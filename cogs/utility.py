@@ -39,7 +39,7 @@ class Utility(commands.Cog):
                 limit += 1
                 continue
             message_sum = sum([sum(d.values()) for d in [channel['data_by_week'][w] for w in channel['data_by_week']]])
-            lb_str += f'**`#{p}`** - <#{channel["channel_id"]}>  | Messages: {message_sum}'
+            lb_str += f'**`#{p}`** - <#{channel["channel_id"]}>  | Messages: {message_sum}\n'
             p += 1
 
         embed_colour = config.EMBED_COLOUR
