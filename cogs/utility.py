@@ -24,7 +24,7 @@ class Utility(commands.Cog):
     @commands.command(help='See the channel activity leaderboard', usage='channel_activity (page)', examples=['channel_activity', 'channel_activity 2'], clearance='User', cls=command.Command)
     async def channel_activity(self, ctx, page=1):
         channel_data = [d for d in db.channels.find({'guild_id': ctx.guild.id})]
-        max_page_num = math.ceil(len([d for d in channel_data]))
+        max_page_num = math.ceil(len([d for d in channel_data]) / 10)
 
         sum_for_channel = {}
         for channel in channel_data:
