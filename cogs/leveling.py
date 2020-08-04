@@ -878,19 +878,29 @@ class Leveling(commands.Cog):
         }
         db.boosts.insert_one(boost_dict)
 
-    @commands.command(help='See all the perks that a role has to offer',
-                      usage='perks [role name]',
-                      examples=['perks Party Member'],
-                      clearance='User', cls=command.Command)
+    @commands.command(help='See all the perks that a role has to offer', usage='perks [role name]', examples=['perks Party Member'], clearance='User', cls=command.Command)
     async def perks(self, ctx, *, role_name=None):
-        if role_name is None:
-            return await embed_maker.command_error(ctx)
-
         leveling_data = db.leveling_data.find_one({'guild_id': ctx.guild.id}, {'leveling_routes': 1})
 
         leveling_routes = leveling_data['leveling_routes']
         honours_branch = leveling_routes['honours']
         parliamentary_branch = leveling_routes['parliamentary']
+
+        if role_name is None:
+            # find roles that have perks
+            filtered_parliamentary = list(filter(lambda x: len(x) > 2, parliamentary_branch))
+            filtered_honours = list(filter(lambda x: len(x) > 2, honours_branch))
+
+            embed_colour = config.EMBED_COLOUR
+            embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+            embed.set_author(name=f'List of roles with perks', icon_url=ctx.guild.icon_url)
+            embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+            parliamentary_str = '\n'.join(r[0] for r in filtered_parliamentary) if filtered_parliamentary else 'Currently no Parliamentary roles offer any perks'
+            honours_str = '\n'.join(r[0] for r in filtered_honours) if filtered_honours else 'Currently no Honours roles offer any perks'
+            embed.add_field(name='>Parliamentary Roles', value=parliamentary_str, inline=False)
+            embed.add_field(name='>Honours Roles', value=honours_str, inline=False)
+
+            return await ctx.send(embed=embed)
 
         filtered_parliamentary = list(filter(lambda x: x[0].lower() == role_name.lower(), parliamentary_branch))
         filtered_honours = list(filter(lambda x: x[0].lower() == role_name.lower(), honours_branch))
