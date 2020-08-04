@@ -25,12 +25,21 @@ class Utility(commands.Cog):
     async def channel_activity(self, ctx, page=1):
         channel_data = [d for d in db.channels.find({'guild_id': ctx.guild.id})]
         max_page_num = math.ceil(len([d for d in channel_data]))
+
+        sum_for_channel = {}
+        for channel in channel_data:
+            message_sum = sum([sum(d.values()) for d in [channel['data_by_week'][w] for w in channel['data_by_week']]])
+            sum_for_channel[channel['channel_id']] = message_sum
+
+        # sort channels
+        sum_for_channel = {k: v for k, v in sorted(sum_for_channel.items(), key=lambda item: item[1], reverse=True)}
+
         # construct top 10
         lb_str = ''
         limit = 10
         p = 1
         page_start = 1 + (10 * (page - 1))
-        for i, channel in enumerate(channel_data):
+        for i, channel in enumerate(sum_for_channel):
             if i == limit:
                 break
 
@@ -38,8 +47,8 @@ class Utility(commands.Cog):
                 p += 1
                 limit += 1
                 continue
-            message_sum = sum([sum(d.values()) for d in [channel['data_by_week'][w] for w in channel['data_by_week']]])
-            lb_str += f'**`#{p}`** - <#{channel["channel_id"]}>  | Messages: {message_sum}\n'
+
+            lb_str += f'**`#{p}`** - <#{channel}>  | Messages: {sum_for_channel[channel]}\n'
             p += 1
 
         embed_colour = config.EMBED_COLOUR
