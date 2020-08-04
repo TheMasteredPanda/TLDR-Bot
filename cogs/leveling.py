@@ -105,7 +105,7 @@ class Leveling(commands.Cog):
             if source == 'everyone':
                 source = f'@{source}'
 
-            boost_remove = discord.utils.find(lambda rl: rl.name.lower() == source.lower(), ctx.guild.roles)
+            boost_user = discord.utils.find(lambda rl: rl.name.lower() == source.lower(), ctx.guild.roles)
             source_type = 'role'
 
         boost_data = [d for d in db.boosts.find({'guild_id': ctx.guild.id, f'{source_type}_id': boost_user.id})]
@@ -189,7 +189,8 @@ class Leveling(commands.Cog):
             'guild_id': ctx.guild.id,
             f'{source_type}_id': to_boost.id,
             'expires': expires,
-            'multiplier': multiplier
+            'multiplier': multiplier,
+            'type': 'Manual'
         }
         db.boosts.insert_one(boost_object)
 
@@ -968,7 +969,11 @@ class Leveling(commands.Cog):
                     hp_till_next_level = (totoal_h_level + 1) * 1000
                     hp_needed = hp_till_next_level - hp
                     avg_msg_needed = math.ceil(hp_needed / 20)
-                    hp_value = f'**Rank:** `#{h_rank}`\n**Role:** <@&{h_role.id}>\n**Role Level:** {member_h_level}\n**Total Level:** {totoal_h_level}\n**Points:** {hp}/{hp_till_next_level}\n**Progress:** {hp_progress}%\n**Mlu:** {avg_msg_needed}'
+                    if ctx.guild.id in hp_cooldown and ctx.author.id in hp_cooldown[ctx.guild.id]:
+                        cooldown = format_time.seconds(hp_cooldown[ctx.guild.id][ctx.author.id] - round(time()))
+                    else:
+                        cooldown = '0 seconds'
+                    hp_value = f'**Rank:** `#{h_rank}`\n**Role:** <@&{h_role.id}>\n**Role Level:** {member_h_level}\n**Total Level:** {totoal_h_level}\n**Points:** {hp}/{hp_till_next_level}\n**Progress:** {hp_progress}%\n**Mlu:** {avg_msg_needed}\n**Cooldown:** {cooldown}'
                 else:
                     hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role.id}> | Progress: **{hp_progress}%**'
 
@@ -991,7 +996,11 @@ class Leveling(commands.Cog):
             pp_till_next_level = round(5 / 6 * (total_p_level + 1) * (2 * (total_p_level + 1) * (total_p_level + 1) + 27 * (total_p_level + 1) + 91))
             pp_needed = pp_till_next_level - pp
             avg_msg_needed = math.ceil(pp_needed / 20)
-            pp_value = f'**Rank:** `#{p_rank}`\n**Role:** <@&{p_role.id}>\n**Role Level:** {member_p_level}\n**Total Level:** {total_p_level}\n**Points:** {pp}/{pp_till_next_level}\n**Progress:** {pp_progress}%\n**Mlu:** {avg_msg_needed}'
+            if ctx.guild.id in pp_cooldown and ctx.author.id in pp_cooldown[ctx.guild.id]:
+                cooldown = format_time.seconds(pp_cooldown[ctx.guild.id][ctx.author.id] - round(time()))
+            else:
+                cooldown = '0 seconds'
+            pp_value = f'**Rank:** `#{p_rank}`\n**Role:** <@&{p_role.id}>\n**Role Level:** {member_p_level}\n**Total Level:** {total_p_level}\n**Points:** {pp}/{pp_till_next_level}\n**Progress:** {pp_progress}%\n**Mlu:** {avg_msg_needed}\n**Cooldown**: {cooldown}'
         else:
             pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{p_role.id}> | Progress: **{pp_progress}%**'
 
@@ -1011,6 +1020,55 @@ class Leveling(commands.Cog):
                 rep_value = f'**#{rep_rank}** | **{rep}** Rep Points'
 
             embed.add_field(name='>Reputation', value=rep_value, inline=False)
+
+        # add boosts field
+        if member == '-v':
+            boost_str = ''
+            # add user specific boosts
+            i = 1
+            user_boosts = db.boosts.find({'guild_id': ctx.guild.id, 'user_id': ctx.author.id})
+            for boost in user_boosts:
+                expires = boost["expires"]
+                if expires < round(time()):
+                    db.boosts.delete_one({'_id': ObjectId(boost['_id'])})
+                    continue
+
+                multiplier = boost["multiplier"]
+                percent = 100 - abs(round((multiplier - 1) * 100, 1))
+                if percent.is_integer():
+                    percent = int(percent)
+                boost_str += f'`#{i}` - {percent}% boost | Expires: {format_time.seconds(expires - round(time()), accuracy=5)}'
+                if 'type' in boost:
+                    boost_str += f' | Type: {boost["type"]}\n'
+
+                i += 1
+
+            # add role specific boosts
+            boost_role_ids = db.boosts.distinct('role_id')
+            # find common role ids
+            boost_role_ids = set(boost_role_ids) & set([r.id for r in ctx.author.roles])
+            for role_id in boost_role_ids:
+                boost = db.boosts.find_one({'guild_id': ctx.guild.id, 'role_id': role_id})
+                if not boost:
+                    continue
+
+                expires = boost["expires"]
+                if expires < round(time()):
+                    db.boosts.delete_one({'_id': ObjectId(boost['_id'])})
+                    continue
+
+                multiplier = boost["multiplier"]
+                percent = 100 - abs(round((multiplier - 1) * 100, 1))
+                if percent.is_integer():
+                    percent = int(percent)
+                boost_str += f'`#{i}` - {percent}% boost | Expires: {format_time.seconds(expires - round(time()), accuracy=5)}'
+                if 'type' in boost:
+                    boost_str += f' | Type: {boost["type"]}\n'
+
+                i += 1
+
+            boost_str = 'None' if not boost_str else boost_str
+            embed.add_field(name='>Boosts', value=boost_str)
 
         # add settings field
         if member == '-v':
