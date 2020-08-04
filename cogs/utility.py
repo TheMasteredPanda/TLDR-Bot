@@ -7,6 +7,7 @@ import asyncio
 import os
 import requests
 import googletrans
+import math
 from bs4 import BeautifulSoup
 from cogs.utils import get_member, get_user_clearance
 from datetime import datetime
@@ -20,8 +21,36 @@ class Utility(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='translate text to english', usage='translate [text]', examples=['translate tere'],
-                      clearance='User', cls=command.Command)
+    @commands.command(help='See the channel activity leaderboard', usage='channel_activity (page)', examples=['channel_activity', 'channel_activity 2'], clearance='User', cls=command.Command)
+    async def channel_activity(self, ctx, page=1):
+        channel_data = [d for d in db.channels.find({'guild_id': ctx.guild.id})]
+        max_page_num = math.ceil(len([d for d in channel_data]))
+        # construct top 10
+        lb_str = ''
+        limit = 10
+        p = 1
+        page_start = 1 + (10 * (page - 1))
+        for i, channel in enumerate(channel_data):
+            if i == limit:
+                break
+
+            if p < page_start:
+                p += 1
+                limit += 1
+                continue
+            message_sum = sum([sum(d.values()) for d in [channel['data_by_week'][w] for w in channel['data_by_week']]])
+            lb_str += f'**`#{p}`** - <#{channel["channel_id"]}>  | Messages: {message_sum}'
+            p += 1
+
+        embed_colour = config.EMBED_COLOUR
+        description = 'No data collected' if not lb_str else lb_str
+        leaderboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=description)
+        leaderboard_embed.set_footer(text=f'{ctx.author} | Page {page}/{max_page_num}', icon_url=ctx.author.avatar_url)
+        leaderboard_embed.set_author(name=f'Messages in the past 7 days', icon_url=ctx.guild.icon_url)
+
+        return await ctx.send(embed=leaderboard_embed)
+
+    @commands.command(help='translate text to english', usage='translate [text]', examples=['translate tere'], clearance='User', cls=command.Command)
     async def translate(self, ctx, *, text=None):
         if text is None:
             return await embed_maker.command_error(ctx)
