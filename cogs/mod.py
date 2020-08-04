@@ -117,7 +117,8 @@ class Mod(commands.Cog):
 
             return await embed_maker.message(ctx, f'if {member} mentions {" or ".join(f"`{f}`" for f in split_filters)} mods will be @\'d', colour='green')
 
-    @commands.command(help='Daily debate scheduler', usage='dailydebates (action) (arg) -ta (topic author) -o (poll options)',
+    @commands.command(help='Daily debate scheduler, remove values by setting them to "None" or disabled daily debates with `dailydebates disable`',
+                      usage='dailydebates (action) (arg) -ta (topic author) -o (poll options)',
                       clearance='Mod', cls=command.Command, aliases=['dd', 'dailydebate'],
                       examples=['dailydebates', 'dailydebates add is TLDR ross mega cool? -ta Hattyot -o Yes | Double Yes',
                                 'dailydebates remove 1', 'dailydebates set_time 2pm GMT',
@@ -161,6 +162,10 @@ class Mod(commands.Cog):
 
         if arg is None:
             return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
+
+        if action == 'disable':
+            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': 0}})
+            return await embed_maker.message(ctx, f'Daily debates have been disabled')
 
         if action == 'set_time':
             parsed_arg_time = dateparser.parse(arg, settings={'RETURN_AS_TIMEZONE_AWARE': True})
