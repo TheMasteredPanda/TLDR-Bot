@@ -83,7 +83,7 @@ class TLDR(commands.Bot):
                 description = 'React to give yourself a role\n'
 
                 for emoji in roles:
-                    description += f'\n{emoji}: `{roles[emoji]["message"]}`'
+                    description += f'\n{emoji} - `{roles[emoji]["message"]}`'
 
                 channel = guild.get_channel(int(channel_id))
                 message = await channel.fetch_message(int(message_id))
@@ -94,7 +94,7 @@ class TLDR(commands.Bot):
             
             await user.remove_roles(role)
 
-            msg = f'Role Taken: {emote}: `{reaction_menu_data["roles"][emote]["message"]}`'
+            msg = f'Role Taken: {emote} - `{reaction_menu_data["roles"][emote]["message"]}`'
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
             embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
@@ -150,14 +150,14 @@ class TLDR(commands.Bot):
                 description = 'React to give yourself a role\n'
 
                 for emoji in roles:
-                    description += f'\n{emoji}: `{roles[emoji]["message"]}`'
+                    description += f'\n{emoji} - `{roles[emoji]["message"]}`'
 
                 channel = guild.get_channel(int(channel_id))
                 message = await channel.fetch_message(int(message_id))
                 return await message.edit(embed=embed)
 
             await user.add_roles(role)
-            msg = f'Role Given: {emote}: `{reaction_menu_data["roles"][emote]["message"]}`'
+            msg = f'Role Given: {emote} - `{reaction_menu_data["roles"][emote]["message"]}`'
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
             embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)

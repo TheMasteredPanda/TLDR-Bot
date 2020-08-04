@@ -130,7 +130,7 @@ class Utility(commands.Cog):
 
         embed_colour = config.EMBED_COLOUR
         embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
-        embed.set_author(name=f'Role Menu: {role_menu_name}')
+        embed.set_author(name=f'Role Menu - "{role_menu_name}"')
         embed.set_footer(icon_url=ctx.guild.icon_url)
         description = 'React to give yourself a role\n'
 
@@ -184,7 +184,7 @@ class Utility(commands.Cog):
         }
 
         if not role_menu_data:
-            description += f'\n{emote}: `{message}`'
+            description += f'\n{emote} - `{message}`'
             embed.description = description
             msg = await ctx.send(embed=embed)
             await msg.add_reaction(emote)
@@ -215,7 +215,7 @@ class Utility(commands.Cog):
 
             roles = role_menu_data['roles']
             for emoji in roles:
-                description += f'\n{emoji}: `{roles[emoji]["message"]}`'
+                description += f'\n{emoji} - `{roles[emoji]["message"]}`'
 
             embed.description = description
             await message.edit(embed=embed)
