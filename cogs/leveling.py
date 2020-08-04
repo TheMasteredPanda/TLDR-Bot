@@ -893,12 +893,13 @@ class Leveling(commands.Cog):
 
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
+            embed.description = f'To view perks of a role type `{ctx.prefix}perks [role name]`'
             embed.set_author(name=f'List of roles with perks', icon_url=ctx.guild.icon_url)
             embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
             parliamentary_str = '\n'.join(r[0] for r in filtered_parliamentary) if filtered_parliamentary else 'Currently no Parliamentary roles offer any perks'
             honours_str = '\n'.join(r[0] for r in filtered_honours) if filtered_honours else 'Currently no Honours roles offer any perks'
-            embed.add_field(name='>Parliamentary Roles', value=parliamentary_str, inline=False)
-            embed.add_field(name='>Honours Roles', value=honours_str, inline=False)
+            embed.add_field(name='>Parliamentary Roles With Perks', value=parliamentary_str, inline=False)
+            embed.add_field(name='>Honours Roles With Perks', value=honours_str, inline=False)
 
             return await ctx.send(embed=embed)
 
