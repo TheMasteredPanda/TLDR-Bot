@@ -516,7 +516,7 @@ class Leveling(commands.Cog):
             leveling_user = database.schemas['leveling_user']
             leveling_user['guild_id'] = ctx.guild.id
             leveling_user['user_id'] = member.id
-            db.leveling_users.insert_one(leveling_user)
+            db.leveling_users.insert_one(leveling_user.copy())
 
         leveling_user['hp'] += amount
 
@@ -831,7 +831,7 @@ class Leveling(commands.Cog):
             leveling_user = database.schemas['leveling_user']
             leveling_user['guild_id'] = ctx.guild.id
             leveling_user['user_id'] = mem.id
-            db.leveling_users.insert_one(leveling_user)
+            db.leveling_users.insert_one(leveling_user.copy())
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time()) + 86400  # 24 hours
@@ -947,7 +947,7 @@ class Leveling(commands.Cog):
             leveling_user = database.schemas['leveling_user']
             leveling_user['guild_id'] = ctx.guild.id
             leveling_user['user_id'] = mem.id
-            db.leveling_users.insert_one(leveling_user)
+            db.leveling_users.insert_one(leveling_user.copy())
 
         # inform user of boost, if they have it
         boost_multiplier = get_user_boost_multiplier(mem)
@@ -1157,7 +1157,7 @@ class Leveling(commands.Cog):
                 leveling_user['guild_id'] = message.guild.id
                 leveling_user['user_id'] = message.author.id
 
-                db.leveling_users.insert_one(leveling_user)
+                db.leveling_users.insert_one(leveling_user.copy())
 
             # adds honours role to user if it's their first honours points gain
             if leveling_user['hp'] == 0:
@@ -1193,7 +1193,7 @@ class Leveling(commands.Cog):
                 leveling_user['guild_id'] = message.guild.id
                 leveling_user['user_id'] = message.author.id
 
-                db.leveling_users.insert_one(leveling_user)
+                db.leveling_users.insert_one(leveling_user.copy())
 
             # check for active boost and add to pp_add if active
             boost_multiplier = get_user_boost_multiplier(message.author)
