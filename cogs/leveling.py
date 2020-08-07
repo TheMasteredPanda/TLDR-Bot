@@ -1007,7 +1007,7 @@ class Leveling(commands.Cog):
             pp_till_next_level = round(5 / 6 * (total_p_level + 1) * (2 * (total_p_level + 1) * (total_p_level + 1) + 27 * (total_p_level + 1) + 91))
             pp_needed = pp_till_next_level - pp
             avg_msg_needed = math.ceil(pp_needed / 20)
-            if ctx.guild.id in pp_cooldown and ctx.author.id in pp_cooldown[ctx.guild.id]:
+            if ctx.guild.id in pp_cooldown and ctx.author.id in pp_cooldown[ctx.guild.id] and pp_cooldown[ctx.guild.id][ctx.author.id] > round(time()):
                 cooldown = format_time.seconds(pp_cooldown[ctx.guild.id][ctx.author.id] - round(time()))
             else:
                 cooldown = '0 seconds'
@@ -1021,7 +1021,7 @@ class Leveling(commands.Cog):
         if 'reputation' in leveling_user and leveling_user['reputation'] > 0 or member == '-v':
             rep = leveling_user['reputation'] if 'reputation' in leveling_user else '0'
             rep_rank = await self.calculate_user_rank('reputation', ctx.guild, leveling_user) if 'reputation' in leveling_user and leveling_user['reputation'] > 0 else 'None'
-            last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user['last_rep'] else 'None'
+            last_rep = f'<@{leveling_user["last_rep"]}>' if 'last_rep' in leveling_user and leveling_user['last_rep'] else 'None'
             rep_time = leveling_user['rep_timer'] - round(time())
             rep_again = format_time.seconds(rep_time, accuracy=3) if rep_time > 0 else '0 seconds'
             # verbose option
