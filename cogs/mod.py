@@ -117,19 +117,16 @@ class Mod(commands.Cog):
 
             return await embed_maker.message(ctx, f'if {member} mentions {" or ".join(f"`{f}`" for f in split_filters)} mods will be @\'d', colour='green')
 
-    @commands.command(help='Daily debate scheduler, remove values by setting them to "None" or disabled daily debates with `dailydebates disable`',
-                      usage='dailydebates (action) (arg) -ta (topic author) -o (poll options)',
-                      clearance='Mod', cls=command.Command, aliases=['dd', 'dailydebate'],
-                      examples=['dailydebates', 'dailydebates add is TLDR ross mega cool? -ta Hattyot -o Yes | Double Yes',
-                                'dailydebates remove 1', 'dailydebates set_time 2pm GMT',
-                                'dailydebates set_channel #daily-debates', 'dailydebates set_role Debaters',
-                                'dailydebates set_poll_channel #daily-debate-voting'])
-    async def dailydebates(self, ctx, action=None, *, arg=None):
+    @commands.group(name='dailydebates', help='Daily debate scheduler/manager',
+                    usage='dailydebates (sub command) (arg(s))',
+                    clearance='Mod', cls=command.Group, aliases=['dd', 'dailydebate'], examples=['dailydebates'],
+                    sub_commands=['add', 'insert', 'remove', 'set_time', 'set_channel', 'set_role', 'set_poll_channel', 'set_poll_options', 'disable'])
+    async def _dailydebates(self, ctx):
         daily_debates_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
         if daily_debates_data is None:
             daily_debates_data = self.bot.add_collections(ctx.guild.id, 'server_data')
 
-        if action is None:
+        if ctx.subcommand_passed is None:
             # List currently set up daily debate topics
             topics = daily_debates_data['topics']
             if not topics:
@@ -145,7 +142,8 @@ class Mod(commands.Cog):
 
                     topics_str += f'`#{i + 1}`: {topic}\n'
                     if topic_options:
-                        topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(topic_options)]) + '\n'
+                        topics_str += '**Poll Options:**' + ' |'.join(
+                            [f' `{o}`' for i, o in enumerate(topic_options)]) + '\n'
                     if topic_author:
                         topics_str += f'**Topic Author:** {str(topic_author)}\n'
 
@@ -160,111 +158,161 @@ class Mod(commands.Cog):
 
             return await ctx.send(embed=embed)
 
-        if action == 'disable':
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': 0}})
-            return await embed_maker.message(ctx, f'Daily debates have been disabled')
+    @_dailydebates.command(name='disable', help='Disable the daily debates system, time will be set to 0', usage='dailydebates disable', examples=['dailydebates disable'], clearance='Mod', cls=command.Command)
+    async def _disable(self, ctx):
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': 0}})
 
-        if arg is None:
-            return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
-
-        if action == 'set_time':
-            parsed_arg_time = dateparser.parse(arg, settings={'RETURN_AS_TIMEZONE_AWARE': True})
-            if not parsed_arg_time:
-                return await embed_maker.message(ctx, 'Invalid time', colour='red')
-
-            parsed_dd_time = dateparser.parse(arg, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_arg_time.tzinfo)})
-            time_diff = parsed_dd_time - datetime.datetime.now(parsed_arg_time.tzinfo)
-            time_diff_seconds = round(time_diff.total_seconds())
-
-            if time_diff_seconds < 0:
-                return await embed_maker.message(ctx, 'Invalid time', colour='red')
-
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': arg}})
-            await embed_maker.message(ctx, f'Daily debates will now be announced every day at {arg}')
-
-            # cancel old timer if active
-            daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
-            if daily_debate_timer:
-                db.timers.delete_one({'_id': ObjectId(daily_debate_timer['_id'])})
-                return await self.start_daily_debate_timer(ctx.guild.id, arg)
-            else:
-                return
-
-        if action == 'set_channel':
-            if not ctx.message.channel_mentions:
-                return await embed_maker.message(ctx, 'Invalid channel mention', colour='red')
-
-            channel_id = ctx.message.channel_mentions[0].id
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'channel_id': channel_id}})
-            return await embed_maker.message(ctx, f'Daily debates will now be announced every day at <#{channel_id}>')
-
-        if action == 'set_poll_channel':
-            if arg == 'None':
-                db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
-                return await embed_maker.message(ctx, f'daily debates poll channel has been disabled')
-
-            if not ctx.message.channel_mentions:
-                return await embed_maker.message(ctx, 'Invalid channel mention', colour='red')
-
-            channel_id = ctx.message.channel_mentions[0].id
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'poll_channel_id': channel_id}})
-            return await embed_maker.message(ctx, f'Daily debate polls will now be sent every day to <#{channel_id}>')
-
-        if action == 'set_role':
-            if arg == 'None':
-                db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
-                return await embed_maker.message(ctx, f'daily debates role has been disabled')
-
-            role = discord.utils.find(lambda r: r.name.lower() == arg.lower(), ctx.guild.roles)
-            if not role:
-                return await embed_maker.message(ctx, 'Invalid role name', colour='red')
-
-            role_id = role.id
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': role_id}})
-            return await embed_maker.message(ctx, f'Daily debates will now be announced every day to <@&{role_id}>')
-
-        # check if time has been set up, if not, inform user
-        if not daily_debates_data['time']:
-            err = f'Time has not been set yet, i dont know when to send the message\n' \
-                  f'Set time with `{config.PREFIX}dailydebates set_time [time]` e.g. `{config.PREFIX}dailydebates set_time 2pm GMT+1`'
-            return await embed_maker.message(ctx, err, colour='red')
-
-        # check if channel has been set up, if not, inform user
-        if not daily_debates_data['channel_id']:
-            err = f'Channel has not been set yet, i dont know where to send the message\n' \
-                  f'Set time with `{config.PREFIX}dailydebates set_channel [#channel]` e.g. `{config.PREFIX}dailydebates set_channel #daily-debates`'
-            return await embed_maker.message(ctx, err, colour='red')
-
-        # check for active timer
+        # cancel timer if active
         daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
+        if daily_debate_timer:
+            db.timers.delete_one({'_id': ObjectId(daily_debate_timer['_id'])})
 
-        if not daily_debate_timer:
-            await self.start_daily_debate_timer(ctx.guild.id, daily_debates_data['time'])
+        return await embed_maker.message(ctx, f'Daily debates have been disabled')
 
-        if action not in ['add', 'remove', 'insert']:
-            return await embed_maker.command_error(ctx, '(action)')
+    @_dailydebates.command(name='set_poll_options', help='Set the poll options for a daily debate topic',
+                           usage='dailydebates set_poll_options [index of topic] [option 1] | [option 2] | (option 3)...',
+                           examples=['dailydebates set_poll_options 1 yes | no | double yes | double no'], clearance='Mod', cls=command.Command)
+    async def _set_poll_options(self, ctx, index=None, options=None):
+        if index is None:
+            return await embed_maker.command_error(ctx)
 
-        if action == 'remove':
-            if not arg.isdigit():
-                return await embed_maker.message(ctx, 'Invalid index', colour='red')
+        if not index.isdigit():
+            return await embed_maker.command_error(ctx, '[index of topic]')
 
-            index = int(arg)
-            if index > len(daily_debates_data['topics']):
-                return await embed_maker.message(ctx, 'Index too big', colour='red')
+        if options is None:
+            return await embed_maker.command_error(ctx, '[options]')
 
-            index = int(arg)
-            if index < 1:
-                return await embed_maker.message(ctx, 'Index cant be smaller than 1', colour='red')
+        options = [o.strip() for o in options.split('|')]
 
-            topic_to_delete = daily_debates_data['topics'][index - 1]
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$pull': {'topics': topic_to_delete}})
+        if not options:
+            return await embed_maker.command_error(ctx, '[options]')
+        if len(options) < 2:
+            return await embed_maker.message(ctx, 'not enough options set', colour='red')
+        if len(options) > 9:
+            return await embed_maker.message(ctx, 'Too many poll options set', colour='red')
 
-            return await embed_maker.message(
-                ctx, f'`{topic_to_delete["topic"]}` has been removed from the list of daily debate topics'
-                f'\nThere are now **{len(daily_debates_data["topics"]) - 1}** topics on the list'
-            )
+        daily_debates_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
+        topics = daily_debates_data['topics']
 
-        args = self.parse_dd_args(arg)
+        index = int(index)
+        if len(topics) < index:
+            return await embed_maker.message(ctx, 'index out of range', colour='red')
+
+        topic = topics[index - 1]
+
+        topic_obj = {
+            'topic': topic['topic'],
+            'topic_author_id': topic['topic_author_id'] ,
+            'topic_options': options
+        }
+
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {f'topics.{index - 1}': topic_obj}})
+        options_str = ' |'.join([f' `{o}`' for i, o in enumerate(options)])
+        return await embed_maker.message(ctx, f'Along with the topic: **"{topic["topic"]}"**\nwill be sent a poll with these options: {options_str}')
+
+    @_dailydebates.command(name='set_poll_channel', help=f'Set the poll channel where polls will be sent, disable polls by setting poll channel to `None``',
+                           usage='dailydebates set_poll_channel [#channel]', examples=['dailydebates set_poll_channel #daily_debate_polls'],
+                           clearance='Mod', cls=command.Command)
+    async def _set_poll_channel(self, ctx, channel=None):
+        if channel.lower() == 'none':
+            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
+            return await embed_maker.message(ctx, f'daily debates poll channel has been disabled')
+
+        if not ctx.message.channel_mentions:
+            return await embed_maker.message(ctx, 'Invalid channel mention', colour='red')
+
+        channel_id = ctx.message.channel_mentions[0].id
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'poll_channel_id': channel_id}})
+        return await embed_maker.message(ctx, f'Daily debate polls will now be sent every day to <#{channel_id}>')
+
+    @_dailydebates.command(name='set_role', help=f'set the role that will be @\'d when topics are announced, disable @\'s by setting the role to `None`',
+                           usage='dailydebates set_role [role]', examples=['dailydebates set_role Debater'], clearance='Mod', cls=command.Command)
+    async def _set_role(self, ctx, *, role_name=None):
+        if role_name.lower() == 'none':
+            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
+            return await embed_maker.message(ctx, f'daily debates role has been disabled')
+
+        role = discord.utils.find(lambda r: r.name.lower() == role_name.lower(), ctx.guild.roles)
+        if not role:
+            return await embed_maker.message(ctx, 'Invalid role name', colour='red')
+
+        role_id = role.id
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': role_id}})
+        return await embed_maker.message(ctx, f'Daily debates will now be announced every day to <@&{role_id}>')
+
+    @_dailydebates.command(name='set_channel', help=f'set the channel where topics are announced',
+                           usage='dailydebates set_channel [#set_channel]', examples=['dailydebates set_channel #daily-debates'],
+                           clearance='Mod', cls=command.Command)
+    async def _set_channel(self, ctx, channel=None):
+        if channel is None:
+            return await embed_maker.command_error(ctx)
+
+        if not ctx.message.channel_mentions:
+            return await embed_maker.message(ctx, 'Invalid channel mention', colour='red')
+
+        channel_id = ctx.message.channel_mentions[0].id
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'channel_id': channel_id}})
+        return await embed_maker.message(ctx, f'Daily debates will now be announced every day at <#{channel_id}>')
+
+    @_dailydebates.command(name='set_time', help='set the time when topics are announced',
+                           usage='dailydebates set_time [time]', examples=['dailydebates set_time 14:00 GMT+1'],
+                           clearance='Mod', cls=command.Command)
+    async def _set_time(self, ctx, *, time=None):
+        if time is None:
+            return await embed_maker.command_error(ctx)
+
+        parsed_time = dateparser.parse(time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
+        if not parsed_time:
+            return await embed_maker.message(ctx, 'Invalid time', colour='red')
+
+        parsed_dd_time = dateparser.parse(time, settings={'PREFER_DATES_FROM': 'future', 'RETURN_AS_TIMEZONE_AWARE': True, 'RELATIVE_BASE': datetime.datetime.now(parsed_time.tzinfo)})
+        time_diff = parsed_dd_time - datetime.datetime.now(parsed_dd_time.tzinfo)
+        time_diff_seconds = round(time_diff.total_seconds())
+
+        if time_diff_seconds < 0:
+            return await embed_maker.message(ctx, 'Invalid time', colour='red')
+
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': time}})
+        await embed_maker.message(ctx, f'Daily debates will now be announced every day at {time}')
+
+        # cancel old timer if active
+        daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
+        if daily_debate_timer:
+            db.timers.delete_one({'_id': ObjectId(daily_debate_timer['_id'])})
+            return await self.start_daily_debate_timer(ctx.guild.id, time)
+        else:
+            return
+
+    @_dailydebates.command(name='remove', help='remove a topic from the topic list',
+                           usage='dailydebates remove [topic index]', examples=['dailydebates remove 2'],
+                           clearance='Mod', cls=command.Command)
+    async def _remove(self, ctx, index=None):
+        if not index.isdigit():
+            return await embed_maker.message(ctx, 'Invalid index', colour='red')
+
+        daily_debate_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
+
+        index = int(index)
+        if index > len(daily_debate_data['topics']):
+            return await embed_maker.message(ctx, 'Index too big', colour='red')
+
+        if index < 1:
+            return await embed_maker.message(ctx, 'Index cant be smaller than 1', colour='red')
+
+        topic_to_delete = daily_debate_data['topics'][index - 1]
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$pull': {'topics': topic_to_delete}})
+
+        return await embed_maker.message(
+            ctx, f'`{topic_to_delete["topic"]}` has been removed from the list of daily debate topics'
+                 f'\nThere are now **{len(daily_debate_data["topics"]) - 1}** topics on the list'
+        )
+
+    @_dailydebates.command(name='add', help='add a topic to the list topics along with optional options and topic author',
+                           usage='dailydebates add [topic] -ta (topic author) -o (poll options)',
+                           examples=['dailydebates add is ross mega cool? -ta hattyot -o yes | double yes | triple yes'],
+                           clearance='Mod', cls=command.Command)
+    async def _add(self, ctx, *, args=None):
+        args = self.parse_dd_args(args)
         topic = args['t']
         topic_author_arg = args['ta']
         topic_options_arg = args['o']
@@ -281,22 +329,43 @@ class Mod(commands.Cog):
             'topic_author_id': topic_author_arg,
             'topic_options': topic_options_arg
         }
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$push': {'topics': topic_obj}})
 
-        if action == 'insert':
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$push': {'topics': {'$each': [topic_obj], '$position': 0}}})
+        daily_debate_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
+        return await embed_maker.message(
+            ctx, f'`{topic}` has been added to the list of daily debate topics'
+            f'\nThere are now **{len(daily_debate_data["topics"])}** topics on the list'
+        )
 
-            return await embed_maker.message(
-                ctx, f'`{topic}` has been inserted into first place in the list of daily debate topics'
-                     f'\nThere are now **{len(daily_debates_data["topics"]) + 1}** topics on the list'
-            )
+    @_dailydebates.command(name='insert', help='insert a topic into the first place on the list of topics along with optional options and topic author',
+                           usage='dailydebates insert [topic] -ta (topic author) -o (poll options)',
+                           examples=['dailydebates insert is ross mega cool? -ta hattyot -o yes | double yes | triple yes'],
+                           clearance='Mod', cls=command.Command)
+    async def _insert(self, ctx, *, args=None):
+        args = self.parse_dd_args(args)
+        topic = args['t']
+        topic_author_arg = args['ta']
+        topic_options_arg = args['o']
+        if topic_author_arg:
+            member = await get_member(ctx, self.bot, topic_author_arg)
+            if member is None:
+                return await embed_maker.message(ctx, 'Invalid topic author', colour='red')
+            elif isinstance(member, str):
+                return await embed_maker.message(ctx, member, colour='red')
+            topic_author_arg = member.id
 
-        if action == 'add':
-            db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$push': {'topics': topic_obj}})
+        topic_obj = {
+            'topic': topic,
+            'topic_author_id': topic_author_arg,
+            'topic_options': topic_options_arg
+        }
+        db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$push': {'topics': {'$each': [topic_obj], '$position': 0}}})
 
-            return await embed_maker.message(
-                ctx, f'`{topic}` has been added to the list of daily debate topics'
-                f'\nThere are now **{len(daily_debates_data["topics"]) + 1}** topics on the list'
-            )
+        daily_debate_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
+        return await embed_maker.message(
+            ctx, f'`{topic}` has been inserted into first place in the list of daily debate topics'
+                 f'\nThere are now **{len(daily_debate_data["topics"])}** topics on the list'
+        )
 
     @staticmethod
     def parse_dd_args(args):
