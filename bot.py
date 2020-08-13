@@ -233,10 +233,9 @@ class TLDR(commands.Bot):
             return await pm_cog.process_pm(ctx)
 
         watchlist = db.watchlist.find_one({'guild_id': message.guild.id, 'user_id': message.author.id})
-        watchlist_data = db.watchlist_data.find_one({'guild_id': message.guild.id})
-        if watchlist and watchlist_data:
-            filters = watchlist['filters']
-            channel_id = watchlist_data['channel_id']
+        watchlist_category = discord.utils.find(lambda c: c.name == 'Watchlist', message.guild.categories)
+        if watchlist and watchlist_category:
+            channel_id = watchlist['channel_id']
             channel = self.get_channel(int(channel_id))
             if channel:
                 embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
@@ -245,6 +244,7 @@ class TLDR(commands.Bot):
 
                 embed.description = f'{message.content}\n[Link]({message.jump_url})'
 
+                filters = watchlist['filters']
                 content = ''
                 for f in filters:
                     regex = re.compile(fr'({f})')
@@ -361,7 +361,7 @@ class TLDR(commands.Bot):
     @staticmethod
     def add_collections(guild_id, col=None):
         return_doc = None
-        collections = ['leveling_data', 'watchlist_data', 'daily_debates']
+        collections = ['leveling_data', 'daily_debates']
         for c in collections:
             collection = db.__getattribute__(c)
             doc = collection.find_one({'guild_id': guild_id})

@@ -16,16 +16,12 @@ class Mod(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='add (or remove) a user to the watchlist and log all their messages to a channel. You can also add filters to ping mods when a certain thing is said',
-                      examples=['watchlist add @hattyot', 'watchlist remove @hattyot', 'watchlist set_channel #watchlist', 'watchlist add_filters @hattyot filter1 | filter2'],
-                      clearance='Admin', cls=command.Command, usage='watchlist [action] [user/channel] (filters)')
-    async def watchlist(self, ctx, action=None, src=None, *, filters=None):
-        watchlist_data = db.watchlist_data.find_one({'guild_id': ctx.guild.id})
-        if watchlist_data is None:
-            watchlist_data = self.bot.add_collections(ctx.guild.id, 'watchlist_data')
-
+    @commands.group(name='watchlist', help='Manage the watchlist, which logs all the users message to a channel',
+                    usage='watchlist (sub command) (args)', examples=['watchlist'],
+                    sub_commands=['add', 'remove', 'add_filters'], clearance='Mod', cls=command.Group)
+    async def _watchlist(self, ctx):
         users_on_list = [d for d in db.watchlist.distinct('user_id', {'guild_id': ctx.guild.id})]
-        if action is None:
+        if ctx.subcommand_passed is None:
             colour = config.EMBED_COLOUR
             list_embed = discord.Embed(colour=colour, timestamp=datetime.datetime.now())
             list_embed.set_author(name='Users on the watchlist')
@@ -52,70 +48,107 @@ class Mod(commands.Cog):
                 list_embed.description = on_list_str
                 return await ctx.send(embed=list_embed)
 
-        if action not in ['add', 'remove', 'add_filters', 'set_channel']:
+    @_watchlist.command(name='add', help='add a user to the watchlist', usage='watchlist add [user] -f (filter1 | filter2 | filter3)', examples=['watchlist add hattyot -f hat | ot | pp'], clearance='Mod', cls=command.Command)
+    async def _watchlist_add(self, ctx, *, args=None):
+        if args is None:
             return await embed_maker.command_error(ctx)
 
-        if src is None:
-            return await embed_maker.command_error(ctx)
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-(f) ', args)))
+        user_identifier = _args[0]
+        filters = _args[-1] if len(_args) > 1 else []
 
-        if action == 'set_channel':
-            if not ctx.message.channel_mentions:
-                return await embed_maker.message(ctx, 'Invalid channel', colour='red')
-            channel = ctx.message.channel_mentions[0]
-            db.watchlist_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'channel_id': channel.id}})
-
-            return await embed_maker.message(ctx, f'The watchlist channel has been set to: <#{channel.id}>', colour='green')
-
-        channel_id = watchlist_data['channel_id']
-        if not channel_id:
-            return await embed_maker.message(ctx, 'You can\'t add users to the watchlist if you haven\'t set the watchlist channel')
-
-        member = await get_member(ctx, self.bot, src)
-        if member is None:
+        member = await get_member(ctx, self.bot, user_identifier)
+        if member is None or isinstance(member, str):
             return await embed_maker.message(ctx, 'Invalid member', colour='red')
 
         watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': member.id})
 
-        if action == 'add':
-            if watchlist_user:
-                return await embed_maker.message(ctx, 'User is already on the list', colour='red')
+        if watchlist_user:
+            return await embed_maker.message(ctx, 'User is already on the watchlist', colour='red')
 
-            split_filters = [f.strip() for f in filters.split('|')] if filters else []
+        split_filters = [f.strip() for f in filters.split('|')] if filters else []
 
-            watchlist_doc = {
-                'guild_id': ctx.guild.id,
-                'user_id': member.id,
-                'filters': split_filters
-            }
-            db.watchlist.insert_one(watchlist_doc)
+        watchlist_category = discord.utils.find(lambda c: c.name == 'Watchlist', ctx.guild.categories)
+        if watchlist_category is None:
+            # get all staff roles
+            staff_roles = filter(lambda r: r.permissions.manage_messages, ctx.guild.roles)
 
-            msg = f'<@{member.id}> has been added to the watchlist'
-            if split_filters:
-                msg += f'\nWith these filters: {" or ".join(f"`{f}`" for f in split_filters)}'
+            # staff roles can read channels in category, users cant
+            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True))
+            overwrites[ctx.guild.default_role] = discord.PermissionOverwrite(read_messages=False)
 
-            return await embed_maker.message(ctx, msg, colour='green')
+            watchlist_category = await ctx.guild.create_category(name='Watchlist', overwrites=overwrites)
 
-        elif action == 'remove':
-            if watchlist_user is None:
-                return await embed_maker.message(ctx, 'User is not on the list', colour='red')
+        watchlist_channel = await ctx.guild.create_text_channel(f'{member.name}', category=watchlist_category)
 
-            db.watchlist.delete_one({'guild_id': ctx.guild.id, 'user_id': member.id})
+        watchlist_doc = {
+            'guild_id': ctx.guild.id,
+            'user_id': member.id,
+            'filters': split_filters,
+            'channel_id': watchlist_channel.id
+        }
+        db.watchlist.insert_one(watchlist_doc)
 
-            return await embed_maker.message(ctx, f'<@{member.id}> has been removed from the watchlist', colour='green')
+        msg = f'<@{member.id}> has been added to the watchlist'
+        if split_filters:
+            msg += f'\nWith these filters: {" or ".join(f"`{f}`" for f in split_filters)}'
 
-        elif action == 'add_filters':
-            if filters is None:
-                return await embed_maker.command_error('Filters missing')
+        return await embed_maker.message(ctx, msg, colour='green')
 
-            if not watchlist_user:
-                return await embed_maker.message(ctx, 'User is not on the list', colour='red')
+    @_watchlist.command(name='remove', help='remove a user from the watchlist', usage='watchlist remove [user]', examples=['watchlist remove hattyot'], clearance='Mod', cls=command.Command)
+    async def _watchlist_remove(self, ctx, *, user=None):
+        if user is None:
+            return await embed_maker.command_error(ctx)
 
-            all_filters = watchlist_user['filters']
-            split_filters = [f.strip() for f in filters.split('|')] if filters else []
-            if all_filters:
-                split_filters += all_filters
+        member = await get_member(ctx, self.bot, user)
+        if member is None or isinstance(member, str):
+            return await embed_maker.message(ctx, 'Invalid member', colour='red')
 
-            return await embed_maker.message(ctx, f'if {member} mentions {" or ".join(f"`{f}`" for f in split_filters)} mods will be @\'d', colour='green')
+        watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': member.id})
+
+        if watchlist_user is None:
+            return await embed_maker.message(ctx, 'User is not on the list', colour='red')
+
+        # remove watchlist channel
+        channel_id = watchlist_user['channel_id']
+        channel = self.bot.get_channel(int(channel_id))
+        if channel:
+            await channel.delete()
+
+        db.watchlist.delete_one({'guild_id': ctx.guild.id, 'user_id': member.id})
+
+        return await embed_maker.message(ctx, f'<@{member.id}> has been removed from the watchlist', colour='green')
+
+    @_watchlist.command(name='add_filters', help='are filters to a user on the watchlist', usage='watchlist add_filters [user] -f (filter 1 | filter 2)',
+                        examples=['watchlist add_filters hattyot -f example 1 | example 2'], clearance='Mod', cls=command.Command)
+    async def _watchlist_add_filters(self, ctx, *, args=None):
+        if args is None:
+            return await embed_maker.command_error(ctx)
+
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-(f) ', args)))
+        user_identifier = _args[0]
+        if len(_args) > 1:
+            filters = _args[-1]
+        else:
+            return await embed_maker.message(ctx, 'Missing filters', colour='red')
+
+        member = await get_member(ctx, self.bot, user_identifier)
+        if member is None or isinstance(member, str):
+            return await embed_maker.message(ctx, 'Invalid member', colour='red')
+
+        watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': member.id})
+
+        if watchlist_user is None:
+            return await embed_maker.message(ctx, 'User is not on the list', colour='red')
+
+        all_filters = watchlist_user['filters']
+        split_filters = [f.strip() for f in filters.split('|')] if filters else []
+        if all_filters:
+            split_filters += all_filters
+
+        db.watchlist.update_one({'guild_id': ctx.guild.id, 'user_id': member.id}, {'$set': {f'filters': split_filters}})
+
+        return await embed_maker.message(ctx, f'if {member} mentions {" or ".join(f"`{f}`" for f in split_filters)} mods will be @\'d', colour='green')
 
     @commands.group(name='dailydebates', help='Daily debate scheduler/manager',
                     usage='dailydebates (sub command) (arg(s))',
@@ -159,7 +192,7 @@ class Mod(commands.Cog):
             return await ctx.send(embed=embed)
 
     @_dailydebates.command(name='disable', help='Disable the daily debates system, time will be set to 0', usage='dailydebates disable', examples=['dailydebates disable'], clearance='Mod', cls=command.Command)
-    async def _disable(self, ctx):
+    async def _dailydebates_disable(self, ctx):
         db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': 0}})
 
         # cancel timer if active
@@ -172,7 +205,7 @@ class Mod(commands.Cog):
     @_dailydebates.command(name='set_poll_options', help='Set the poll options for a daily debate topic',
                            usage='dailydebates set_poll_options [index of topic] [option 1] | [option 2] | (option 3)...',
                            examples=['dailydebates set_poll_options 1 yes | no | double yes | double no'], clearance='Mod', cls=command.Command)
-    async def _set_poll_options(self, ctx, index=None, options=None):
+    async def _dailydebates_set_poll_options(self, ctx, index=None, options=None):
         if index is None:
             return await embed_maker.command_error(ctx)
 
@@ -213,7 +246,10 @@ class Mod(commands.Cog):
     @_dailydebates.command(name='set_poll_channel', help=f'Set the poll channel where polls will be sent, disable polls by setting poll channel to `None``',
                            usage='dailydebates set_poll_channel [#channel]', examples=['dailydebates set_poll_channel #daily_debate_polls'],
                            clearance='Mod', cls=command.Command)
-    async def _set_poll_channel(self, ctx, channel=None):
+    async def _dailydebates_set_poll_channel(self, ctx, channel=None):
+        if channel is None:
+            return await embed_maker.command_error(ctx)
+
         if channel.lower() == 'none':
             db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
             return await embed_maker.message(ctx, f'daily debates poll channel has been disabled')
@@ -227,7 +263,10 @@ class Mod(commands.Cog):
 
     @_dailydebates.command(name='set_role', help=f'set the role that will be @\'d when topics are announced, disable @\'s by setting the role to `None`',
                            usage='dailydebates set_role [role]', examples=['dailydebates set_role Debater'], clearance='Mod', cls=command.Command)
-    async def _set_role(self, ctx, *, role_name=None):
+    async def _dailydebates_set_role(self, ctx, *, role_name=None):
+        if role_name is None:
+            return await embed_maker.command_error(ctx)
+
         if role_name.lower() == 'none':
             db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'role_id': 0}})
             return await embed_maker.message(ctx, f'daily debates role has been disabled')
@@ -243,7 +282,7 @@ class Mod(commands.Cog):
     @_dailydebates.command(name='set_channel', help=f'set the channel where topics are announced',
                            usage='dailydebates set_channel [#set_channel]', examples=['dailydebates set_channel #daily-debates'],
                            clearance='Mod', cls=command.Command)
-    async def _set_channel(self, ctx, channel=None):
+    async def _dailydebates_set_channel(self, ctx, channel=None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
@@ -257,7 +296,7 @@ class Mod(commands.Cog):
     @_dailydebates.command(name='set_time', help='set the time when topics are announced',
                            usage='dailydebates set_time [time]', examples=['dailydebates set_time 14:00 GMT+1'],
                            clearance='Mod', cls=command.Command)
-    async def _set_time(self, ctx, *, time=None):
+    async def _dailydebates_set_time(self, ctx, *, time=None):
         if time is None:
             return await embed_maker.command_error(ctx)
 
@@ -286,7 +325,10 @@ class Mod(commands.Cog):
     @_dailydebates.command(name='remove', help='remove a topic from the topic list',
                            usage='dailydebates remove [topic index]', examples=['dailydebates remove 2'],
                            clearance='Mod', cls=command.Command)
-    async def _remove(self, ctx, index=None):
+    async def _dailydebates_remove(self, ctx, index=None):
+        if index is None:
+            return await embed_maker.command_error(ctx)
+
         if not index.isdigit():
             return await embed_maker.message(ctx, 'Invalid index', colour='red')
 
@@ -311,7 +353,10 @@ class Mod(commands.Cog):
                            usage='dailydebates add [topic] -ta (topic author) -o (poll options)',
                            examples=['dailydebates add is ross mega cool? -ta hattyot -o yes | double yes | triple yes'],
                            clearance='Mod', cls=command.Command)
-    async def _add(self, ctx, *, args=None):
+    async def _dailydebates_add(self, ctx, *, args=None):
+        if args is None:
+            return await embed_maker.command_error(ctx)
+
         args = self.parse_dd_args(args)
         topic = args['t']
         topic_author_arg = args['ta']
@@ -341,7 +386,7 @@ class Mod(commands.Cog):
                            usage='dailydebates insert [topic] -ta (topic author) -o (poll options)',
                            examples=['dailydebates insert is ross mega cool? -ta hattyot -o yes | double yes | triple yes'],
                            clearance='Mod', cls=command.Command)
-    async def _insert(self, ctx, *, args=None):
+    async def _dailydebates_insert(self, ctx, *, args=None):
         args = self.parse_dd_args(args)
         topic = args['t']
         topic_author_arg = args['ta']

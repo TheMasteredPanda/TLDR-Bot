@@ -4,7 +4,7 @@ import config
 
 class Connection:
     __slots__ = ['mongo_client', 'db', 'leveling_data', 'leveling_users', 'boosts', 'timers', 'tickets',
-                 'commands', 'daily_debates', 'watchlist', 'watchlist_data', 'tags', 'reaction_menus',
+                 'commands', 'daily_debates', 'watchlist', 'tags', 'reaction_menus',
                  'outside_emotes', 'channels']
 
     def __init__(self):
@@ -18,7 +18,6 @@ class Connection:
         self.tags = self.db['tags']
         self.commands = self.db['commands']
         self.watchlist = self.db['watchlist']
-        self.watchlist_data = self.db['watchlist_data']
         self.daily_debates = self.db['daily_debates']
         self.reaction_menus = self.db['reaction_menus']
         self.outside_emotes = self.db['outside_emotes']
