@@ -34,6 +34,24 @@ class Leveling(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    @commands.command(help='See how many messages you need to send to level up (dont forget about the 60s cooldown)',
+                      usage='mlu', examples=['mlu'], clearance='User', cls=command.Command)
+    async def mlu(self, ctx):
+        leveling_user = db.leveling_users.find_one({'guild_id': ctx.guild.id, 'user_id': ctx.author.id})
+        if not leveling_user:
+            leveling_user = database.schemas['leveling_user']
+            leveling_user['guild_id'] = ctx.guild.id
+            leveling_user['user_id'] = ctx.author.id
+            db.leveling_users.insert_one(leveling_user.copy())
+
+        p_level = leveling_user['p_level']
+        pp = leveling_user['pp']
+        pp_till_next_level = round(5 / 6 * (p_level + 1) * (2 * (p_level + 1) * (p_level + 1) + 27 * (p_level + 1) + 91))
+        pp_needed = pp_till_next_level - pp
+        avg_msg_needed = math.ceil(pp_needed / 20)
+
+        return await ctx.send(avg_msg_needed)
+
     @commands.command(help='remove latest boost from user or remove boost from role',
                       usage='remove_boost [user/role/everyone]',
                       examples=['remove_boost Hattyot', 'remove_boost Mayor', 'remove_boost everyone'],
@@ -978,13 +996,11 @@ class Leveling(commands.Cog):
                     hp = leveling_user['hp']
                     totoal_h_level = leveling_user['h_level']
                     hp_till_next_level = (totoal_h_level + 1) * 1000
-                    hp_needed = hp_till_next_level - hp
-                    avg_msg_needed = math.ceil(hp_needed / 20)
                     if ctx.guild.id in hp_cooldown and ctx.author.id in hp_cooldown[ctx.guild.id]:
                         cooldown = format_time.seconds(hp_cooldown[ctx.guild.id][ctx.author.id] - round(time()))
                     else:
                         cooldown = '0 seconds'
-                    hp_value = f'**Rank:** `#{h_rank}`\n**Role:** <@&{h_role.id}>\n**Role Level:** {member_h_level}\n**Total Level:** {totoal_h_level}\n**Points:** {hp}/{hp_till_next_level}\n**Progress:** {hp_progress}%\n**Mlu:** {avg_msg_needed}\n**Cooldown:** {cooldown}'
+                    hp_value = f'**Rank:** `#{h_rank}`\n**Role:** <@&{h_role.id}>\n**Role Level:** {member_h_level}\n**Total Level:** {totoal_h_level}\n**Points:** {hp}/{hp_till_next_level}\n**Progress:** {hp_progress}%\n**Cooldown:** {cooldown}'
                 else:
                     hp_value = f'**#{h_rank}** | **Level** {member_h_level} <@&{h_role.id}> | Progress: **{hp_progress}%**'
 
@@ -1005,13 +1021,11 @@ class Leveling(commands.Cog):
             pp = int(leveling_user['pp'])
             total_p_level = int(leveling_user['p_level'])
             pp_till_next_level = round(5 / 6 * (total_p_level + 1) * (2 * (total_p_level + 1) * (total_p_level + 1) + 27 * (total_p_level + 1) + 91))
-            pp_needed = pp_till_next_level - pp
-            avg_msg_needed = math.ceil(pp_needed / 20)
             if ctx.guild.id in pp_cooldown and ctx.author.id in pp_cooldown[ctx.guild.id] and pp_cooldown[ctx.guild.id][ctx.author.id] > round(time()):
                 cooldown = format_time.seconds(pp_cooldown[ctx.guild.id][ctx.author.id] - round(time()))
             else:
                 cooldown = '0 seconds'
-            pp_value = f'**Rank:** `#{p_rank}`\n**Role:** <@&{p_role.id}>\n**Role Level:** {member_p_level}\n**Total Level:** {total_p_level}\n**Points:** {pp}/{pp_till_next_level}\n**Progress:** {pp_progress}%\n**Mlu:** {avg_msg_needed}\n**Cooldown**: {cooldown}'
+            pp_value = f'**Rank:** `#{p_rank}`\n**Role:** <@&{p_role.id}>\n**Role Level:** {member_p_level}\n**Total Level:** {total_p_level}\n**Points:** {pp}/{pp_till_next_level}\n**Progress:** {pp_progress}%\n**Cooldown**: {cooldown}'
         else:
             pp_value = f'**#{p_rank}** | **Level** {member_p_level} <@&{p_role.id}> | Progress: **{pp_progress}%**'
 
