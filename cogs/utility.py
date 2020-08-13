@@ -52,7 +52,7 @@ class Utility(commands.Cog):
             p += 1
 
         embed_colour = config.EMBED_COLOUR
-        description = 'No data collected' if not lb_str else lb_str
+        description = 'No data collected' if not lb_str else f'{lb_str}\n\nTotal messages sent: **{sum(sum_for_channel.values())}**'
         leaderboard_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=description)
         leaderboard_embed.set_footer(text=f'{ctx.author} | Page {page}/{max_page_num}', icon_url=ctx.author.avatar_url)
         leaderboard_embed.set_author(name=f'Messages in the past 7 days', icon_url=ctx.guild.icon_url)
