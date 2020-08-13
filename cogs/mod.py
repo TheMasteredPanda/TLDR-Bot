@@ -160,12 +160,12 @@ class Mod(commands.Cog):
 
             return await ctx.send(embed=embed)
 
-        if arg is None:
-            return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
-
         if action == 'disable':
             db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': 0}})
             return await embed_maker.message(ctx, f'Daily debates have been disabled')
+
+        if arg is None:
+            return await embed_maker.command_error(ctx, '(topic/time/channel/notification role)')
 
         if action == 'set_time':
             parsed_arg_time = dateparser.parse(arg, settings={'RETURN_AS_TIMEZONE_AWARE': True})
