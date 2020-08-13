@@ -736,7 +736,7 @@ class Utility(commands.Cog):
         return result
 
     @commands.command(help='Get help smh', usage='help (command)', examples=['help', 'help ping'], clearance='User', cls=command.Command)
-    async def help(self, ctx, _cmd=None):
+    async def help(self, ctx, _cmd=None, _sub_cmd=None):
         embed_colour = config.EMBED_COLOUR
         prefix = config.PREFIX
         all_commands = self.bot.commands
@@ -840,12 +840,23 @@ class Utility(commands.Cog):
                 if cmd.cog_name not in help_object or cmd not in help_object[cmd.cog_name]:
                     return await embed_maker.message(ctx, f'{_cmd} is not a valid command')
 
+                if _sub_cmd:
+                    cmd = cmd.get_command(_sub_cmd)
+                    if cmd is None:
+                        return await embed_maker.message(ctx, f'{_sub_cmd} is not a valid sub command')
+
                 examples = f' | {prefix}'.join(cmd.examples)
                 cmd_help = f"""
                 **Description:** {cmd.help}
                 **Usage:** {prefix}{cmd.usage}
                 **Examples:** {prefix}{examples}
                 """
+
+                if hasattr(cmd, 'sub_commands'):
+                    sub_commands_str = '**Sub Commands:** ' + ' | '.join(s for s in cmd.sub_commands)
+                    sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {cmd.name} [sub command]`'
+                    cmd_help += sub_commands_str
+
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=cmd_help)
                 embed.set_author(name=f'Help - {cmd}', icon_url=ctx.guild.icon_url)
                 embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
