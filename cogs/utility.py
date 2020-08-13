@@ -617,6 +617,8 @@ class Utility(commands.Cog):
         else:
             description += '\n\n'.join(f'{emote} - {options[emote]} - **{emote_count}** | **{round((emote_count * 100) / total_emotes)}%**' for emote, emote_count in poll.items() if emote in options)
 
+        description += f'\n\n**Total Votes:** {total_emotes}'
+
         old_embed = message.embeds[0].to_dict()
         embed = message.embeds[0]
         embed.description = description
