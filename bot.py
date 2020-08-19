@@ -256,27 +256,31 @@ class TLDR(commands.Bot):
                 await channel.send(embed=embed, content=content)
 
         # collect data
-        channel_data_filter = {'guild_id': message.guild.id, 'channel_id': message.channel.id}
-        channel_data = db.channels.find_one(channel_data_filter)
-        if channel_data is None:
-            channel_data = {
-                'guild_id': message.guild.id,
-                'channel_id': message.channel.id,
-                'data_by_week': {}
-            }
-            db.channels.insert_one(channel_data)
 
-        today = datetime.now()
-        # wipe last weeks day data
-        week_number = today.isocalendar()[1]
-        if f'{week_number - 1}' in channel_data['data_by_week'] and f'{today.day}' in channel_data['data_by_week'][f'{week_number - 1}']:
-            db.channels.update_one(channel_data_filter, {'$unset': {f'data_by_week.{week_number - 1}.{today.day}': ''}})
-            # check if week dict is empty
-            del channel_data['data_by_week'][f'{week_number - 1}'][f'{today.day}']
-            if not channel_data['data_by_week'][f'{week_number - 1}']:
-                db.channels.update_one(channel_data_filter, {'$unset': {f'data_by_week.{week_number - 1}': ''}})
+        # filter out ticket and watchlist channels
+        channel_category = message.channel.category
+        if not (channel_category and channel_category.name in ['Open Tickets', 'Watchlist']):
+            channel_data_filter = {'guild_id': message.guild.id, 'channel_id': message.channel.id}
+            channel_data = db.channels.find_one(channel_data_filter)
+            if channel_data is None:
+                channel_data = {
+                    'guild_id': message.guild.id,
+                    'channel_id': message.channel.id,
+                    'data_by_week': {}
+                }
+                db.channels.insert_one(channel_data)
 
-        db.channels.update_one(channel_data_filter, {'$inc': {f'data_by_week.{week_number}.{today.day}': 1}})
+            today = datetime.now()
+            # wipe last weeks day data
+            week_number = today.isocalendar()[1]
+            if f'{week_number - 1}' in channel_data['data_by_week'] and f'{today.weekday()}' in channel_data['data_by_week'][f'{week_number - 1}']:
+                db.channels.update_one(channel_data_filter, {'$unset': {f'data_by_week.{week_number - 1}.{today.weekday()}': ''}})
+                # check if week dict is empty
+                del channel_data['data_by_week'][f'{week_number - 1}'][f'{today.weekday()}']
+                if not channel_data['data_by_week'][f'{week_number - 1}']:
+                    db.channels.update_one(channel_data_filter, {'$unset': {f'data_by_week.{week_number - 1}': ''}})
+
+            db.channels.update_one(channel_data_filter, {'$inc': {f'data_by_week.{week_number}.{today.weekday()}': 1}})
 
         if message.content.startswith(config.PREFIX):
             return await self.process_commands(message)
@@ -386,8 +390,8 @@ class TLDR(commands.Bot):
         print(f'{self.user} is ready')
 
         # run old timers
-        utils_cog = self.get_cog('Utils')
-        await utils_cog.run_old_timers()
+        # utils_cog = self.get_cog('Utils')
+        # await utils_cog.run_old_timers()
 
         for g in self.guilds:
             # Check if guild documents in collections exist if not, it adds them
