@@ -27,6 +27,10 @@ class TLDR(commands.Bot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
+    async def on_message_edit(self, before, after):
+        if before.content != after.content and after.content.startswith(config.PREFIX):
+            return await self.process_commands(after)
+
     async def on_message_delete(self, message):
         # delete reaction menu if message is reaction menu
         if message.guild is None:
