@@ -499,8 +499,8 @@ class Utility(commands.Cog):
         return result
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [-q question] (-o option1 | option2 | ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d) (-u update interval)',
-                      examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m'],
+                      usage='anon_poll [-q question] (-o option1 | option2 | ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d) (-u update interval) (-p how many options users can pick)',
+                      examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m -p 2'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
         if args is None:
@@ -512,6 +512,7 @@ class Utility(commands.Cog):
         poll_time = format_time.parse(args['t'])
         option_emotes = args['o_emotes']
         update_interval = args['u']
+        pick_count = int(args['p'])
 
         err = ''
         if poll_time is None:
@@ -541,7 +542,7 @@ class Utility(commands.Cog):
         description = f'**"{question}"**\n\n'
         colour = config.EMBED_COLOUR
         embed = discord.Embed(title='Anonymous Poll', colour=colour, description=description, timestamp=datetime.now())
-        embed.set_footer(text='Started at', icon_url=ctx.guild.icon_url)
+        embed.set_footer(text='Started at')
 
         if not options:
             emotes = ['👍', '👎']
@@ -554,18 +555,15 @@ class Utility(commands.Cog):
                 emotes = all_num_emotes[:len(options)]
 
             description += '\n\n'.join(f'{e} | **{o}**' for o, e in zip(options, emotes))
-            embed.description = description
+
+        description += '\n\nReact with :regional_indicator_v: to vote'
+        embed.description = description
 
         poll_msg = await ctx.send(embed=embed)
-        # add reactions to message
-        for e in emotes:
-            await poll_msg.add_reaction(e)
+        await poll_msg.add_reaction('🇻')
 
         utils_cog = self.bot.get_cog('Utils')
-        if update_interval:
-            expires = 0
-        else:
-            expires = round(time.time()) + round(poll_time)
+        expires = 0 if update_interval else round(time.time()) + round(poll_time)
 
         extras = {
             'message_id': poll_msg.id,
@@ -584,8 +582,10 @@ class Utility(commands.Cog):
             'guild_id': ctx.guild.id,
             'message_id': poll_msg.id,
             'question': question,
-            'voted': [],
-            'poll': dict.fromkeys(emotes, 0)
+            'pick_count': pick_count,
+            'voted': {},
+            'poll': dict.fromkeys(emotes, 0),
+            'options': options
         }
         db.reaction_menus.insert_one(reaction_menu_doc)
 
@@ -621,26 +621,38 @@ class Utility(commands.Cog):
 
         old_embed = message.embeds[0].to_dict()
         embed = message.embeds[0]
-        embed.description = description
         embed.timestamp = datetime.fromtimestamp(true_expire)
         if update_interval:
             embed.set_footer(text=f'Results updated every {format_time.seconds(update_interval)} | Ends at')
         else:
             embed.set_footer(text='Ended at')
 
+        expired = round(time.time()) > true_expire
+        if not expired:
+            embed.set_footer(text='Ended at')
+            description += '\n\nReact with :regional_indicator_v: to vote'
+
+        embed.description = description
+
         if old_embed != embed.to_dict():
             await message.edit(embed=embed)
 
         utils_cog = self.bot.get_cog('Utils')
         # check if poll passed true expire
-        expired = round(time.time()) > true_expire
         if expired:
-            db.reaction_menus.delete_one({'guild_id': guild_id, 'message_id': message_id})
+            # delete poll from db
+            db.reaction_menus.delete_one({'guild_id': guild_id, 'message_id': message.id})
             await message.clear_reactions()
 
+            # delete any remaining temp polls in dms
+            temp_polls = [d for d in db.reaction_menus.find({'main_message_id': message.id})]
+            if temp_polls:
+                db.reaction_menus.delete_many({'main_message_id': message.id})
+                for p in temp_polls:
+                    await self.bot.http.delete_message(p['channel_id'], p['message_id'])
+
             # send message about poll being completed
-            return await channel.send(
-                f'Poll finished: https://discordapp.com/channels/{guild_id}/{channel_id}/{message_id}')
+            return await channel.send(f'Poll finished: https://discordapp.com/channels/{guild_id}/{channel_id}/{message.id}')
 
         # run poll timer again if needed
         elif update_interval:
@@ -704,9 +716,10 @@ class Utility(commands.Cog):
             'o': [],
             't': '5m',
             'o_emotes': {},
-            'u': ''
+            'u': '',
+            'p': 1
         }
-        _args = list(filter(lambda a: bool(a), re.split(r' ?-([toqu]) ', args)))
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([toqup]) ', args)))
         for i in range(int(len(_args)/2)):
             result[_args[i + (i * 1)]] = _args[i + (i + 1)]
 

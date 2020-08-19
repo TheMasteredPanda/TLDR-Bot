@@ -3,6 +3,7 @@ import os
 import config
 import re
 import traceback
+import hashlib
 from time import time
 from datetime import  datetime
 from modules import database, embed_maker
@@ -103,38 +104,80 @@ class TLDR(commands.Bot):
 
     async def on_raw_reaction_add(self, payload):
         guild_id = payload.guild_id
-        if not guild_id:
-            return
-        guild = self.get_guild(int(guild_id))
 
         channel_id = payload.channel_id
         message_id = payload.message_id
+        user_id = payload.user_id
 
         # check if message is reaction_menu
-        reaction_menu_data = db.reaction_menus.find_one({'guild_id': int(guild_id), 'message_id': message_id})
+        reaction_menu_data = db.reaction_menus.find_one({'message_id': message_id})
         if not reaction_menu_data:
-            return
-
-        user_id = payload.user_id
-        user = guild.get_member(user_id)
-        if user is None:
-            user = await guild.fetch_member(user_id)
-
-        if user.bot:
             return
 
         emote = payload.emoji.name
         if payload.emoji.is_custom_emoji():
             emote = f'<:{payload.emoji.name}:{payload.emoji.id}>'
 
+        user = self.get_user(user_id)
+        if user.bot:
+            return
+
+        if 'main_message_id' in reaction_menu_data:
+            main_message_reaction_menu_data = db.reaction_menus.find_one({'message_id': reaction_menu_data['main_message_id']})
+            if emote not in main_message_reaction_menu_data['poll']:
+                return
+
+            # check if user has voted for this option already
+            user_pick = emote
+            user_pick_hash_object = hashlib.md5(b'%a' % config.BOT_TOKEN + b'%a' % user.id + b'%a' % user_pick)
+            user_pick_hash = user_pick_hash_object.hexdigest()
+
+            if f'{user.id}' in main_message_reaction_menu_data['voted'] and user_pick_hash in main_message_reaction_menu_data['voted'][f'{user.id}']:
+                embed = discord.Embed(colour=config.EMBED_COLOUR, description=f'You have already voted for {user_pick}', timestamp=datetime.now())
+                return await user.send(embed=embed, delete_after=10)
+
+            # inform user of what they picked
+            description = f'Your vote has been counted towards {user_pick}'
+            # inform user if they have more options to pick
+            pick_count = main_message_reaction_menu_data['pick_count']
+            picks_counted = len(main_message_reaction_menu_data['voted'][f'{user.id}']) + 1 if f'{user.id}' in main_message_reaction_menu_data['voted'] else 1
+            if picks_counted < pick_count:
+                description += f'\nYou can pick **{pick_count - picks_counted}** more options'
+            else:
+                # delete poll message
+                await self.http.delete_message(channel_id, reaction_menu_data['message_id'])
+                # delete temporary poll from database
+                db.reaction_menus.delete_one({'message_id': message_id})
+
+            embed = discord.Embed(colour=config.EMBED_COLOUR, description=description, timestamp=datetime.now())
+            await user.send(embed=embed, delete_after=10)
+
+            # count user vote
+            db.reaction_menus.update_one({'message_id': reaction_menu_data['main_message_id']}, {'$inc': {f'poll.{emote}': 1}})
+
+            # log user vote
+            db.reaction_menus.update_one({'message_id': reaction_menu_data['main_message_id']}, {'$push': {f'voted.{user.id}': user_pick_hash}})
+
+        if not guild_id:
+            return
+
+        guild = self.get_guild(int(guild_id))
+
+        if not guild:
+            return
+
+        member = guild.get_member(user_id)
+        if member is None:
+            member = await guild.fetch_member(user_id)
+
         # react menu is role menu
         if 'role_menu_name' in reaction_menu_data and emote in reaction_menu_data['roles']:
             roles = reaction_menu_data['roles']
             role_id = roles[emote]['role_id']
-            role = discord.utils.find(lambda r: r.id == int(role_id), user.guild.roles)
+            role = discord.utils.find(lambda r: r.id == int(role_id), member.guild.roles)
             if not role:
                 # delete role from roles if role_id is invalid and update role menu
-                db.reaction_menus.update_one({'guild_id': guild_id, 'message_id': message_id}, {'$unset': {f'roles.{emote}': ''}})
+                db.reaction_menus.update_one({'message_id': message_id}, {'$unset': {f'roles.{emote}': ''}})
                 del roles[emote]
 
                 # delete message if last role has been removed
@@ -156,35 +199,72 @@ class TLDR(commands.Bot):
                 message = await channel.fetch_message(int(message_id))
                 return await message.edit(embed=embed)
 
-            await user.add_roles(role)
+            await member.add_roles(role)
             msg = f'Role Given: {emote} - `{reaction_menu_data["roles"][emote]["message"]}`'
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, description=msg, timestamp=datetime.now())
-            embed.set_footer(text=f'{user.guild}', icon_url=user.guild.icon_url)
+            embed.set_footer(text=f'{guild}', icon_url=guild.icon_url)
 
-            return await user.send(embed=embed)
+            return await member.send(embed=embed)
 
-        elif 'poll' in reaction_menu_data and emote in reaction_menu_data['poll']:
-            channel = guild.get_channel(int(channel_id))
-            message = await channel.fetch_message(int(message_id))
-            await message.remove_reaction(payload.emoji, user)
-
+        elif 'poll' in reaction_menu_data and emote == '🇻':
+            # send user poll
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
             embed.set_footer(text=f'{guild.name}', icon_url=guild.icon_url)
-            description = f'**"{reaction_menu_data["question"]}"**'
 
-            if user.id in reaction_menu_data['voted']:
-                embed.description = f'{description}\nYou have already voted'
-                msg = await user.send(embed=embed)
-                return await msg.delete(delay=20)
+            question = reaction_menu_data["question"]
+            pick_count = reaction_menu_data['pick_count']
+            picks_counted = len(reaction_menu_data['voted'][f'{member.id}']) if f'{member.id}' in reaction_menu_data['voted'] else 0
+            if picks_counted >= pick_count:
+                embed = discord.Embed(title=f'Anonymous Poll - "{question}"', colour=config.EMBED_COLOUR, description='You have already picked the maximum amount of options', timestamp=datetime.now())
+                embed.set_footer(text=f'{guild}', icon_url=guild.icon_url)
+                return await member.send(embed=embed)
+            emotes = reaction_menu_data['poll'].keys()
+            options = reaction_menu_data['options']
 
-            db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$inc': {f'poll.{emote}': 1}})
-            db.reaction_menus.update_one({'guild_id': guild.id, 'message_id': message.id}, {'$push': {f'voted': user.id}})
+            description = f'**"{question}"**\n\n'
+            colour = config.EMBED_COLOUR
+            embed = discord.Embed(title='Anonymous Poll', colour=colour, description=description, timestamp=datetime.now())
+            embed.set_footer(text=f'You can pick {pick_count} option(s)', icon_url=guild.icon_url)
 
-            embed.description = f'{description}\nYour vote has been counted towards: {emote}'
-            msg = await user.send(embed=embed)
-            return await msg.delete(delay=20)
+            description += '\n\n'.join(f'{e} | **{o}**' for o, e in zip(options, emotes))
+            embed.description = description
+
+            msg = await member.send(embed=embed)
+            for e in emotes:
+                await msg.add_reaction(e)
+
+            # check if there is already an active temporary timer
+            temp_timer_data = db.reaction_menus.find_one({'main_message_id': message_id, 'user_id': member.id})
+            if temp_timer_data:
+                db.reaction_menus.delete_one({'main_message_id': message_id, 'user_id': member.id})
+                await self.http.delete_message(temp_timer_data['channel_id'], temp_timer_data['message_id'])
+
+            # create temporary user poll
+            reaction_menu_doc = {
+                'guild_id': guild.id,
+                'main_message_id': message_id,
+                'message_id': msg.id,
+                'channel_id': msg.channel.id,
+                'user_id': member.id,
+            }
+            db.reaction_menus.insert_one(reaction_menu_doc)
+
+            # start 10m timer for deleting the poll message sent to user
+            expires = int(time()) + (60 * 10)  # 10 minutes
+            utils_cog = self.get_cog('Utils')
+            await utils_cog.create_timer(expires=expires, guild_id=guild.id, event='delete_temp_poll', extras={'channel_id': msg.channel.id, 'message_id': msg.id})
+
+    @commands.Cog.listener()
+    async def on_delete_temp_poll_timer_over(self, timer):
+        channel_id = timer['extras']['channel_id']
+        message_id = timer['extras']['message_id']
+
+        try:
+            return await self.http.delete_message(channel_id, message_id)
+        except:
+            return
 
     async def on_command_error(self, ctx, exception):
         trace = exception.__traceback__
