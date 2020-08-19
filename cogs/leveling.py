@@ -50,7 +50,11 @@ class Leveling(commands.Cog):
         pp_needed = pp_till_next_level - pp
         avg_msg_needed = math.ceil(pp_needed / 20)
 
-        return await ctx.send(avg_msg_needed)
+        embed = discord.Embed(colour=config.EMBED_COLOUR, description=f'Messages needed to level up: **{avg_msg_needed}**', timestamp=datetime.now())
+        embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+        embed.set_author(name='MLU', icon_url=ctx.guild.icon_url)
+
+        return await ctx.send(embed=embed)
 
     @commands.command(help='remove latest boost from user or remove boost from role',
                       usage='remove_boost [user/role/everyone]',
