@@ -255,6 +255,10 @@ class TLDR(commands.Bot):
 
                 await channel.send(embed=embed, content=content)
 
+            else:
+                # remove from watchlist, since watchlist channel doesnt exist
+                db.watchlist.delete_one({'guild_id': message.guild.id, 'user_id': message.author.id})
+
         # collect data
 
         # filter out ticket and watchlist channels
