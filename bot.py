@@ -253,7 +253,13 @@ class TLDR(commands.Bot):
                         content = f'<@&{config.MOD_ROLE_ID}> - Filter Match: `{f}`'
                         break
 
-                await channel.send(embed=embed, content=content)
+                # send images sent by user
+                files = []
+                for a in message.attachments:
+                    files.append(await a.to_file())
+                    content += '\nAttachments:\n'
+
+                await channel.send(embed=embed, content=content, files=files)
 
             else:
                 # remove from watchlist, since watchlist channel doesnt exist
