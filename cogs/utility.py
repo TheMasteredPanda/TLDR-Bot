@@ -629,8 +629,9 @@ class Utility(commands.Cog):
 
         expired = round(time.time()) > true_expire
         if not expired:
-            embed.set_footer(text='Ended at')
             description += '\n\nReact with :regional_indicator_v: to vote'
+        else:
+            embed.set_footer(text='Ended at')
 
         embed.description = description
 
