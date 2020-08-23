@@ -212,12 +212,23 @@ class TLDR(commands.Bot):
             return await member.send(embed=embed)
 
         elif 'poll' in reaction_menu_data and emote == '🇻':
+            question = reaction_menu_data["question"]
+
+            # check if poll is restricted to role
+            if 'restrict_role' in reaction_menu_data:
+                restrict_role_id = reaction_menu_data['restrict_role']
+                restrict_role = discord.utils.find(lambda r: r.id == restrict_role_id, guild.roles)
+                if restrict_role and restrict_role not in member.roles:
+                    # user doesnt have required role
+                    embed = discord.Embed(title=f'Anonymous Poll - "{question}"', colour=config.EMBED_COLOUR, description='You do not have the required role to vote in this poll', timestamp=datetime.now())
+                    embed.set_footer(text=f'{guild}', icon_url=guild.icon_url)
+                    return await member.send(embed=embed)
+
             # send user poll
             embed_colour = config.EMBED_COLOUR
             embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
             embed.set_footer(text=f'{guild.name}', icon_url=guild.icon_url)
 
-            question = reaction_menu_data["question"]
             pick_count = reaction_menu_data['pick_count']
             picks_counted = len(reaction_menu_data['voted'][f'{member.id}']) if f'{member.id}' in reaction_menu_data['voted'] else 0
             if picks_counted >= pick_count:

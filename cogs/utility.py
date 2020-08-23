@@ -499,8 +499,8 @@ class Utility(commands.Cog):
         return result
 
     @commands.command(help='Create an anonymous poll. with options adds numbers as reactions, without it just adds thumbs up and down. after x minutes (default 5) is up, results are displayed',
-                      usage='anon_poll [-q question] (-o option1 | option2 | ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d) (-u update interval) (-p how many options users can pick)',
-                      examples=['anon_poll -q best food? -o pizza, burger, fish and chips, salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m -p 2'],
+                      usage='anon_poll [-q question] (-o option1 | option2 | ...)/(-o [emote: option], [emote: option], ...) (-t [time (m/h/d) (-u update interval) (-p how many options users can pick) -r (role needed to vote)',
+                      examples=['anon_poll -q best food? -o pizza | burger | fish and chips | salad', 'anon_poll -q Do you guys like pizza? -t 2m', 'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m -p 2 -r Mayor'],
                       clearance='Mod', cls=command.Command)
     async def anon_poll(self, ctx, *, args=None):
         if args is None:
@@ -512,9 +512,20 @@ class Utility(commands.Cog):
         poll_time = format_time.parse(args['t'])
         option_emotes = args['o_emotes']
         update_interval = args['u']
-        pick_count = int(args['p'])
+        pick_count = args['p']
+        restrict_role_identifier = args['r']
 
         err = ''
+
+        restrict_role = ''
+        if restrict_role_identifier:
+            restrict_role = discord.utils.find(lambda r: r.name.lower() == restrict_role_identifier.lower() or str(r.id) == restrict_role_identifier, ctx.guild.roles)
+            if restrict_role is None:
+                err = 'Invalid role'
+
+        if not pick_count.isdigit():
+            err = 'pick count arg is not a number'
+
         if poll_time is None:
             err = 'Invalid time arg'
 
@@ -557,6 +568,9 @@ class Utility(commands.Cog):
             description += '\n\n'.join(f'{e} | **{o}**' for o, e in zip(options, emotes))
 
         description += '\n\nReact with :regional_indicator_v: to vote'
+        if restrict_role:
+            description += f'\nRole needed to vote: <@&{restrict_role.id}>'
+
         embed.description = description
 
         poll_msg = await ctx.send(embed=embed)
@@ -572,9 +586,13 @@ class Utility(commands.Cog):
             'update_interval': 0,
             'true_expire': 0
         }
+
         if update_interval:
             extras['update_interval'] = update_interval
             extras['true_expire'] = round(time.time()) + poll_time
+
+        if restrict_role:
+            extras['restrict_role'] = restrict_role.id
 
         await utils_cog.create_timer(expires=expires, guild_id=ctx.guild.id, event='anon_poll', extras=extras)
 
@@ -582,11 +600,14 @@ class Utility(commands.Cog):
             'guild_id': ctx.guild.id,
             'message_id': poll_msg.id,
             'question': question,
-            'pick_count': pick_count,
+            'pick_count': int(pick_count),
             'voted': {},
             'poll': dict.fromkeys(emotes, 0),
             'options': options
         }
+        if restrict_role:
+            reaction_menu_doc['restrict_role'] = restrict_role.id
+
         db.reaction_menus.insert_one(reaction_menu_doc)
 
         return await ctx.message.delete(delay=3)
@@ -632,6 +653,10 @@ class Utility(commands.Cog):
             description += '\n\nReact with :regional_indicator_v: to vote'
         else:
             embed.set_footer(text='Ended at')
+
+        if 'restrict_role' in timer['extras']:
+            restrict_role_id = timer['extras']['restrict_role']
+            description += f'\nRole needed to vote: <@&{restrict_role_id}>'
 
         embed.description = description
 
@@ -718,9 +743,10 @@ class Utility(commands.Cog):
             't': '5m',
             'o_emotes': {},
             'u': '',
-            'p': 1
+            'p': '1',
+            'r': ''
         }
-        _args = list(filter(lambda a: bool(a), re.split(r' ?-([toqup]) ', args)))
+        _args = list(filter(lambda a: bool(a), re.split(r' ?-([toqupr]) ', args)))
         for i in range(int(len(_args)/2)):
             result[_args[i + (i * 1)]] = _args[i + (i + 1)]
 
