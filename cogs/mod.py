@@ -205,7 +205,7 @@ class Mod(commands.Cog):
     @_dailydebates.command(name='set_poll_options', help='Set the poll options for a daily debate topic',
                            usage='dailydebates set_poll_options [index of topic] [option 1] | [option 2] | (option 3)...',
                            examples=['dailydebates set_poll_options 1 yes | no | double yes | double no'], clearance='Mod', cls=command.Command)
-    async def _dailydebates_set_poll_options(self, ctx, index=None, options=None):
+    async def _dailydebates_set_poll_options(self, ctx, index=None, *, options=None):
         if index is None:
             return await embed_maker.command_error(ctx)
 
