@@ -318,9 +318,8 @@ class Mod(commands.Cog):
         daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
         if daily_debate_timer:
             db.timers.delete_one({'_id': ObjectId(daily_debate_timer['_id'])})
-            return await self.start_daily_debate_timer(ctx.guild.id, time)
-        else:
-            return
+
+        return await self.start_daily_debate_timer(ctx.guild.id, time)
 
     @_dailydebates.command(name='remove', help='remove a topic from the topic list',
                            usage='dailydebates remove [topic index]', examples=['dailydebates remove 2'],
@@ -377,10 +376,14 @@ class Mod(commands.Cog):
         db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$push': {'topics': topic_obj}})
 
         daily_debate_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
-        return await embed_maker.message(
+        await embed_maker.message(
             ctx, f'`{topic}` has been added to the list of daily debate topics'
             f'\nThere are now **{len(daily_debate_data["topics"])}** topics on the list'
         )
+
+        daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
+        if not daily_debate_timer:
+            return await self.start_daily_debate_timer(ctx.guild.id, time)
 
     @_dailydebates.command(name='insert', help='insert a topic into the first place on the list of topics along with optional options and topic author',
                            usage='dailydebates insert [topic] -ta (topic author) -o (poll options)',
@@ -407,10 +410,14 @@ class Mod(commands.Cog):
         db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$push': {'topics': {'$each': [topic_obj], '$position': 0}}})
 
         daily_debate_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
-        return await embed_maker.message(
+        await embed_maker.message(
             ctx, f'`{topic}` has been inserted into first place in the list of daily debate topics'
                  f'\nThere are now **{len(daily_debate_data["topics"])}** topics on the list'
         )
+
+        daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
+        if not daily_debate_timer:
+            return await self.start_daily_debate_timer(ctx.guild.id, time)
 
     @staticmethod
     def parse_dd_args(args):
@@ -516,29 +523,50 @@ class Mod(commands.Cog):
         # pin new topic message
         await msg.pin()
 
-        # send poll to polls channel if its set
         if dd_poll_channel_id:
-            if not topic_options:
-                poll_emotes = ['👍', '👎', '😐']
-                topic_options = ['Yes', 'No', 'Neutral']
-            else:
-                all_num_emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
-                poll_emotes = all_num_emotes[:len(topic_options)]
-
             dd_poll_channel = discord.utils.find(lambda c: c.id == int(dd_poll_channel_id), guild.channels)
+            if dd_poll_channel:
+                # send yes/no/abstain poll
 
-            description = f'**"{topic}"**\n'
-            colour = config.EMBED_COLOUR
-            embed = discord.Embed(colour=colour, description=description, timestamp=datetime.datetime.now())
-            embed.set_author(name='Daily Debate Poll')
-            embed.set_footer(text='Started at', icon_url=guild.icon_url)
+                poll_emotes = ['👍', '👎', '😐']
+                poll_options = ['Yes', 'No', 'Abstain']
 
-            description += '\n'.join(f'\n{e} | **{o}**' for e, o in zip(poll_emotes, topic_options))
-            embed.description = description
+                description = f'**"{topic}"**\n'
+                colour = config.EMBED_COLOUR
+                embed = discord.Embed(colour=colour, description=description, timestamp=datetime.datetime.now())
+                embed.set_author(name='Daily Debate Poll')
+                embed.set_footer(text='Started at', icon_url=guild.icon_url)
 
-            poll_msg = await dd_poll_channel.send(embed=embed)
-            for e in poll_emotes:
-                await poll_msg.add_reaction(e)
+                description += '\n'.join(f'\n{e} | **{o}**' for e, o in zip(poll_emotes, poll_options))
+                embed.description = description
+
+                poll_msg = await dd_poll_channel.send(embed=embed)
+                for e in poll_emotes:
+                    await poll_msg.add_reaction(e)
+
+                # start 20h to send results to users
+                utils_cog = self.bot.get_cog('Utils')
+                expires = round(time() + (3600 * 20))
+                await utils_cog.create_timer(guild_id=guild_id, expires=expires, event='dd_results', extras={'poll_id': poll_msg.id, 'poll_channel_id':poll_msg.channel.id, 'dd_channel_id': dd_channel_id})
+
+                # send poll with custom options if they are provided
+                if topic_options:
+                    all_num_emotes = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣']
+                    poll_emotes = all_num_emotes[:len(topic_options)]
+                    poll_options = topic_options
+
+                    description = f'**"{topic}"**\n'
+                    colour = config.EMBED_COLOUR
+                    embed = discord.Embed(colour=colour, description=description, timestamp=datetime.datetime.now())
+                    embed.set_author(name='Daily Debate - Which statement(s) do you agree with?')
+                    embed.set_footer(text='Started at', icon_url=guild.icon_url)
+
+                    description += '\n'.join(f'\n{e} | **{o}**' for e, o in zip(poll_emotes, poll_options))
+                    embed.description = description
+
+                    poll_msg = await dd_poll_channel.send(embed=embed)
+                    for e in poll_emotes:
+                        await poll_msg.add_reaction(e)
 
         # award topic author boost if there is one
         if topic_author:
@@ -553,6 +581,43 @@ class Mod(commands.Cog):
 
         # start daily_debate timer over
         return await self.start_daily_debate_timer(guild.id, dd_time)
+
+    @commands.Cog.listener()
+    async def on_dd_results_timer_over(self, timer):
+        poll_channel_id = timer['extras']['poll_channel_id']
+        poll_id = timer['extras']['poll_id']
+        dd_channel_id = timer['extras']['dd_channel_id']
+
+        channel = self.bot.get_channel(poll_channel_id)
+        if channel is None:
+            return
+
+        poll_message = await channel.fetch_message(poll_id)
+        if poll_message is None:
+            return
+
+        # get results
+        results = {}
+        reactions = poll_message.reactions
+        for r in reactions:
+            results[r.emoji] = r.count
+
+        results_sum = sum(results.values())
+        if results_sum == 0:
+            return
+
+        ayes = results["👍"]
+        noes = results["👎"]
+        abstain = results["😐"]
+
+        who_has_it = 'noes' if noes > ayes else 'ayes'
+        results_str = f'**ORDER, ORDER**\n\nThe ayes to the right: **{ayes}**\nThe noes to the left: **{noes}**\nAbstentions: **{abstain}**\n\nThe **{who_has_it}** have. The **{who_has_it}** have it. Unlock!'
+        # send results string in dd channel
+        dd_channel = self.bot.get_channel(dd_channel_id)
+        if dd_channel is None:
+            return
+
+        return await dd_channel.send(results_str)
 
     @commands.command(help='Open a ticket for discussion', usage='open_ticket [ticket]', clearance='Mod', cls=command.Command, examples=['open_ticket new mods'])
     async def open_ticket(self, ctx, *, ticket=None):
