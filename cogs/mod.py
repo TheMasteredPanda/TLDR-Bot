@@ -383,7 +383,7 @@ class Mod(commands.Cog):
 
         daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
         if not daily_debate_timer:
-            return await self.start_daily_debate_timer(ctx.guild.id, time)
+            return await self.start_daily_debate_timer(ctx.guild.id, daily_debate_data['time'])
 
     @_dailydebates.command(name='insert', help='insert a topic into the first place on the list of topics along with optional options and topic author',
                            usage='dailydebates insert [topic] -ta (topic author) -o (poll options)',
@@ -417,7 +417,7 @@ class Mod(commands.Cog):
 
         daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
         if not daily_debate_timer:
-            return await self.start_daily_debate_timer(ctx.guild.id, time)
+            return await self.start_daily_debate_timer(ctx.guild.id, daily_debate_data['time'])
 
     @staticmethod
     def parse_dd_args(args):
