@@ -547,7 +547,7 @@ class Mod(commands.Cog):
                 # start 20h to send results to users
                 utils_cog = self.bot.get_cog('Utils')
                 expires = round(time() + (3600 * 20))
-                await utils_cog.create_timer(guild_id=guild_id, expires=expires, event='dd_results', extras={'poll_id': poll_msg.id, 'poll_channel_id':poll_msg.channel.id, 'dd_channel_id': dd_channel_id})
+                await utils_cog.create_timer(guild_id=guild_id, expires=expires, event='dd_results', extras={'poll_id': poll_msg.id, 'poll_channel_id':poll_msg.channel.id})
 
                 # send poll with custom options if they are provided
                 if topic_options:
@@ -611,13 +611,9 @@ class Mod(commands.Cog):
         abstain = results["😐"]
 
         who_has_it = 'noes' if noes > ayes else 'ayes'
-        results_str = f'**ORDER, ORDER**\n\nThe ayes to the right: **{ayes}**\nThe noes to the left: **{noes}**\nAbstentions: **{abstain}**\n\nThe **{who_has_it}** have. The **{who_has_it}** have it. Unlock!'
-        # send results string in dd channel
-        dd_channel = self.bot.get_channel(dd_channel_id)
-        if dd_channel is None:
-            return
-
-        return await dd_channel.send(results_str)
+        results_str = f'**ORDER! ORDER!**\n\nThe ayes to the right: **{ayes}**\nThe noes to the left: **{noes}**\nAbstentions: **{abstain}**\n\nThe **{who_has_it}** have it. The **{who_has_it}** have it. Unlock!'
+        # send results string in dd poll channel
+        return await channel.send(results_str)
 
     @commands.command(help='Open a ticket for discussion', usage='open_ticket [ticket]', clearance='Mod', cls=command.Command, examples=['open_ticket new mods'])
     async def open_ticket(self, ctx, *, ticket=None):
