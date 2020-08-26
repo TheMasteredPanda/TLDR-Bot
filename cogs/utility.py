@@ -883,8 +883,8 @@ class Utility(commands.Cog):
                     return await embed_maker.message(ctx, f'{_cmd} is not a valid command')
 
                 if _sub_cmd:
-                    cmd = cmd.get_command(_sub_cmd)
-                    if cmd is None:
+                    sub_cmd = cmd.get_command(_sub_cmd)
+                    if sub_cmd is None:
                         return await embed_maker.message(ctx, f'{_sub_cmd} is not a valid sub command')
 
                 examples = f' | {prefix}'.join(cmd.examples)
