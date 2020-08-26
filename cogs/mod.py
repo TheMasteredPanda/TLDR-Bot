@@ -586,7 +586,6 @@ class Mod(commands.Cog):
     async def on_dd_results_timer_over(self, timer):
         poll_channel_id = timer['extras']['poll_channel_id']
         poll_id = timer['extras']['poll_id']
-        dd_channel_id = timer['extras']['dd_channel_id']
 
         channel = self.bot.get_channel(poll_channel_id)
         if channel is None:
