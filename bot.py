@@ -27,6 +27,9 @@ class TLDR(commands.Bot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
+    async def on_error(self, event_method, *args, **kwargs):
+        print(event_method, args, kwargs)
+
     async def on_message_edit(self, before, after):
         if before.content != after.content and after.content.startswith(config.PREFIX):
             return await self.process_commands(after)
@@ -495,8 +498,8 @@ class TLDR(commands.Bot):
         print(f'{self.user} is ready')
 
         # run old timers
-        utils_cog = self.get_cog('Utils')
-        await utils_cog.run_old_timers()
+        # utils_cog = self.get_cog('Utils')
+        # await utils_cog.run_old_timers()
 
         for g in self.guilds:
             # Check if guild documents in collections exist if not, it adds them
@@ -508,11 +511,14 @@ class TLDR(commands.Bot):
                 # calculates time until next debate
                 daily_debate_data = db.daily_debates.find_one({'guild_id': g.id})
                 if not daily_debate_data:
-                    return
+                    continue
+
                 dd_time = daily_debate_data['time']
                 dd_channel_id = daily_debate_data['channel_id']
                 if not dd_time or not dd_channel_id:
-                    return
+                    continue
+
+                print('start_timer')
 
                 mod_cog = self.get_cog('Mod')
                 await mod_cog.start_daily_debate_timer(g.id, dd_time)

@@ -314,10 +314,8 @@ class Mod(commands.Cog):
         db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': time}})
         await embed_maker.message(ctx, f'Daily debates will now be announced every day at {time}')
 
-        # cancel old timer if active
-        daily_debate_timer = db.timers.find_one({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
-        if daily_debate_timer:
-            db.timers.delete_one({'_id': ObjectId(daily_debate_timer['_id'])})
+        # cancel old timer
+        db.timers.delete_many({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
 
         return await self.start_daily_debate_timer(ctx.guild.id, time)
 
@@ -435,6 +433,9 @@ class Mod(commands.Cog):
         return result
 
     async def start_daily_debate_timer(self, guild_id, dd_time):
+        # delete old timer
+        db.timers.delete_many({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
+
         # creating first parsed_dd_time to grab timezone info
         parsed_dd_time = dateparser.parse(dd_time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
 
@@ -643,6 +644,8 @@ class Mod(commands.Cog):
         date_str = today.strftime('%Y-%m-%d')
         ticket_channel = await ctx.guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
         await ticket_channel.send(embed=ticket_embed)
+
+    # @commands.command(help='Archive ticket and remove access to channel from users', usage='archive_ticket')
 
     @commands.command(help='Give user access to ticket', usage='get_user [user]', examples=['get_user hattyot'], clearance='Mod', cls=command.Command)
     async def get_user(self, ctx, member=None):
