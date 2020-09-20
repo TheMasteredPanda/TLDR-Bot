@@ -434,7 +434,7 @@ class Mod(commands.Cog):
 
     async def start_daily_debate_timer(self, guild_id, dd_time):
         # delete old timer
-        db.timers.delete_many({'guild_id': ctx.guild.id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
+        db.timers.delete_many({'guild_id': guild_id, 'event': {'$in': ['daily_debate', 'daily_debate_final']}})
 
         # creating first parsed_dd_time to grab timezone info
         parsed_dd_time = dateparser.parse(dd_time, settings={'RETURN_AS_TIMEZONE_AWARE': True})
