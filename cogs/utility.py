@@ -881,7 +881,12 @@ class Utility(commands.Cog):
                 if cmd.hidden:
                     return
 
-                if cmd.cog_name not in help_object or cmd not in help_object[cmd.cog_name]:
+                cog_name = cmd.cog_name
+
+                if cmd.clearance != 'User' and cog_name == 'Leveling':
+                    cog_name = 'Leveling - Staff'
+
+                if cog_name not in help_object or cmd not in help_object[cog_name]:
                     return await embed_maker.message(ctx, f'{_cmd} is not a valid command')
 
                 if _sub_cmd:
