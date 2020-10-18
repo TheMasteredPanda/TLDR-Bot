@@ -162,6 +162,10 @@ class Utils(commands.Cog):
         await self.call_timer_event(timer)
 
     async def call_timer_event(self, timer):
+        timer = db.timers.find_one({'_id': ObjectId(timer['_id'])})
+        if not timer:
+            return
+
         db.timers.delete_one({'_id': ObjectId(timer['_id'])})
         self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
 
