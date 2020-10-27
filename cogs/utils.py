@@ -1,28 +1,20 @@
 from discord.ext import commands
 from modules import database
-from cachetools import TTLCache, Cache
 from datetime import datetime
+from bson import ObjectId
+from time import time
 import config
 import asyncio
-import time
-import uuid
 import discord
 import re
+
 db = database.Connection()
-
-
-class TTLItemCache(TTLCache):
-    def __setitem__(self, key, value, cache_setitem=Cache.__setitem__, ttl=None):
-        super(TTLItemCache, self).__setitem__(key, value)
-        if ttl:
-            link = self._TTLCache__links.get(key, None)
-            if link:
-                link.expire += ttl - self.ttl
 
 
 async def get_member(ctx, bot, source):
     if source is None:
         return None
+
     if isinstance(source, int):
         source = str(source)
 
@@ -46,9 +38,11 @@ async def get_member(ctx, bot, source):
         if len(source) < 3:
             return 'User name input needs to be at least 3 characters long'
 
+        # checks first for a direct name match
         members = list(filter(lambda m: m.name.lower() == source.lower() or m.display_name.lower() == source.lower(), ctx.guild.members))
         if not members:
             regex = re.compile(fr'({source.lower()})')
+            # checks for regex match
             members = list(filter(lambda m: re.findall(regex, str(m).lower()) or re.findall(regex, m.display_name.lower()), ctx.guild.members))
             if len(members) > 10:
                 return 'Too many username matches'
@@ -105,6 +99,39 @@ def get_user_clearance(member):
     return clearance
 
 
+def get_user_boost_multiplier(member):
+    multiplier = 1
+
+    # add user specific boosts
+    user_boosts = db.boosts.find({'guild_id': member.guild.id, 'user_id': member.id})
+    for boost in user_boosts:
+        # check if boost is expired
+        expires = boost['expires']
+        if round(time()) > expires:
+            db.boosts.delete_one({'_id': ObjectId(boost['_id'])})
+            continue
+
+        multiplier += boost['multiplier']
+
+    # add role specific boosts
+    boost_role_ids = db.boosts.distinct('role_id')
+    # find common role ids
+    boost_role_ids = set(boost_role_ids) & set([r.id for r in member.roles])
+    for role_id in boost_role_ids:
+        boost = db.boosts.find_one({'guild_id': member.guild.id, 'role_id': role_id})
+        if not boost:
+            continue
+        # check if boost is expired
+        expires = boost['expires']
+        if round(time()) > expires:
+            db.boosts.delete_one({'_id': ObjectId(boost['_id'])})
+            continue
+
+        multiplier += boost['multiplier']
+
+    return multiplier
+
+
 class Utils(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -112,32 +139,17 @@ class Utils(commands.Cog):
         self.loop = self.bot.loop
         self.event = asyncio.Event(loop=self.loop)
 
-        self.menus = TTLItemCache(maxsize=2048, ttl=2*60)
-        self.no_expire_menus = {}
-
-    async def new_no_expire_menu(self, message, buttons):
-        self.no_expire_menus[message.id] = buttons
-        for button in buttons:
-            await message.add_reaction(button)
-
-    async def new_menu(self, message, buttons, ttl=None):
-        self.menus.__setitem__(message.id, buttons, ttl=ttl)
-        for button in buttons:
-            await message.add_reaction(button)
-
     async def run_old_timers(self):
-        timers_collection = db.timers.find({})
-        for g in timers_collection:
-            timers = g['timers']
-            if timers:
-                print(f'running old timers for: {g["guild_id"]}')
-                for timer in timers:
-                    asyncio.create_task(self.run_timer(g['guild_id'], timer))
+        print(f'running old timers')
+        timers = db.timers.find({})
+        for timer in timers:
+            asyncio.create_task(self.run_timer(timer))
 
-    async def run_timer(self, guild_id, timer):
-        now = round(time.time())
+    async def run_timer(self, timer):
+        now = round(time())
 
         if timer['expires'] > now:
+            # run separate timer function if specified otherwise just sleep
             if 'timer_cog' in timer['extras'] and 'timer_function' in timer['extras']:
                 cog = self.bot.get_cog(timer['extras']['timer_cog'])
                 timer_function = getattr(cog, timer['extras']['timer_function'])
@@ -147,34 +159,26 @@ class Utils(commands.Cog):
             else:
                 await asyncio.sleep(timer['expires'] - now)
 
-        await self.call_timer_event(guild_id, timer)
+        await self.call_timer_event(timer)
 
-    async def call_timer_event(self, guild_id, timer):
-        # find timer object
-        data = db.timers.find_one({'guild_id': guild_id})
-        if data is None:
-            data = self.bot.add_collections(guild_id, 'timers')
+    async def call_timer_event(self, timer):
+        timer = db.timers.find_one({'_id': ObjectId(timer['_id'])})
+        if not timer:
+            return
 
-        timers = data['timers']
-        timer_obj = [t for t in timers if t['id'] == timer['id']]
-        if timer_obj:
-            db.timers.update_one({'guild_id': guild_id}, {'$pull': {'timers': {'id': timer['id']}}})
-            self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
+        db.timers.delete_one({'_id': ObjectId(timer['_id'])})
+        self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
 
     async def create_timer(self, **kwargs):
-        timer_id = str(uuid.uuid4())
-        timer_object = {
-            'id': timer_id,
+        timer_dict = {
             'guild_id': kwargs['guild_id'],
             'expires': kwargs['expires'],
             'event': kwargs['event'],
             'extras': kwargs['extras']
         }
 
-        db.timers.update_one({'guild_id': timer_object['guild_id']}, {'$push': {f'timers': timer_object}})
-        asyncio.create_task(self.run_timer(timer_object['guild_id'], timer_object))
-
-        return timer_object
+        db.timers.insert_one(timer_dict)
+        asyncio.create_task(self.run_timer(timer_dict))
 
 
 def setup(bot):

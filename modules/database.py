@@ -3,58 +3,29 @@ import config
 
 
 class Connection:
-    __slots__ = ['mongo_client', 'db', 'levels', 'timers', 'polls', 'tickets', 'server_data', 'tags']
+    __slots__ = ['mongo_client', 'db', 'leveling_data', 'leveling_users', 'boosts', 'timers', 'tickets',
+                 'commands', 'daily_debates', 'watchlist', 'tags', 'reaction_menus',
+                 'outside_emotes', 'channels']
 
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
         self.db = self.mongo_client['TLDR']
-        self.levels = self.db['levels']
+        self.leveling_data = self.db['leveling_data']
+        self.leveling_users = self.db['leveling_users']
+        self.boosts = self.db['boosts']
         self.timers = self.db['timers']
-        self.polls = self.db['polls']
         self.tickets = self.db['tickets']
-        self.server_data = self.db['server_data']
         self.tags = self.db['tags']
+        self.commands = self.db['commands']
+        self.watchlist = self.db['watchlist']
+        self.daily_debates = self.db['daily_debates']
+        self.reaction_menus = self.db['reaction_menus']
+        self.outside_emotes = self.db['outside_emotes']
+        self.channels = self.db['channels']
 
 
-# Default schemas for databases
 schemas = {
-    'tickets': {
-        'guild_id': 0,
-        'tickets': {
-            # 'channel_id': 'user_id'
-        }
-    },
-    'polls': {
-        'guild_id': 0,
-        'polls': {
-            # 'message id': {
-            #     'emote': 0,
-            # }
-        }
-    },
-    'timers': {
-        'guild_id': 0,
-        'timers': []
-    },
-    'levels': {
-        'guild_id': 0,
-        'users': {},
-        'level_up_channel': 0,
-        'leveling_routes': {
-            'parliamentary': [
-                ('Citizen', 5, []),  # 0: name of role 1: how many levels in role 2: rewards list sent to user
-            ],
-            'honours': [
-                ('Public Servant', 5, [])
-            ]
-        },
-        'honours_channels': [],
-        'boost': {
-            'users': {},
-            'roles': {}
-        }
-    },
-    'levels_user': {
+    'leveling_user': {
         'pp': 0,  # Participation points or parliamentary points
         'p_level': 0,  # parliamentary level
         'hp': 0,  # honours points
@@ -66,57 +37,31 @@ schemas = {
         },
         'reputation': 0,
         'rep_timer': 0,
-        'rep_history': []
+        'last_rep': 0
     },
-    'server_data': {
-        'commands': {
-            'disabled': [],
-            'access': {
-                'users': {
-                    # 'user_id': []
-                },
-                'roles': {
-                    # 'role_id': []
-                }
-            }
+    'leveling_data': {
+        'guild_id': 0,
+        'level_up_channel': 0,
+        'leveling_routes': {
+            'parliamentary': [
+                ('Citizen', 5, []),  # 0: name of role 1: how many levels in role 2: rewards list sent to user
+            ],
+            'honours': [
+                ('Public Servant', 5, [])
+            ]
         },
-        'daily_debates': {
-            'topics': [],
-            'time': '',
-            'channel': 0,
-            'poll_channel': 0,
-            'role': 0
-        },
-        'role_menus': {
-            # 'message_id': {
-            #     'channel_id': 0
-            #     'name': '',
-            #     'roles': [{'emote': 'emote', 'role_id': 'role id', 'message': 'msg'}]
-            # }
-        },
-        'watchlist': {
-            'on_list': [],
-            'filters': {
-                # 'user_id': []
-            },
-            'channel_id': 0  # channel id
-        }
+        'honours_channels': [],
     },
-    'tags': {
-        # 'tag name': {
-        #     'response': '',
-        #     'owner_id': 0
-        # }
+    'watchlist_data': {
+        'guild_id': 0,
+        'channel_id': 0
     },
-    'commands': {
-        'disabled': [],
-        'access': {
-            'users': {
-                # 'user_id': []
-            },
-            'roles': {
-                # 'role_id': []
-            }
-        }
+    'daily_debates': {
+        'guild_id': 0,
+        'channel_id': 0,
+        'poll_channel_id': 0,
+        'role_id': 0,
+        'time': 0,
+        'topics': []
     }
 }
