@@ -337,7 +337,7 @@ class TLDR(commands.Bot):
                 embed.set_author(name=f'{message.author}', icon_url=message.author.avatar_url)
                 embed.set_footer(text=f'message id: {message.id}', icon_url=message.guild.icon_url)
 
-                embed.description = f'{message.content}\n[Link]({message.jump_url})'
+                embed.description = f'{message.content}\n[Link]({message.jump_url}) <#{message.channel.id}>'
 
                 filters = watchlist['filters']
                 content = ''
