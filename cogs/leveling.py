@@ -606,11 +606,10 @@ class Leveling(commands.Cog):
         embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
 
         # Looks up how many people are in a role
-        # i don't know how this works, but it does
         roles = [k[0] for k in leveling_routes[branch]]
         count = dict.fromkeys(roles, 0)
         for role in roles:
-            count[role] = db.leveling_users.count({'guild_id': ctx.guild.id, f'{prefix}role': role})
+            count[role] = db.leveling_users.count({'guild_id': ctx.guild.id, f'{prefix}role': role, 'left': {'$exists': False}})
 
         value = ''
         for i, _role in enumerate(leveling_routes[branch]):
