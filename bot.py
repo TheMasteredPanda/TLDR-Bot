@@ -11,6 +11,7 @@ from cogs.utils import get_user_clearance
 from discord.ext import commands
 
 db = database.Connection()
+intents = discord.Intents.all()
 
 
 async def get_prefix(bot, message):
@@ -19,7 +20,8 @@ async def get_prefix(bot, message):
 
 class TLDR(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix=get_prefix, case_insensitive=True, help_command=None)
+        super().__init__(command_prefix=get_prefix, case_insensitive=True, help_command=None,
+                         intents=intents, chunk_guilds_at_startup=True)
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
@@ -318,6 +320,7 @@ class TLDR(commands.Bot):
             return await channel.send(embed=embed)
 
     async def on_message(self, message):
+        await self.wait_until_ready()
         if message.author.bot:
             return
 
@@ -493,12 +496,14 @@ class TLDR(commands.Bot):
         await self.change_presence(activity=bot_game)
 
         print(f'{self.user} is ready')
-
         # run old timers
         utils_cog = self.get_cog('Utils')
         await utils_cog.run_old_timers()
 
         for g in self.guilds:
+            # cache members
+            await g.fetch_members(limit=10000000).flatten()
+
             # Check if guild documents in collections exist if not, it adds them
             self.add_collections(g.id)
 
