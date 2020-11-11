@@ -606,14 +606,13 @@ class Leveling(commands.Cog):
 
         # Looks up how many people are in a role
         # i don't know how this works, but it does
-        m_counts = dict.fromkeys([k[0] for k in leveling_routes[branch]], [])
-        count = dict.fromkeys([k[0] for k in leveling_routes[branch]], 0)
-        for r in reversed(leveling_routes[branch]):
-            role = discord.utils.find(lambda _r: _r.name == r[0], ctx.guild.roles)
-            for m in role.members:
-                if m.id not in m_counts[r[0]]:
-                    count[r[0]] += 1
-                    m_counts[r[0]].append(m.id)
+        roles = [k[0] for k in leveling_routes[branch]]
+        count = dict.fromkeys(roles, 0)
+        filtered_members = [*filter(lambda m: set([r.name for r in m.roles]) & set(roles), ctx.guild.members)]
+        for m in filtered_members:
+            member_roles = set([r.name for r in m.roles]) & set(roles)
+            highest_role = max([roles.index(r) for r in member_roles])
+            count[roles[highest_role]] += 1
 
         value = ''
         for i, _role in enumerate(leveling_routes[branch]):
