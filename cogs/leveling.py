@@ -596,6 +596,7 @@ class Leveling(commands.Cog):
             'p': 'parliamentary'
         }
         branch = branch_switch.get(branch[0], 'parliamentary')
+        prefix = f'{branch[0]}_'
 
         leveling_routes = leveling_data['leveling_routes']
         embed_colour = config.EMBED_COLOUR
@@ -608,11 +609,8 @@ class Leveling(commands.Cog):
         # i don't know how this works, but it does
         roles = [k[0] for k in leveling_routes[branch]]
         count = dict.fromkeys(roles, 0)
-        filtered_members = [*filter(lambda m: set([r.name for r in m.roles]) & set(roles), ctx.guild.members)]
-        for m in filtered_members:
-            member_roles = set([r.name for r in m.roles]) & set(roles)
-            highest_role = max([roles.index(r) for r in member_roles])
-            count[roles[highest_role]] += 1
+        for role in roles:
+            count[role] = db.leveling_users.count({'guild_id': ctx.guild.id, f'{prefix}role': role})
 
         value = ''
         for i, _role in enumerate(leveling_routes[branch]):
@@ -623,6 +621,8 @@ class Leveling(commands.Cog):
 
         if not value:
             value = 'This branch currently has no roles'
+
+        value += f'\n\nTotal: **{sum(count.values())} People**'
 
         embed.add_field(name=f'>{branch.title()} - Every 5 levels you advance a role', value=value, inline=False)
 
