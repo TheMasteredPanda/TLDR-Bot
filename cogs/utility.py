@@ -100,7 +100,7 @@ class Utility(commands.Cog):
     async def ping(self, ctx):
         message_created_at = ctx.message.created_at
         message = await ctx.send("Pong")
-        ping = (datetime.utcnow() - message_created_at) * 1000
+        ping = round(datetime.utcnow() - message_created_at) * 1000
         await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping.total_seconds())}ms")
 
     @commands.command(help='See someones profile picture', usage='pfp (user)',
