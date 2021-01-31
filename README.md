@@ -16,3 +16,8 @@ pip3 install -r requirements.txt
 ```
 python3 bot.py
 ```
+## Running with docker
+```
+docker-compose build
+docker-compose up -d
+```
