@@ -807,8 +807,7 @@ class Leveling(commands.Cog):
         else:
             if user_index < len(sorted_users):
                 your_pos_str = await construct_lb_your_pos(page)
-
-        leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
+                leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
 
         await ctx.send(embed=leaderboard_embed)
 
