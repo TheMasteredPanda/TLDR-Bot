@@ -639,18 +639,27 @@ class Leveling(commands.Cog):
         key = key_switch.get(branch[0], 'pp')
         if branch.isdigit():
             page = int(branch)
+
         branch = branch_switch.get(branch[0], 'parliamentary')
 
         sorted_users = [d for d in db.leveling_users.find({'guild_id': ctx.guild.id, 'left': {'$exists': False}, key: {'$gt': 0}}).sort(key, -1)]
 
         # find out max page number
         max_page_num = math.ceil(len(list(sorted_users)) / 10)
+        if max_page_num == 0:
+            max_page_num = 1
+
         if page > max_page_num:
             return await embed_maker.message(ctx, 'Exceeded maximum page number', colour='red')
 
         leveling_user = db.leveling_users.find_one({'guild_id': ctx.guild.id, 'user_id': ctx.author.id})
-        user_index = sorted_users.index(leveling_user)
-        user_rank = await self.calculate_user_rank(key, ctx.guild, sorted_users[user_index])
+
+        try:
+            user_index = sorted_users.index(leveling_user)
+        except ValueError:
+            user_index = len(sorted_users)
+
+        user_rank = await self.calculate_user_rank(key, ctx.guild, leveling_user)
 
         utils_cog = self.bot.get_cog('Utils')
 
