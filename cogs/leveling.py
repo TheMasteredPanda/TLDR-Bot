@@ -805,7 +805,8 @@ class Leveling(commands.Cog):
         if user_rank is None or user_rank <= page * 10:
             return await ctx.send(embed=leaderboard_embed)
         else:
-            your_pos_str = await construct_lb_your_pos(page)
+            if user_index < len(sorted_users):
+                your_pos_str = await construct_lb_your_pos(page)
 
         leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
 
