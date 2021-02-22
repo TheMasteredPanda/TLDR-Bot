@@ -725,17 +725,9 @@ class Leveling(commands.Cog):
         branch_role = next(filter(lambda rl: rl['name'] == leveling_user[f'{prefix}_role'], roles))
         role_index = roles.index(branch_role)
 
-        # if user goes up multiple roles, add previous roles to user
-        if role_level < -1:
-            roles_up = roles[role_index + 1:role_index + abs(role_level) + 1]
-            new_role_obj = None
-            for r in roles_up:
-                role_object = await get_leveling_role(message.guild, r['name'], message.author)
-                new_role_obj = role_object
-        else:
-            # check if user is on last role else set according to role index and new role level
-            new_role = roles[-1] if len(roles) - 1 < role_index + abs(role_level) else roles[role_index + abs(role_level)]
-            new_role_obj = await get_leveling_role(message.guild, new_role['name'], message.author)
+        # check if user is on last role else set according to role index and new role level
+        new_role = roles[-1] if len(roles) - 1 < role_index + abs(role_level) else roles[role_index + abs(role_level)]
+        new_role_obj = await get_leveling_role(message.guild, new_role['name'], message.author)
 
         db.leveling_users.update_one({
             'guild_id': message.guild.id,
