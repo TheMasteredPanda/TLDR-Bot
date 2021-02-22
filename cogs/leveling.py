@@ -532,7 +532,7 @@ class Leveling(commands.Cog):
 
             user_role_name = leveling_user[f'{branch[0]}_role']
 
-            user_role = await get_leveling_role(ctx.guild, user_role_name, ctx.author)
+            user_role = await get_leveling_role(ctx.guild, user_role_name)
             role_level = await user_role_level(branch, leveling_user)
             progress_percent = percent_till_next_level(branch, leveling_user)
 
