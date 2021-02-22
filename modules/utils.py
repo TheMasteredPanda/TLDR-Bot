@@ -246,7 +246,7 @@ async def get_member(ctx: commands.Context, source) -> Optional[discord.Member]:
         ctx,
         description=description,
         author={'name': 'Members'},
-        footer={'text': ctx.author.__str__, 'icon_url': ctx.author.avatar_url},
+        footer={'text': str(ctx.author), 'icon_url': ctx.author.avatar_url},
         send=True
     )
 
