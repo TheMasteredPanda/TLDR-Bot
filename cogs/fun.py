@@ -45,12 +45,12 @@ class Fun(commands.Cog):
         clearance='User',
         cls=cls.Command
     )
-    async def dadjoke(self, ctx):
+    async def dadjoke(self, ctx: commands.Context):
         url = "https://icanhazdadjoke.com/"
         response = requests.get(url, headers={"Accept": "text/plain"})
         joke = response.text.encode("ascii", "ignore").decode("ascii")
 
-        return await embed_maker.message(ctx, description=joke)
+        return await embed_maker.message(ctx, description=joke, send=True)
 
     @staticmethod
     async def fetch_image(session, url):
