@@ -18,7 +18,7 @@ class Group(commands.Group):
 
         for clearance in ['User', 'Mod', 'Admin', 'Dev']:
             if clearance in kwargs:
-                self.__dict__.update({clearance: kwargs[clearance]})
+                self.__setattr__(clearance, kwargs[clearance])
                 self.special_help = True
                 break
 
@@ -34,6 +34,6 @@ class Command(commands.Command):
 
         for clearance in ['User', 'Mod', 'Admin', 'Dev']:
             if clearance in kwargs:
-                self.__dict__.update({clearance: kwargs[clearance]})
+                self.__setattr__(clearance, kwargs[clearance])
                 self.special_help = True
                 break
