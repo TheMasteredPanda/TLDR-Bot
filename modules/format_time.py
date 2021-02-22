@@ -1,6 +1,7 @@
 import re
 import math
 
+s = 1
 m = 60
 h = m * 60
 d = h * 24
@@ -58,35 +59,12 @@ def parse(string=None):
             return None
 
         match = match[0]
-        n = int(match[0])
-        ptype = match[1] if match[1] else 's'
-        switcher = {
-            'years': n * y,
-            'year': n * y,
-            'yrs': n * y,
-            'yr': n * y,
-            'y': n * y,
-            'weeks': n * w,
-            'week': n * w,
-            'w': n * w,
-            'days': n * d,
-            'day': n * d,
-            'd': n * d,
-            'hours': n * h,
-            'hour': n * h,
-            'hrs': n * h,
-            'hr': n * h,
-            'h': n * h,
-            'minutes': n * m,
-            'minute': n * m,
-            'mins': n * m,
-            'min': n * m,
-            'm': n * m,
-            'seconds': n,
-            'second': n,
-            'secs': n,
-            'sec': n,
-            's': n
-        }
-        tm += switcher.get(ptype, 0)
+        num = int(match[0])
+        time_type = match[1] if match[1] else 's'
+
+        try:
+            tm += num * locals()[time_type[0]]
+        except:
+            continue
+
     return tm

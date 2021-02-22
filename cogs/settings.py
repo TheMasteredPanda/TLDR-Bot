@@ -1,7 +1,7 @@
 import discord
 import config
 from discord.ext import commands
-from modules import database, command, embed_maker
+from modules import database, cls, embed_maker
 from datetime import datetime
 
 db = database.Connection()
@@ -11,14 +11,15 @@ class Settings(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(help='Change the channel where level up messages are sent',
-                      usage='level_up_channel [#channel]', examples=['level_up_channel #bots'],
-                      clearance='Mod', cls=command.Command)
-    async def level_up_channel(self, ctx, channel=None):
-        leveling_data = db.leveling_data.find_one({'guild_id': ctx.guild.id}, {'level_up_channel': 1})
-        if leveling_data is None:
-            leveling_data = self.bot.add_collections(ctx.guild.id, 'leveling_data')
-
+    @commands.command(
+        help='Change the channel where level up messages are sent',
+        usage='level_up_channel [#channel]',
+        examples=['level_up_channel #bots'],
+        clearance='Mod',
+        cls=cls.Command
+    )
+    async def level_up_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
+        leveling_data = db.get_leveling_data(ctx.guild.id, {'level_up_channel': 1})
         current_channel_id = leveling_data['level_up_channel']
 
         if not current_channel_id:
@@ -36,13 +37,17 @@ class Settings(commands.Cog):
             embed.set_author(name='Level Up Channel', icon_url=ctx.guild.icon_url)
             return await ctx.send(embed=embed)
 
-        if ctx.message.channel_mentions:
-            channel = ctx.message.channel_mentions[0]
+        if channel:
             if channel.id == current_channel_id:
-                return await embed_maker.message(ctx, f'Level up channel is already set to <#{channel.id}>', colour='red')
+                return await embed_maker.error(ctx, f'Level up channel is already set to <#{channel.id}>')
 
             db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'level_up_channel': channel.id}})
-            return await embed_maker.message(ctx, f'Level up channel has been set to <#{channel.id}>', colour='green')
+            return await embed_maker.message(
+                ctx,
+                description=f'Level up channel has been set to <#{channel.id}>',
+                colour='green',
+                send=True
+            )
         else:
             return await embed_maker.command_error(ctx, '[#channel]')
 
