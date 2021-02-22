@@ -30,11 +30,11 @@ class Events(commands.Cog):
         # check if any users have left while the bot was offline
         for guild in self.bot.guilds:
             guild_members = [m.id for m in await guild.fetch_members(limit=None).flatten()]
-            leveling_users = db.leveling_users.find({})
+            leveling_users = db.leveling_users.find({'guild_id': guild.id})
 
             for user in leveling_users:
                 # if true, user has left the server while the bot was offline
-                if user['user_id'] not in guild_members:
+                if int(user['user_id']) not in guild_members:
                     self.transfer_leveling_data(user)
 
         self.bot.left_check.set()

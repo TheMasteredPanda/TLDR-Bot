@@ -36,11 +36,7 @@ class Role(commands.Converter):
 
 class Branch(commands.Converter):
     async def convert(self, ctx: commands.Context, argument: str = ''):
-        if argument.isdigit():
-            return int(argument)
-
         branch_switch = {'p': 'parliamentary', 'h': 'honours'}
-
         return branch_switch.get(argument[0], 'parliamentary')
 
 
