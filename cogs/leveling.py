@@ -551,7 +551,7 @@ class Leveling(commands.Cog):
         examples=['leaderboard parliamentary', 'lb honours'],
         cls=cls.Command
     )
-    async def leaderboard(self, ctx: commands.Context, branch: Union[Branch, int], page: int = 1):
+    async def leaderboard(self, ctx: commands.Context, branch: Union[Branch, int] = 'parliamentary', page: int = 1):
         if type(branch) == int:
             page = branch
             branch = 'parliamentary'
