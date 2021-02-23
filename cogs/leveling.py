@@ -538,12 +538,11 @@ class Leveling(commands.Cog):
                 role_level = await user_role_level(branch, leveling_user)
                 progress_percent = percent_till_next_level(branch, leveling_user)
                 lb_str += f'{pre}**Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
+                if not your_pos:
+                    lb_str += '\n'
             else:
                 rep = leveling_user['reputation']
                 lb_str += f' | **{rep} Reputation**\n'
-
-            if not your_pos:
-                lb_str += '\n'
 
         return lb_str
 
