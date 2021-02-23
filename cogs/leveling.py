@@ -563,7 +563,7 @@ class Leveling(commands.Cog):
             branch_switch = {'p': 'parliamentary', 'h': 'honours', 'r': 'reputation'}
             branch = branch_switch.get(branch[0], 'parliamentary')
 
-        key_switch = {'r': 'rep', 'p': 'pp', 'h': 'hp'}
+        key_switch = {'r': 'reputation', 'p': 'pp', 'h': 'hp'}
         key = key_switch.get(branch[0], 'pp')
 
         # get list of users sorted by points who have more than 0 points
