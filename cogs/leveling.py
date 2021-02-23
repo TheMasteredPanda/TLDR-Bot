@@ -551,13 +551,19 @@ class Leveling(commands.Cog):
         examples=['leaderboard parliamentary', 'lb honours'],
         cls=cls.Command
     )
-    async def leaderboard(self, ctx: commands.Context, branch: Union[Branch, int] = 'parliamentary', page: int = 1):
-        if type(branch) == int:
-            page = branch
+    async def leaderboard(self, ctx: commands.Context, branch: str = 'parliamentary', page: int = 1):
+        if branch.isdigit():
+            page = int(branch)
             branch = 'parliamentary'
+        else:
+            branch_switch = {'p': 'parliamentary', 'h': 'honours', 'r': 'reputation'}
+            branch = branch_switch.get(branch[0], 'parliamentary')
+
+        key_switch = {'r': 'rep', 'p': 'pp', 'h': 'hp'}
+        key = key_switch.get(branch[0], 'pp')
 
         # get list of users sorted by points who have more than 0 points
-        sorted_users = [u for u in db.leveling_users.find({'guild_id': ctx.guild.id, f'{branch[0]}p': {'$gt': 0}}).sort(f'{branch[0]}p', -1)]
+        sorted_users = [u for u in db.leveling_users.find({'guild_id': ctx.guild.id, key: {'$gt': 0}}).sort(key, -1)]
 
         page_size_limit = 10
 
