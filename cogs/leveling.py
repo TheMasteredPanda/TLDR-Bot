@@ -879,7 +879,7 @@ class Leveling(commands.Cog):
             # check for active boost and add to pp_add if active
             boost_multiplier = get_user_boost_multiplier(message.author)
             if boost_multiplier > 0:
-                pp_add = round(pp_add * boost_multiplier)
+                pp_add = round(pp_add * (1 + boost_multiplier))
 
             leveling_user['pp'] += pp_add
             db.add_points('parliamentary', guild.id, author.id, pp_add)
