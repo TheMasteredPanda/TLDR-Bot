@@ -522,10 +522,12 @@ class Leveling(commands.Cog):
             if member is None:
                 member = await ctx.guild.fetch_member(int(user_id))
 
+            addition = 0 if your_pos else 1
+
             if user_id == ctx.author.id:
-                lb_str += rf'**`#{index + i + 1}`**\* - {member.display_name}'
+                lb_str += rf'**`#{index + i + addition}`**\* - {member.display_name}'
             else:
-                lb_str += f'`#{index + i + 1}` - {member.display_name}'
+                lb_str += f'`#{index + i + addition}` - {member.display_name}'
 
             if not your_pos:
                 lb_str += f'  [{member}]'
@@ -600,11 +602,7 @@ class Leveling(commands.Cog):
         if user_index == len(sorted_users) or user_index + 1 <= page * page_size_limit:
             return await ctx.send(embed=leaderboard_embed)
         elif user_index < len(sorted_users):
-            your_pos_page = math.ceil((user_index + 1) / page_size_limit)
-            your_pos_sorted_users_page = sorted_users[page_size_limit * (your_pos_page - 1):page_size_limit * your_pos_page]
-            your_pos_index = your_pos_sorted_users_page.index(leveling_user)
-
-            sorted_users_segment = your_pos_sorted_users_page[your_pos_index - 1: your_pos_index + 2]
+            sorted_users_segment = sorted_users[user_index - 1:user_index + 2]
             your_pos_str = await self.construct_lb_str(ctx, branch, sorted_users_segment, user_index, your_pos=True)
             leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
 
