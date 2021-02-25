@@ -548,6 +548,12 @@ class Utility(commands.Cog):
         elif command:
             command_object = self.bot.get_command(command, ctx.author)
 
+            if command_object is None:
+                return await embed_maker.error(ctx, f"Couldn't find a command by: `{command}`")
+
+            if command_object.cog_name not in help_object:
+                return
+
             command_list = help_object[command_object.cog_name]
             if 'Special Access' in help_object:
                 command_list += help_object['Special Access']

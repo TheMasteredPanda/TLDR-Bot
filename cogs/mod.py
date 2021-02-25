@@ -157,7 +157,7 @@ class Mod(commands.Cog):
 
     @watchlist.command(
         name='add_filters',
-        help='are filters to a user on the watchlist',
+        help='Add filters to a user on the watchlist, when a user message matches the filter, mods are pinged.',
         usage='watchlist add_filters [user] -f (filter 1 | filter 2)',
         examples=[r'watchlist add_filters hattyot -f filter 1 -f \sfilter 2\s'],
         parse_args=['f'],
