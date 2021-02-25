@@ -197,7 +197,7 @@ class PrivateMessages(commands.Cog):
         clearance='Mod',
         cls=cls.Command
     )
-    async def get_user(self, ctx: commands.Context, member: str = None):
+    async def get_user(self, ctx: commands.Context, *, member: str = None):
         if member is None:
             return await embed_maker.command_error(ctx)
 
