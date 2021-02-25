@@ -719,6 +719,7 @@ class Leveling(commands.Cog):
 
         if verbose:
             if "settings" not in leveling_user or "@_me" not in leveling_user['settings']:
+                leveling_user["settings"] = {}
                 leveling_user["settings"]["@_me"] = False
 
             rank_embed.add_field(name='>Settings', value=f'**@_me:** {leveling_user["settings"]["@_me"]}', inline=False)
