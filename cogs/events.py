@@ -60,12 +60,10 @@ class Events(commands.Cog):
         if channel:
             embed = await embed_maker.message(
                 message,
+                description=f'{message.content}\n<#{message.channel.id}> [link]({message.jump_url})',
                 author={'name': f'{message.author}', 'icon_url': message.author.avatar_url},
                 footer={'text': f'message id: {message.id}', 'icon_url': message.guild.icon_url}
             )
-
-            embed.add_field(name='>Message', value=message.content, inline=False)
-            embed.add_field(name='>Channel', value=f'<#{message.channel.id}> [link]({message.jump_url})', inline=False)
 
             filters = watchlist['filters']
             content = ''
