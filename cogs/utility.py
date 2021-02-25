@@ -558,10 +558,10 @@ class Utility(commands.Cog):
             if not command_object:
                 return await embed_maker.message(ctx, description=f'{command} is not a valid command', send=True)
 
-            examples = f' | {ctx.prefix}'.join(command_object.examples)
+            examples = f'\n'.join(command_object.examples)
             cmd_help = f"**Description:** {command_object.help}\n" \
-                       f"**Usage:** {ctx.prefix}{command_object.usage}\n" \
-                       f"**Examples:** {ctx.prefix}{examples}"
+                       f"**Usage:** {command_object.usage}\n" \
+                       f"**Examples:**\n{examples}"
 
             if hasattr(command_object, 'sub_commands'):
                 sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command_object.sub_commands)

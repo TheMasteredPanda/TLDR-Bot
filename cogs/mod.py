@@ -803,8 +803,6 @@ class Mod(commands.Cog):
         if not emote:
             role = await get_guild_role(ctx.guild, user_input)
 
-        print(emote, role)
-
         if emote:
             if emote.roles:
                 return await embed_maker.message(
@@ -835,8 +833,9 @@ class Mod(commands.Cog):
 
     @commands.command(
         help='restrict an emote to specific role(s)',
-        usage='emote_role [action] -r [role] -e [emote 1] (emote 2)...',
+        usage='emote_role (action) -r [role] -e [emote 1] (emote 2)...',
         examples=[
+            'emote_role',
             'emote_role add -r Mayor -e :TldrNewsUK:',
             'emote_role remove -r Mayor -e :TldrNewsUK: :TldrNewsUS: :TldrNewsEU:'
         ],
@@ -845,6 +844,21 @@ class Mod(commands.Cog):
     )
     async def emote_role(self, ctx: commands.Context, action: str = None, *, args: Union[ParseArgs, dict] = None):
         if action is None:
+            emotes = ctx.guild.emojis
+            description = ''
+            for emote in emotes:
+                emote_roles = " | ".join(f'<@&{role.id}>' for role in emote.roles)
+                if not emote_roles:
+                    continue
+
+                description += f'\n{emote} -> {emote_roles}'
+
+            return await embed_maker.message(
+                ctx,
+                description=description,
+                send=True
+            )
+
             return await embed_maker.command_error(ctx)
 
         if action not in ['add', 'remove']:
@@ -879,6 +893,8 @@ class Mod(commands.Cog):
                 # add bot role to emote_roles
                 if ctx.guild.self_role not in emote_roles:
                     emote_roles.append(ctx.guild.self_role)
+
+                emote_roles = [*set(emote_roles)]
 
                 await emote.edit(roles=emote_roles)
 
