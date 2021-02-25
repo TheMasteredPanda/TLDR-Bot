@@ -63,7 +63,7 @@ def parse(string=None):
         time_type = match[1] if match[1] else 's'
 
         try:
-            tm += num * locals()[time_type[0]]
+            tm += num * globals()[time_type[0]]
         except:
             continue
 
