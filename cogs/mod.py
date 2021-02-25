@@ -3,7 +3,9 @@ import dateparser
 import datetime
 import time
 import config
-import re
+import asyncio
+import base64
+import math
 
 from cogs import utility
 from bson import ObjectId
@@ -843,30 +845,39 @@ class Mod(commands.Cog):
         cls=cls.Command
     )
     async def emote_role(self, ctx: commands.Context, action: str = None, *, args: Union[ParseArgs, dict] = None):
-        if action.isdigit():
+        if action and action.isdigit():
             page = int(action)
         else:
             page = 1
-        if action is None:
+
+        if action not in ['add', 'remove']:
             emotes = ctx.guild.emojis
+            max_pages = math.ceil(len(emotes) / 10)
+
+            if page > max_pages or page < 1:
+                return await embed_maker.error(ctx, 'Invalid page number given')
+
+            emotes = emotes[10 * (page - 1):10 * page]
+
             description = ''
+            index = 0
             for emote in emotes:
-                emote_roles = " | ".join(f'<@&{role.id}>' for role in emote.roles)
-                if not emote_roles:
+                if not emote.roles:
                     continue
 
-                description += f'\n{emote} -> {emote_roles}'
+                emote_roles = " | ".join(f'<@&{role.id}>' for role in emote.roles)
+                description += f'\n<:{emote.name}:{emote.id}> -> {emote_roles}'
+                index += 1
+
+                if index == 10:
+                    break
 
             return await embed_maker.message(
                 ctx,
                 description=description,
-                send=True
+                send=True,
+                footer={'text': f'Page {page}/{max_pages}'}
             )
-
-            return await embed_maker.command_error(ctx)
-
-        if action not in ['add', 'remove']:
-            return await embed_maker.command_error(ctx, '[action]')
 
         # return error if required variables are not given
         if 'r' not in args or not args['r']:
