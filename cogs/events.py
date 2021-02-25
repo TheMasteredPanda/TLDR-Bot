@@ -7,6 +7,7 @@ import traceback
 import asyncio
 import re
 
+from bson import ObjectId
 from cogs.leveling import get_leveling_role
 from bot import TLDR
 from modules import database, format_time, embed_maker
@@ -43,7 +44,7 @@ class Events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot:
+        if message.author.bot or not message.guild:
             return
 
         leveling_cog = self.bot.get_cog('Leveling')
@@ -546,6 +547,12 @@ class Events(commands.Cog):
             'guild_id': timer['guild_id'],
             'user_id': timer['extras']['user_id']
         })
+
+    @commands.Cog.listener()
+    async def on_guild_channel_delete(self, channel):
+        ticket = db.tickets.find_one({'guild_id': channel.guild.id, 'channel_id': channel.id})
+        if ticket:
+            db.tickets.delete_one({'_id': ObjectId(ticket['_id'])})
 
 
 def setup(bot):
