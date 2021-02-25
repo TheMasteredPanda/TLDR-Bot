@@ -22,7 +22,6 @@ class PrivateMessages(commands.Cog):
             called_cmd = self.__getattribute__(cmd)
             return await called_cmd(ctx, args)
         except AttributeError as e:
-            print(e)
             if ctx.message.content.startswith(config.PREFIX):
                 return await self.pm_help(ctx, args)
 
@@ -106,10 +105,17 @@ class PrivateMessages(commands.Cog):
         ticket_embed.add_field(name='>Reporter', value=f'<@{ctx.author.id}>', inline=False)
         ticket_embed.add_field(name='>Issue(s)', value=issue, inline=False)
 
-        return await self.send_ticket_embed(ctx, main_guild, ticket_embed)
+        # send images sent by user
+        files = []
+        content = ''
+        for a in ctx.message.attachments:
+            files.append(await a.to_file())
+            content = 'Attachments:\n'
+
+        return await self.send_ticket_embed(ctx, main_guild, ticket_embed, content=content, files=files)
 
     @staticmethod
-    async def send_ticket_embed(ctx: commands.Context, guild: discord.Guild, embed: discord.Embed, content: str = None):
+    async def send_ticket_embed(ctx: commands.Context, guild: discord.Guild, embed: discord.Embed, content: str = None, files: list = None):
         ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', guild.categories)
 
         if ticket_category is None:
@@ -125,7 +131,7 @@ class PrivateMessages(commands.Cog):
         today = date.today()
         date_str = today.strftime('%Y-%m-%d')
         ticket_channel = await guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
-        await ticket_channel.send(embed=embed, content=content)
+        await ticket_channel.send(embed=embed, content=content, files=files)
 
         msg = 'This issue has been forwarded to the moderators'
         embed = discord.Embed(colour=discord.Colour.green(), timestamp=datetime.now(), description=msg)
