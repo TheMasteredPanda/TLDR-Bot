@@ -718,7 +718,10 @@ class Leveling(commands.Cog):
             rank_embed.add_field(name='>Boosts', value=boost_str)
 
         if verbose:
-            rank_embed.add_field(name='>Settings', value=f'**@_me:** { leveling_user["settings"]["@_me"]}', inline=False)
+            if "settings" not in leveling_user or "@_me" not in leveling_user['settings']:
+                leveling_user["settings"]["@_me"] = False
+
+            rank_embed.add_field(name='>Settings', value=f'**@_me:** {leveling_user["settings"]["@_me"]}', inline=False)
 
         return await ctx.send(embed=rank_embed)
 
