@@ -67,7 +67,7 @@ class Mod(commands.Cog):
     @watchlist.command(
         name='add',
         help='add a user to the watchlist, with optionl filters (mathces are found with regex)',
-        usage='watchlist add [user] -f (filter1 | filter2 | filter3)',
+        usage='watchlist add [user] -f (filter1) -f (filter2)...',
         examples=[r'watchlist add hattyot -f hattyot -f \sot\s -f \ssus\s'],
         clearance='Mod',
         parse_args=['f'],
@@ -843,6 +843,10 @@ class Mod(commands.Cog):
         cls=cls.Command
     )
     async def emote_role(self, ctx: commands.Context, action: str = None, *, args: Union[ParseArgs, dict] = None):
+        if action.isdigit():
+            page = int(action)
+        else:
+            page = 1
         if action is None:
             emotes = ctx.guild.emojis
             description = ''
