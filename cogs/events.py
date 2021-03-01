@@ -134,7 +134,7 @@ class Events(commands.Cog):
         channel_id = daily_debate_data['channel_id']
         if not topics:
             # remind mods that a topic needs to be set up
-            msg = f'Daily debate starts in {format_time.seconds(tm)} and no topics have been set up <@&{config.MOD_ROLE_ID}>'
+            msg = f'Daily debate starts in {format_time.seconds(tm)} and no topics have been set up <@&{config.MOD_ROLE_ID}> <@&815914427987001424>'
             channel = guild.get_channel(channel_id)
 
             if channel is None:
