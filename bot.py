@@ -6,6 +6,7 @@ import modules.utils
 import modules.cls
 import modules.database
 import modules.embed_maker
+import copy
 
 from typing import Union
 from discord.ext import commands
@@ -57,9 +58,13 @@ class TLDR(commands.Bot):
             user_clearance = modules.utils.get_user_clearance(member)
             for clearance in user_clearance[::-1][:-clearances.index(command.clearance) - 1]:
                 if hasattr(command, clearance) and clearance in user_clearance:
+                    # create copy of command so we're not modifying the original command values
+                    command = copy.copy(command)
+
                     special_help = getattr(command, clearance)
                     command.__dict__.update(**special_help.__dict__)
                     command.clearance = clearance
+                    break
 
         return command
 
