@@ -524,11 +524,12 @@ class Utility(commands.Cog):
                 continue
 
             cog_name = 'Special Access' if access_given else cmd.cog_name
+            cmd_object = self.bot.get_command(cmd.name, ctx.author)
 
             if cog_name not in help_object:
-                help_object[cog_name] = [cmd]
+                help_object[cog_name] = [cmd_object]
             else:
-                help_object[cog_name].append(cmd)
+                help_object[cog_name].append(cmd_object)
 
         if command is None:
             embed = await embed_maker.message(
@@ -547,7 +548,6 @@ class Utility(commands.Cog):
             return await ctx.send(embed=embed)
         elif command:
             command_object = self.bot.get_command(command, ctx.author)
-
             if command_object is None:
                 return await embed_maker.error(ctx, f"Couldn't find a command by: `{command}`")
 
@@ -558,7 +558,7 @@ class Utility(commands.Cog):
             if 'Special Access' in help_object:
                 command_list += help_object['Special Access']
 
-            if not command_object or command_object not in command_list:
+            if not command_object and command_object not in command_list:
                 return
 
             if not command_object:
@@ -569,7 +569,7 @@ class Utility(commands.Cog):
                        f"**Usage:** {command_object.usage}\n" \
                        f"**Examples:**\n{examples}"
 
-            if hasattr(command_object, 'sub_commands'):
+            if hasattr(command_object, 'sub_commands') and command_object.sub_commands:
                 sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command_object.sub_commands)
                 sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {command_object.name} [sub command]`'
                 cmd_help += sub_commands_str
