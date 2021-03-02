@@ -314,7 +314,7 @@ class Leveling(commands.Cog):
 
         cls=cls.Group
     )
-    async def perks(self, ctx: commands.Context, role: Union[Role, dict] = None):
+    async def perks(self, ctx: commands.Context, *, role: Union[Role, dict] = None):
         if ctx.subcommand_passed is None:
             leveling_data = db.leveling_data.find_one({'guild_id': ctx.guild.id}, {'leveling_routes': 1})
 
