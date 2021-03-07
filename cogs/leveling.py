@@ -689,6 +689,18 @@ class Leveling(commands.Cog):
         pp_str = await self.branch_rank_str('parliamentary', ctx.guild, member, leveling_user, verbose)
         rank_embed.add_field(name='>Parliamentary', value=pp_str, inline=False)
 
+        if leveling_user['reputation']:
+            rank = get_user_rank(ctx.guild.id, 'rep', leveling_user)
+            if verbose:
+                last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user["last_rep"] else 'None'
+                rep_str = f"**Reputation:** {leveling_user['reputation']}\n" \
+                          f"**Rep timer:** {format_time.seconds(int(leveling_user['rep_timer']), accuracy=10)}\n" \
+                          f"**Last Rep: {last_rep}**\n"
+            else:
+                rep_str = f'**#{rank}** | **{leveling_user["reputation"]}** reputation'
+
+            rank_embed.add_field(name='>Reputation', value=rep_str, inline=False)
+
         # add boosts field
         if verbose and 'boosts' in leveling_user:
             boost_str = ''
@@ -914,11 +926,15 @@ class Leveling(commands.Cog):
 
 
 def get_user_rank(guild_id, branch: str, leveling_user: dict) -> int:
-    prefix = branch[0]
+    points_switch = {'p': 'pp', 'h': 'hp', 'r': 'reputation'}
+    points = points_switch.get(branch[0])
+    if points not in leveling_user:
+        leveling_user[points] = 0
+
     sorted_users = [u for u in db.leveling_users.find({
         'guild_id': guild_id,
-        f'{prefix}p': {'$gt': leveling_user[f'{prefix}p'] - 0.1}
-    }).sort(f'{prefix}p', -1)]
+        points: {'$gt': leveling_user[points] - 0.1}
+    }).sort(points, -1)]
 
     return sorted_users.index(leveling_user) + 1
 
