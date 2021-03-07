@@ -692,9 +692,15 @@ class Leveling(commands.Cog):
         if leveling_user['reputation']:
             rank = get_user_rank(ctx.guild.id, 'rep', leveling_user)
             if verbose:
+                rep_time = round(time.time()) - int(leveling_user['rep_timer'])
+                if rep_time < 0:
+                    rep_time = 0
+
+                rep_time_str = format_time.seconds(rep_time, accuracy=10)
+
                 last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user["last_rep"] else 'None'
                 rep_str = f"**Reputation:** {leveling_user['reputation']}\n" \
-                          f"**Rep timer:** {format_time.seconds(int(leveling_user['rep_timer']), accuracy=10)}\n" \
+                          f"**Rep timer:** {rep_time_str}\n" \
                           f"**Last Rep: {last_rep}**\n"
             else:
                 rep_str = f'**#{rank}** | **{leveling_user["reputation"]}** reputation'
