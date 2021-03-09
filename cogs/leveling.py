@@ -766,9 +766,29 @@ class Leveling(commands.Cog):
             }
         )
 
+        # Sends user info about perks if role has them
+        if branch_role['perks']:
+            perks_str = "\n • ".join(branch_role['perks'])
+            perks_message = f'**Congrats** again on advancing to **{branch_role["name"]}**!' \
+                            f'\nThis role also gives you new **perks:**' \
+                            f'\n • {perks_str}' \
+                            f'\n\nFor more info on these perks ask one of the TLDR server mods'
+
+            perks_embed = await embed_maker.message(
+                message,
+                description=perks_message,
+                author={'name': 'New Perks!'}
+            )
+
+            try:
+                await message.author.send(embed=perks_embed)
+            # in case user doesnt allow dms from bot
+            except:
+                pass
+
         return new_role_obj
 
-    async def level_up_message(self, branch: str, message: discord.Message, leveling_user: dict, reward_text: str, role: dict):
+    async def level_up_message(self, message: discord.Message, leveling_user: dict, reward_text: str):
         embed = await embed_maker.message(
             message,
             description=reward_text,
@@ -800,29 +820,6 @@ class Leveling(commands.Cog):
         content = f'<@{message.author.id}>' if enabled else ''
 
         await channel.send(embed=embed, content=content)
-
-        # Sends user info about perks if role has them
-        if not role['perks']:
-            return
-
-        if leveling_user[f'{branch[0]}_level'] % 5 == 0:
-            perks_str = "\n • ".join(role['perks'])
-            perks_message = f'**Congrats** again on advancing to **{role["name"]}**!' \
-                            f'\nThis role also gives you new **perks:**' \
-                            f'\n • {perks_str}' \
-                            f'\n\nFor more info on these perks ask one of the TLDR server mods'
-
-            perks_embed = await embed_maker.message(
-                message,
-                description=perks_message,
-                author={'name': 'New Perks!'}
-            )
-
-            try:
-                await message.author.send(embed=perks_embed)
-            # in case user doesnt allow dms from bot
-            except:
-                pass
 
     async def level_up(self, branch: str, leveling_user: dict, message: discord.Message):
         prefix = branch[0]
@@ -866,7 +863,7 @@ class Leveling(commands.Cog):
             }
         )
 
-        await self.level_up_message(branch, message, leveling_user, reward_text, role_entry)
+        await self.level_up_message(message, leveling_user, reward_text)
 
     async def process_message(self, message: discord.Message):
         author = message.author
