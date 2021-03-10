@@ -5,6 +5,7 @@ import config
 import emoji
 import os
 import requests
+import inspect
 
 from bs4 import BeautifulSoup
 from typing import Union
@@ -599,21 +600,23 @@ class Utility(commands.Cog):
             )
 
         # pull source code
-        src = f"```py\n{str(__import__('inspect').getsource(self.bot.get_command(command).callback)).replace('```', f'{u}')}```"
+        command = self.bot.get_command(command)
+        if not command:
+            return await embed_maker.error(ctx, 'Invalid command')
+
+        src = f"```py\n{str(inspect.getsource(command.callback)).replace('```', f'{u}')}```"
 
         # pull back indentation
         new_src = ''
         for line in src.splitlines():
             new_src += f"{line.replace('    ', '', 1)}\n"
+
         src = new_src
 
         if len(src) > 2000:
-            cmd = self.bot.get_command(command).callback
-            if not cmd:
-                return await ctx.send("Command not found.")
-            file = cmd.__code__.co_filename
+            file = command.__code__.co_filename
             location = os.path.relpath(file)
-            total, fl = __import__('inspect').getsourcelines(cmd)
+            total, fl = __import__('inspect').getsourcelines(command)
             ll = fl + (len(total) - 1)
             return await embed_maker.message(
                 ctx,
