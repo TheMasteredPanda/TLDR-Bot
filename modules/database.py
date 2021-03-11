@@ -75,6 +75,16 @@ class Connection:
 
         return daily_debates
 
+    def get_automember(self, guild_id: int):
+        leveling_data = self.get_leveling_data(guild_id, {'automember': 1})
+        if not leveling_data or 'automember' not in leveling_data:
+            self.leveling_data.update_one({'guild_id': guild_id}, {'$set': {'automember': False}})
+            automember = False
+        else:
+            automember = leveling_data['automember']
+
+        return automember
+
 
 schemas = {
     'leveling_user': {

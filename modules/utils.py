@@ -129,6 +129,13 @@ async def get_leveling_role(guild: discord.Guild, role_identifier: str, member: 
         role = await guild.create_role(name=role_identifier)
 
     if member and role not in member.roles:
+        # give member role to non-patreon users if they are given the citizen role
+        # also check if this feature has been enabled
+        automember = db.get_automember(member.guild.id)
+        if automember and role.id == 697184342614474785 and 644182117051400220 not in [r.id for r in member.roles]:
+            member_role = discord.utils.find(lambda r: r.id == 662036345526419486, member.guild.roles)
+            await member.add_roles(member_role)
+
         await member.add_roles(role)
 
     return role
