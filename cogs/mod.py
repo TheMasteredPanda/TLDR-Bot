@@ -1049,9 +1049,12 @@ class Mod(commands.Cog):
         # get either title or author
         title = self.get_title(message.embeds[0])
 
+        # format description
+        description = '\n' + message.embeds[0].description if message.embeds[0].description else ''
+
         # convert values to a multi line message
         text = f"{title}" \
-               f"{message.embeds[0].description}" \
+               f"{description}" \
                f"{fields}"
 
         return text
