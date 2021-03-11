@@ -1,17 +1,18 @@
-import discord
-import dateparser
 import datetime
+import math
+import re
 import time
 import config
+import dateparser
+import discord
 import asyncio
-import base64
-import math
 
-from cogs import utility
+from io import StringIO
 from bson import ObjectId
-from typing import Union
 from discord.ext import commands
+from typing import Union
 from bot import TLDR
+from cogs import utility
 from modules import cls, database, embed_maker
 from modules.utils import (
     ParseArgs,
@@ -20,6 +21,7 @@ from modules.utils import (
     get_guild_role,
     get_member
 )
+
 db = database.Connection()
 
 
@@ -965,6 +967,154 @@ class Mod(commands.Cog):
         date_str = today.strftime('%Y-%m-%d')
         ticket_channel = await ctx.guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
         await ticket_channel.send(embed=ticket_embed)
+
+    @commands.command(
+        help='Archive a ticket channel. Every message will be recorded and put in a google doc',
+        usage='archive_channel',
+        clearance='Mod',
+        examples=['archive_channel'],
+        cls=cls.Command
+    )
+    async def archive_channel(self, ctx: commands.Context):
+        # ask the user if they actually want to start the process of archiving a channel
+        confirm_message = await embed_maker.message(
+            ctx,
+            description='React with 👍 if you are sure you want to archive this channel.',
+            colour='red',
+            send=True
+        )
+
+        def check(reaction: discord.Reaction, user: discord.User):
+            return user == ctx.author and str(reaction.emoji) == '👍'
+
+        try:
+            await ctx.bot.wait_for('reaction_add', timeout=60, check=check)
+        except asyncio.TimeoutError:
+            await confirm_message.delete()
+            return await ctx.message.delete()
+
+        # get embed that confirms users reaction
+        confirmed_embed = await embed_maker.message(
+            ctx,
+            description='Starting archive process, this might take a while, please wait.',
+            colour='green',
+        )
+
+        # edit original message
+        await confirm_message.edit(embed=confirmed_embed)
+
+        # get all the messages for channel and reverse the list
+        channel_history = await ctx.channel.history(limit=None).flatten()
+        channel_history = channel_history[::-1]
+
+        channel_history_string = ''
+        for i, message in enumerate(channel_history):
+            # fix for a weird error
+            if not message or type(message) == str:
+                continue
+
+            channel_history_string += f"\n{message.author} - {message.created_at.strftime('%H:%M:%S | %Y-%m-%d')}"
+
+            if message.content:
+                channel_history_string += f'\n"{message.content}"'
+
+            # if message has embed, convert the embed to text and add it to channel_history_string
+            if message.embeds:
+                channel_history_string += f'\n"{self.embed_message_to_text(message)}"'
+
+            # if message has attachments add them to channel_history_string
+            if message.attachments:
+                # if message has contents it needs to have \n at the end
+                if message.content:
+                    channel_history_string += '\n'
+
+                # gather urls
+                urls = "\n".join([a.url for a in message.attachments])
+                channel_history_string += f'Attachments: {urls}'
+
+            channel_history_string += '\n'
+
+        # convert mentions like "<@93824009823094832098>" into names
+        channel_history_string = self.replace_mentions(ctx.guild, channel_history_string)
+
+        # send file containing archive
+        return await ctx.send(file=discord.File(StringIO(channel_history_string), filename='archive.txt'))
+
+    def embed_message_to_text(self, message: discord.Message):
+        # convert fields to text
+        fields = ""
+        for field in message.embeds[0].fields:
+            fields += f'\n{field.name}\n{field.value}'
+
+        # get either title or author
+        title = self.get_title(message.embeds[0])
+
+        # convert values to a multi line message
+        text = f"{title}" \
+               f"{message.embeds[0].description}" \
+               f"{fields}"
+
+        return text
+
+    @staticmethod
+    def get_title(embed: discord.Embed):
+        title = ''
+        if embed.title:
+            title = embed.title.name if type(embed.title) != str else embed.title
+        elif embed.author:
+            title = embed.author.name if type(embed.author) != str else embed.author
+
+        return title
+
+    @staticmethod
+    def replace_mentions(guild: discord.Guild, string):
+        # replace mentions in values with actual names
+        mentions = re.findall(r'(<(@|@&|@!|#)\d+>)', string)
+        for mention in mentions:
+            # get type, ie. @, @&, @! or #
+            mention_type = mention[1]
+            # get id from find
+            mention_id = re.findall(r'(\d+)', mention[0])[0]
+
+            # turn type into iterable
+            iterable_switch = {
+                '@': guild.members,
+                '@!': guild.members,
+                '@&': guild.roles,
+                '#': guild.channels
+            }
+            iterable = iterable_switch.get(mention_type, None)
+            if not iterable:
+                continue
+
+            # get object from id
+            mention_object = discord.utils.find(lambda o: o.id == int(mention_id), iterable)
+            # if object actually exists replace mention in string
+            if mention_object:
+                string = string.replace(f'{mention[0]}', mention_object.name)
+
+        return string
+
+    @commands.command(
+        name='automember',
+        help='Enables or disables giving non-patreon users the member role when they get the citizen role',
+        usage='automember',
+        clearance='Mod',
+        examples=['automember'],
+        cls=cls.Command
+    )
+    async def auto_member(self, ctx: commands.Context):
+        new_automember = not db.get_automember(ctx.guild.id)
+
+        if new_automember:
+            msg = 'Disabling automember'
+            colour = 'orange'
+        else:
+            msg = 'Enabling automember'
+            colour = 'green'
+
+        db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'automember': new_automember}})
+        return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
 
 
 def setup(bot):
