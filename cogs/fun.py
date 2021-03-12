@@ -86,6 +86,7 @@ class Fun(commands.Cog):
         usage='dog',
         examples=['dog'],
         clearance='User',
+        aliases=['doggo'],
         cls=cls.Command
     )
     async def dog(self, ctx):
