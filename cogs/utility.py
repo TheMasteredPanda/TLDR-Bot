@@ -572,7 +572,7 @@ class Utility(commands.Cog):
 
             if hasattr(command.docs, 'sub_commands') and command.docs.sub_commands:
                 sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command.docs.sub_commands)
-                sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {command.docs.name} [sub command]`'
+                sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
                 cmd_help += sub_commands_str
 
             author_name = f'Help: {command}'
