@@ -35,6 +35,7 @@ class TLDR(commands.Bot):
                 print(f'{filename[:-3]} is now loaded')
 
         self.timers = modules.utils.Timers(self)
+        self.reaction_menus = modules.utils.ReactionMenus(self)
 
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()

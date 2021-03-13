@@ -548,6 +548,26 @@ class Leveling(commands.Cog):
 
         return lb_str
 
+    async def construct_lb_embed(self, ctx: commands.Context, branch: str, sorted_users: list, page_size_limit: int, page: int, user_index: int, max_page_num: int):
+        sorted_users_page = sorted_users[page_size_limit * (page - 1):page_size_limit * page]
+        leaderboard_str = await self.construct_lb_str(ctx, branch, sorted_users_page, index=page_size_limit * (page - 1))
+        description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
+
+        leaderboard_embed = await embed_maker.message(
+            ctx,
+            description=description,
+            footer={'text': f'{ctx.author} | Page {page}/{max_page_num}'},
+            author={'name': f'{branch.title()} Leaderboard'}
+        )
+
+        # Displays user position under leaderboard and users above and below them if user is below position 10
+        if user_index < len(sorted_users) and not (user_index + 1 <= page * page_size_limit):
+            sorted_users_segment = sorted_users[user_index - 1:user_index + 2]
+            your_pos_str = await self.construct_lb_str(ctx, branch, sorted_users_segment, user_index, your_pos=True)
+            leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
+
+        return leaderboard_embed
+
     @commands.command(
         help='Shows the leveling leaderboards (parliamentary(p)/honours(h)) on the server',
         usage='leaderboard (branch)',
@@ -587,26 +607,43 @@ class Leveling(commands.Cog):
         except ValueError:
             user_index = len(sorted_users)
 
-        sorted_users_page = sorted_users[page_size_limit * (page - 1):page_size_limit * page]
-        leaderboard_str = await self.construct_lb_str(ctx, branch, sorted_users_page, index=page_size_limit * (page - 1))
-        description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
+        leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
+        leaderboard_message = await ctx.send(embed=leaderboard_embed)
 
-        leaderboard_embed = await embed_maker.message(
-            ctx,
-            description=description,
-            footer={'text': f'{ctx.author} | Page {page}/{max_page_num}'},
-            author={'name': f'{branch.title()} Leaderboard'}
-        )
+        async def previous_page(reaction: discord.Reaction, user: discord.User, *, pages_remove: int = 1):
+            nonlocal page
 
-        # Displays user position under leaderboard and users above and below them if user is below position 10
-        if user_index == len(sorted_users) or user_index + 1 <= page * page_size_limit:
-            return await ctx.send(embed=leaderboard_embed)
-        elif user_index < len(sorted_users):
-            sorted_users_segment = sorted_users[user_index - 1:user_index + 2]
-            your_pos_str = await self.construct_lb_str(ctx, branch, sorted_users_segment, user_index, your_pos=True)
-            leaderboard_embed.add_field(name='Your Position', value=your_pos_str)
+            page -= pages_remove
+            page %= max_page_num
 
-        await ctx.send(embed=leaderboard_embed)
+            new_leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
+            return await leaderboard_message.edit(embed=new_leaderboard_embed)
+
+        async def next_page(reaction: discord.Reaction, user: discord.User, *, pages_add: int = 1):
+            nonlocal page
+
+            page += pages_add
+            page %= max_page_num
+
+            new_leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
+            return await leaderboard_message.edit(embed=new_leaderboard_embed)
+
+        async def five_pages_forward(reaction: discord.Reaction, user: discord.User):
+            nonlocal page
+            return await next_page(reaction, user, pages_add=5)
+
+        async def five_pages_backward(reaction: discord.Reaction, user: discord.User):
+            nonlocal page
+            return await previous_page(reaction, user, pages_remove=5)
+
+        buttons = {
+            '⏪': five_pages_backward,
+            '⬅️': previous_page,
+            '➡️': next_page,
+            '⏩': five_pages_forward
+        }
+
+        await self.bot.reaction_menus.add(leaderboard_message, buttons)
 
     async def branch_rank_str(self, branch: str, guild: discord.Guild, member: discord.Member, leveling_user: dict, verbose: bool):
         prefix = branch[0]
