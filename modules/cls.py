@@ -42,17 +42,18 @@ class Command(commands.Command):
                     help_object = getattr(self, clearance)
                     help_object.clearance = clearance
 
-        help_object.access_given, help_object.access_taken = self.command_access(member)
+        command_data = db.get_command_data(member.guild.id, self.name)
+
+        help_object.access_given, help_object.access_taken = self.command_access(member, command_data)
         help_object.can_run = (help_object.clearance in user_clearance or help_object.access_given) and not help_object.access_taken
+        help_object.disabled = bool(command_data['disabled'])
 
         return help_object
 
-    def command_access(self, member: discord.Member):
+    @staticmethod
+    def command_access(member: discord.Member, command_data: dict):
         # user access overwrites role access
         # access taken overwrites access given
-
-        command_data = db.get_command_data(member.guild.id, self.name)
-
         user_access = command_data['user_access']
         role_access = command_data['role_access']
 

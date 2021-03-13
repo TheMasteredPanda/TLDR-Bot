@@ -641,10 +641,13 @@ class Mod(commands.Cog):
 
         return await ctx.send(embed=embed)
 
-    async def command_access_check(self, ctx: commands.Context, command: cls.Command,
-                                   user_input: Union[discord.Role, str],
-                                   change: str):
-
+    @staticmethod
+    async def command_access_check(
+            ctx: commands.Context,
+            command: cls.Command,
+            user_input: Union[discord.Role, str],
+            change: str
+    ):
         if type(user_input) == str:
             # check if user input is member
             user_input = await get_member(ctx, user_input)
@@ -679,7 +682,7 @@ class Mod(commands.Cog):
                 )
 
             # can user run command
-            can_access_command = self.bot.can_run_command(command, user_input)
+            can_access_command = command.get_help(user_input).can_run
 
         elif access_type == 'role':
             top_author_role = ctx.author.roles[-1]

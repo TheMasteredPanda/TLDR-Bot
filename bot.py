@@ -42,18 +42,18 @@ class TLDR(commands.Bot):
         if not self.left_check.is_set():
             return
 
+        # no bots allowed
+        if message.author.bot:
+            return
+
         # redirect to private messages cog if message was sent in pms
         if message.guild is None:
             pm_cog = self.get_cog('PrivateMessages')
             ctx = await self.get_context(message)
             return await pm_cog.process_pm(ctx)
 
-        # no bots allowed
-        if message.author.bot:
-            return
-
         # invoke command if message starts with prefix
-        if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, ''):
+        if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, '').strip():
             return await self.process_command(message)
 
     async def process_command(self, message: discord.Message):
@@ -63,10 +63,8 @@ class TLDR(commands.Bot):
             return
 
         ctx.command.docs = ctx.command.get_help(ctx.author)
-
-        command_data = db.get_command_data(ctx.guild.id, ctx.command.name)
         # check if command has been disabled
-        if command_data['disabled']:
+        if ctx.command.docs.disabled:
             return await modules.embed_maker.error(ctx, 'This command has been disabled')
 
         # return if user doesnt have clearance for command

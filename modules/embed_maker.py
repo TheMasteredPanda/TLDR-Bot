@@ -14,7 +14,15 @@ def get_colour(colour):
     }.get(colour, config.EMBED_COLOUR)
 
 
-async def message(ctx: Union[Context, discord.Message], *, description: str = None, author: dict = None, footer: dict = None, colour: str = None, send: bool = False):
+async def message(
+        ctx: Union[Context, discord.Message], *,
+        description: str = None,
+        author: dict = None,
+        footer: dict = None,
+        colour: str = None,
+        title: str = None,
+        send: bool = False
+):
     embed_colour = config.EMBED_COLOUR if colour is None else get_colour(colour)
     embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
 
@@ -32,6 +40,9 @@ async def message(ctx: Union[Context, discord.Message], *, description: str = No
         embed.set_footer(text=footer['text'], icon_url=icon_url)
     else:
         embed.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+
+    if title:
+        embed.title = title
 
     if send:
         return await ctx.send(embed=embed)
