@@ -199,7 +199,7 @@ class Leveling(commands.Cog):
         ],
         clearance='User',
 
-        Admin=cls.SpecialHelp(
+        Admin=cls.Help(
             help='See current leveling routes or add, remove or edit roles',
             usage='ranks (branch) (sub command) (args)',
             examples=['ranks', 'ranks honours'],
@@ -305,7 +305,7 @@ class Leveling(commands.Cog):
         examples=['perks', 'perks Party Member'],
         clearance='User',
 
-        Mod=cls.SpecialHelp(
+        Mod=cls.Help(
             help='See all the perks that a role has to offer or add or remove them',
             usage='perks (<sub command/role name>) (args)',
             examples=['perks', 'perks Party Member'],

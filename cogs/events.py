@@ -92,6 +92,7 @@ class Events(commands.Cog):
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
         traceback_text = ''.join(lines)
 
+        # send error to channel where eval was called
         if ctx.command.name == 'eval':
             return await ctx.send(f'```{exception}\n{traceback_text}```')
 

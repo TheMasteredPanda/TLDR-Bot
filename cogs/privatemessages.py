@@ -63,7 +63,7 @@ class PrivateMessages(commands.Cog):
                 cmd = getattr(self, help_cmd)
                 examples = f' | '.join(cmd.examples)
                 cmd_help = f"""
-                        **Description:** {cmd.help}
+                        **Description:** {cmd.docs}
                         **Usage:** {cmd.usage}
                         **Examples:** {examples}
                         """
@@ -85,8 +85,8 @@ class PrivateMessages(commands.Cog):
     async def report_issue(self, ctx: commands.Context, issue: str = None, _=None):
         if not issue:
             command = ctx.command
-            examples_str = '\n'.join(command.examples)
-            description = f'**Description:** {command.help}\n**Usage:** {command.usage}\n**Examples:** {examples_str}'
+            examples_str = '\n'.join(command.docs.examples)
+            description = f'**Description:** {command.docs.docs}\n**Usage:** {command.usage}\n**Examples:** {examples_str}'
             embed = discord.Embed(colour=discord.Colour.orange(), description=description, title=f'>{command.name}', timestamp=datetime.now())
             embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
             return await ctx.author.send(embed=embed)

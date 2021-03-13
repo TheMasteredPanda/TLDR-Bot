@@ -1,14 +1,9 @@
-import os
-
-in_container = os.environ.get('IN_DOCKER', False)
-if in_container:
-    MONGODB_URL = 'mongodb://db:27017'
-else:
-    MONGODB_URL = 'mongodb://127.0.0.1:27017'
+import collections
 
 BOT_TOKEN = ''
-PREFIX = ''
-EMBED_COLOUR = 0x00a6ad  # TLDR blue
+PREFIX = '>>'
+EMBED_COLOUR = 0x00a6ad
+MONGODB_URL = 'mongodb://127.0.0.1:27017'
 DEV_IDS = []
 
 MAIN_SERVER = 0
@@ -19,3 +14,17 @@ MOD_ROLE_ID = 0
 # Error server and channel where to send error messages
 ERROR_SERVER = 0
 ERROR_CHANNEL = 0
+WEB_API_URL = ''
+
+# for google drive integration
+# path to given credentials for service account
+SERVICE_ACCOUNT_FILE = ''
+DRIVE_PARENT_FOLDER_ID = ''
+
+# clearance levels
+CLEARANCE = collections.OrderedDict({
+    'User': lambda *a: True,
+    'Mod': lambda member: member.guild_permissions.manage_messages,
+    'Admin': lambda member: member.guild_permissions.administrator,
+    'Dev': lambda member: member.id in DEV_IDS,
+})

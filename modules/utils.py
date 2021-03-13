@@ -42,11 +42,11 @@ class Branch(commands.Converter):
 
 class ParseArgs(commands.Converter):
     async def convert(self, ctx: commands.Context, argument: str = ''):
-        regex = r' ?-(\w+) ' if not ctx.command.parse_args else rf' ?-({"|".join(ctx.command.parse_args)})'
+        regex = r' ?-(\w+) ' if not ctx.command.docs.parse_args else rf' ?-({"|".join(ctx.command.parse_args)})'
         filtered_args = list(filter(lambda a: bool(a), re.split(regex, argument)))
         results = {}
 
-        if ctx.command.parse_args and filtered_args[0] not in ctx.command.parse_args:
+        if ctx.command.docs.parse_args and filtered_args[0] not in ctx.command.parse_args:
             results['pre'] = filtered_args.pop(0)
 
         for arg, data in zip(filtered_args[::2], filtered_args[1::2]):
@@ -158,19 +158,13 @@ def get_branch_role(guild_id: int, role_name: str) -> tuple:
 
 
 def get_user_clearance(member: discord.Member) -> list:
-    permissions = member.guild_permissions
-    clearance = ['User']
+    member_clearance = []
 
-    if permissions.manage_messages:
-        clearance.append('Mod')
+    for clearance in config.CLEARANCE:
+        if config.CLEARANCE[clearance](member):
+            member_clearance.append(clearance)
 
-    if permissions.administrator:
-        clearance.append('Admin')
-
-    if member.id in config.DEV_IDS:
-        clearance.append('Dev')
-
-    return clearance
+    return member_clearance
 
 
 async def get_member(ctx: commands.Context, source) -> Optional[discord.Member]:

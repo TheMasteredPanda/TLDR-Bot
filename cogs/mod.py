@@ -659,7 +659,7 @@ class Mod(commands.Cog):
 
         command_data = db.get_command_data(ctx.guild.id, command.name, insert=True)
 
-        if command.clearance in ['Dev', 'Admin']:
+        if command.docs.clearance in ['Dev', 'Admin']:
             return await embed_maker.error(ctx, 'You can not manage access of admin or dev commands')
 
         can_access_command = True

@@ -520,17 +520,16 @@ class Utility(commands.Cog):
 
         user_clearance = get_user_clearance(ctx.author)
         for cmd in self.bot.commands:
-            can_run, access_given, _ = self.bot.can_run_command(cmd, ctx.author, extra=True)
-            if not can_run:
+            cmd.docs = cmd.get_help(ctx.author)
+            if not cmd.docs.can_run:
                 continue
 
-            cog_name = 'Special Access' if access_given else cmd.cog_name
-            cmd_object = self.bot.get_command(cmd.name, ctx.author)
+            cog_name = 'Special Access' if cmd.docs.access_given else cmd.cog_name
 
             if cog_name not in help_object:
-                help_object[cog_name] = [cmd_object]
+                help_object[cog_name] = [cmd]
             else:
-                help_object[cog_name].append(cmd_object)
+                help_object[cog_name].append(cmd)
 
         if command is None:
             embed = await embed_maker.message(
@@ -539,7 +538,6 @@ class Utility(commands.Cog):
                 author={'name': f'Help - {user_clearance[-1]}'}
             )
 
-            # categories are listed in a list so they come out sorted instead of in a random order
             for cog in help_object:
                 embed.add_field(
                     name=f'>{cog}',
@@ -548,36 +546,38 @@ class Utility(commands.Cog):
 
             return await ctx.send(embed=embed)
         elif command:
-            command_object = self.bot.get_command(command, ctx.author)
-            if command_object is None:
+            command = self.bot.get_command(command)
+            if command is None:
                 return await embed_maker.error(ctx, f"Couldn't find a command by: `{command}`")
 
-            if command_object.cog_name not in help_object:
+            command.docs = command.get_help(ctx.author)
+
+            if command.cog_name not in help_object:
                 return
 
-            command_list = help_object[command_object.cog_name]
+            command_list = help_object[command.cog_name]
             if 'Special Access' in help_object:
                 command_list += help_object['Special Access']
 
-            if not command_object and command_object not in command_list:
+            if not command and command not in command_list:
                 return
 
-            if not command_object:
+            if not command:
                 return await embed_maker.message(ctx, description=f'{command} is not a valid command', send=True)
 
-            examples = f'\n'.join(command_object.examples)
-            cmd_help = f"**Description:** {command_object.help}\n" \
-                       f"**Usage:** {command_object.usage}\n" \
+            examples = f'\n'.join(command.docs.examples)
+            cmd_help = f"**Description:** {command.docs.help}\n" \
+                       f"**Usage:** {command.docs.usage}\n" \
                        f"**Examples:**\n{examples}"
 
-            if hasattr(command_object, 'sub_commands') and command_object.sub_commands:
-                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command_object.sub_commands)
-                sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {command_object.name} [sub command]`'
+            if hasattr(command.docs, 'sub_commands') and command.docs.sub_commands:
+                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command.docs.sub_commands)
+                sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {command.docs.name} [sub command]`'
                 cmd_help += sub_commands_str
 
             author_name = f'Help: {command}'
-            if command_object.special_help:
-                author_name += f' - {command_object.clearance}'
+            if command.special_help:
+                author_name += f' - {command.docs.clearance}'
 
             return await embed_maker.message(ctx, description=cmd_help, author={'name': author_name}, send=True)
         else:
