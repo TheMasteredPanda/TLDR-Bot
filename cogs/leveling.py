@@ -767,9 +767,9 @@ class Leveling(commands.Cog):
         )
 
         # Sends user info about perks if role has them
-        if branch_role['perks']:
-            perks_str = "\n • ".join(branch_role['perks'])
-            perks_message = f'**Congrats** again on advancing to **{branch_role["name"]}**!' \
+        if new_role['perks']:
+            perks_str = "\n • ".join(new_role['perks'])
+            perks_message = f'**Congrats** again on advancing to **{new_role["name"]}**!' \
                             f'\nThis role also gives you new **perks:**' \
                             f'\n • {perks_str}' \
                             f'\n\nFor more info on these perks ask one of the TLDR server mods'
@@ -852,7 +852,6 @@ class Leveling(commands.Cog):
         else:
             reward_text = f'Congrats **{message.author.name}** you\'ve become a level **{role_level}** <@&{new_role.id}>'
 
-        role_entry = next(filter(lambda rl: rl['name'] == new_role.name, leveling_data['leveling_routes'][branch]))
         reward_text += ' due to your contributions!' if branch == 'honours' else '!'
 
         db.leveling_users.update_one({
