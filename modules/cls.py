@@ -43,7 +43,7 @@ class Command(commands.Command):
                     help_object.clearance = clearance
 
         help_object.access_given, help_object.access_taken = self.command_access(member)
-        help_object.can_run = (help_object.clearance in user_clearance or help_object.access_give) and not help_object.access_taken
+        help_object.can_run = (help_object.clearance in user_clearance or help_object.access_given) and not help_object.access_taken
 
         return help_object
 
