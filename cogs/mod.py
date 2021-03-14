@@ -282,7 +282,7 @@ class Mod(commands.Cog):
                     if not topic_author:
                         topic_author = await ctx.guild.fetch_member(int(topic_author_id))
 
-                topics_str += f'`#{page_size_limit * (page - 1) + i}`: {topic_str}\n'
+                topics_str += f'`#{page_size_limit * (page - 1) + i + 1}`: {topic_str}\n'
                 if topic_author:
                     topics_str += f'**Topic Author:** {str(topic_author)}\n'
 
