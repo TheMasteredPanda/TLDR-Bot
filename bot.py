@@ -6,9 +6,10 @@ import modules.utils
 import modules.cls
 import modules.database
 import modules.embed_maker
-import copy
+import modules.google_drive
+import modules.reaction_menus
+import modules.timers
 
-from typing import Union
 from discord.ext import commands
 
 intents = discord.Intents.all()
@@ -34,8 +35,9 @@ class TLDR(commands.Bot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
-        self.timers = modules.utils.Timers(self)
-        self.reaction_menus = modules.utils.ReactionMenus(self)
+        self.google_drive = modules.google_drive.Drive()
+        self.timers = modules.timers.Timers(self)
+        self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
 
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
