@@ -208,50 +208,102 @@ class Mod(commands.Cog):
         clearance='Mod',
         aliases=['dd', 'dailydebate'],
         examples=['dailydebates'],
-        sub_commands=['add', 'insert', 'remove', 'set_time', 'set_channel', 'set_role', 'set_poll_channel',
-                      'set_poll_options', 'disable'],
+        sub_commands=['add', 'insert', 'remove', 'set_time', 'set_channel', 'set_role', 'set_poll_channel', 'set_poll_options', 'disable'],
         cls=cls.Group,
 
     )
-    async def dailydebates(self, ctx: commands.Context):
+    async def dailydebates(self, ctx: commands.Context, page: int = 1):
         daily_debates_data = db.get_daily_debates(ctx.guild.id)
         if ctx.subcommand_passed is None:
+            page_size_limit = 10
+
             # List currently set up daily debate topics
             topics = daily_debates_data['topics']
-            if not topics:
-                topics_str = f'Currently there are no debate topics set up'
-            else:
-                # generate topics string
-                topics_str = '**Topics:**\n'
-                for i, topic in enumerate(topics):
-                    topic_str = topic['topic']
-                    topic_author_id = topic['topic_author_id']
-                    topic_options = topic['topic_options']
-                    topic_author = await ctx.guild.fetch_member(int(topic_author_id)) if topic_author_id else None
 
-                    topics_str += f'`#{i + 1}`: {topic_str}\n'
-                    if topic_author:
-                        topics_str += f'**Topic Author:** {str(topic_author)}\n'
+            # calculate max page number
+            max_page_num = math.ceil(len(topics) / page_size_limit)
+            if max_page_num == 0:
+                max_page_num = 1
 
-                    if topic_options:
-                        topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(topic_options.values())]) + '\n'
+            if page > max_page_num:
+                return await embed_maker.error(ctx, 'Exceeded maximum page number')
 
-            dd_time = daily_debates_data['time'] if daily_debates_data['time'] else 'Not set'
-            dd_channel = f'<#{daily_debates_data["channel_id"]}>' if daily_debates_data['channel_id'] else 'Not set'
-            dd_poll_channel = f'<#{daily_debates_data["poll_channel_id"]}>' if daily_debates_data['poll_channel_id'] else 'Not set'
-            dd_role = f'<@&{daily_debates_data["role_id"]}>' if daily_debates_data['role_id'] else 'Not set'
+            embed = await self.construct_dd_embed(ctx, daily_debates_data, max_page_num, page, page_size_limit, topics)
+            dd_message = await ctx.send(embed=embed)
 
-            embed = await embed_maker.message(
-                ctx,
-                description=topics_str,
-                author={'name': 'Daily Debates'}
-            )
-            embed.add_field(
-                name='Attributes',
-                value=f'**Time:** {dd_time}\n**Channel:** {dd_channel}\n**Poll Channel:** {dd_poll_channel}\n**Role:** {dd_role}'
-            )
+            async def previous_page(reaction: discord.Reaction, user: discord.User, *, pages_remove: int = 1):
+                nonlocal page
 
-            return await ctx.send(embed=embed)
+                page -= pages_remove
+                page %= max_page_num
+
+                if page == 0:
+                    page = max_page_num
+
+                new_leaderboard_embed = await self.construct_dd_embed(ctx, daily_debates_data, max_page_num, page, page_size_limit, topics)
+                return await dd_message.edit(embed=new_leaderboard_embed)
+
+            async def next_page(reaction: discord.Reaction, user: discord.User, *, pages_add: int = 1):
+                nonlocal page
+
+                page += pages_add
+                page %= max_page_num
+
+                if page == 0:
+                    page = 1
+
+                new_leaderboard_embed = await self.construct_dd_embed(ctx, daily_debates_data, max_page_num, page, page_size_limit, topics)
+                return await dd_message.edit(embed=new_leaderboard_embed)
+
+            buttons = {
+                '⬅️': previous_page,
+                '➡️': next_page,
+            }
+
+            await self.bot.reaction_menus.add(dd_message, buttons)
+
+    async def construct_dd_embed(self, ctx: commands.Context, daily_debates_data: dict, max_page_num: int, page: int, page_size_limit: int, topics: list):
+        if not topics:
+            topics_str = f'Currently there are no debate topics set up'
+        else:
+            # generate topics string
+            topics_str = '**Topics:**\n'
+            for i, topic in enumerate(topics[page_size_limit * (page - 1):page_size_limit * page]):
+                if i == 10:
+                    break
+
+                topic_str = topic['topic']
+                topic_author_id = topic['topic_author_id']
+                topic_options = topic['topic_options']
+
+                topic_author = None
+                if topic_author_id:
+                    topic_author = ctx.guild.get_member(int(topic_author_id))
+                    if not topic_author:
+                        topic_author = await ctx.guild.fetch_member(int(topic_author_id))
+
+                topics_str += f'`#{page_size_limit * (page - 1) + i}`: {topic_str}\n'
+                if topic_author:
+                    topics_str += f'**Topic Author:** {str(topic_author)}\n'
+
+                if topic_options:
+                    topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(topic_options.values())]) + '\n'
+
+        dd_time = daily_debates_data['time'] if daily_debates_data['time'] else 'Not set'
+        dd_channel = f'<#{daily_debates_data["channel_id"]}>' if daily_debates_data['channel_id'] else 'Not set'
+        dd_poll_channel = f'<#{daily_debates_data["poll_channel_id"]}>' if daily_debates_data['poll_channel_id'] else 'Not set'
+        dd_role = f'<@&{daily_debates_data["role_id"]}>' if daily_debates_data['role_id'] else 'Not set'
+        embed = await embed_maker.message(
+            ctx,
+            description=topics_str,
+            author={'name': 'Daily Debates'},
+            footer={'text': f'Page {page}/{max_page_num}'}
+        )
+        embed.add_field(
+            name='Attributes',
+            value=f'**Time:** {dd_time}\n**Channel:** {dd_channel}\n**Poll Channel:** {dd_poll_channel}\n**Role:** {dd_role}'
+        )
+        return embed
 
     @dailydebates.command(
         name='disable',

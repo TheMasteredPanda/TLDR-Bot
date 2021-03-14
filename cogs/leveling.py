@@ -616,6 +616,9 @@ class Leveling(commands.Cog):
             page -= pages_remove
             page %= max_page_num
 
+            if page == 0:
+                page = max_page_num
+
             new_leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
             return await leaderboard_message.edit(embed=new_leaderboard_embed)
 
@@ -624,6 +627,9 @@ class Leveling(commands.Cog):
 
             page += pages_add
             page %= max_page_num
+
+            if page == 0:
+                page = 1
 
             new_leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
             return await leaderboard_message.edit(embed=new_leaderboard_embed)
