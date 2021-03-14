@@ -496,7 +496,7 @@ class Leveling(commands.Cog):
         clearance='User',
         cls=cls.Command
     )
-    async def mlu(self, ctx: commands.Context, level: int = None):
+    async def mlu(self, ctx: commands.Context, level: float = None):
         leveling_user = db.get_leveling_user(ctx.guild.id, ctx.author.id)
 
         p_level = leveling_user['p_level']
