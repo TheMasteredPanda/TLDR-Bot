@@ -490,35 +490,41 @@ class Leveling(commands.Cog):
         return await embed_maker.message(ctx, description=msg, colour='green', send=True)
 
     @commands.command(
-        help='See how many messages you need to send to level up (dont forget about the 60s cooldown)',
-        usage='mlu',
-        examples=['mlu'],
+        help='See how many messages you need to send to level up and rank up or see how many messages until you reach a level (dont forget about the 60s cooldown)',
+        usage='mlu (level)',
+        examples=['mlu', 'mlu 60'],
         clearance='User',
         cls=cls.Command
     )
-    async def mlu(self, ctx: commands.Context):
+    async def mlu(self, ctx: commands.Context, level: int = None):
         leveling_user = db.get_leveling_user(ctx.guild.id, ctx.author.id)
 
         p_level = leveling_user['p_level']
         pp = leveling_user['pp']
 
-        # points needed until level_up
-        pp_till_next_level = round((5 / 6) * (p_level + 1) * (2 * (p_level + 1) * (p_level + 1) + 27 * (p_level + 1) + 91)) - pp
-        avg_msg_needed = math.ceil(pp_till_next_level / 20)
+        if not level:
+            # points needed until level_up
+            pp_till_next_level = round((5 / 6) * (p_level + 1) * (2 * (p_level + 1) * (p_level + 1) + 27 * (p_level + 1) + 91)) - pp
+            avg_msg_needed = math.ceil(pp_till_next_level / 20)
 
-        # points needed to rank up
-        user_rank = await user_role_level('parliamentary', leveling_user)
-        missing_levels = 6 - user_rank
+            # points needed to rank up
+            user_rank = await user_role_level('parliamentary', leveling_user)
+            missing_levels = 6 - user_rank
 
-        rank_up_level = p_level + missing_levels
-        pp_needed_rank_up = round((5 / 6) * rank_up_level * (2 * rank_up_level * rank_up_level + 27 * rank_up_level + 91)) - pp
-        avg_msg_rank_up = math.ceil(pp_needed_rank_up / 20)
+            rank_up_level = p_level + missing_levels
+            pp_needed_rank_up = round((5 / 6) * rank_up_level * (2 * rank_up_level * rank_up_level + 27 * rank_up_level + 91)) - pp
+            avg_msg_rank_up = math.ceil(pp_needed_rank_up / 20)
+            description = f'Messages needed to:\n'\
+                          f'Level up: **{avg_msg_needed}**\n'\
+                          f'Rank up: **{avg_msg_rank_up}**'
+        else:
+            pp_needed = round((5 / 6) * level * (2 * level * level + 27 * level + 91)) - pp
+            avg_msg_needed = math.ceil(pp_needed / 20)
+            description = f'Messages needed to reach level `{level}`: **{avg_msg_needed}**'
 
         return await embed_maker.message(
             ctx,
-            description=f'Messages needed to:\n'
-                        f'Level up: **{avg_msg_needed}**\n'
-                        f'Rank up: **{avg_msg_rank_up}**',
+            description=description,
             author={'name': 'MLU'},
             send=True
         )
