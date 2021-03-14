@@ -43,11 +43,11 @@ class Branch(commands.Converter):
 
 class ParseArgs(commands.Converter):
     async def convert(self, ctx: commands.Context, argument: str = ''):
-        regex = r' ?-(\w+) ' if not ctx.command.docs.parse_args else rf' ?-({"|".join(ctx.command.parse_args)})'
+        regex = r' ?-(\w+) ' if not ctx.command.docs.parse_args else rf' ?-({"|".join(ctx.command.docs.parse_args)})'
         filtered_args = list(filter(lambda a: bool(a), re.split(regex, argument)))
         results = {}
 
-        if ctx.command.docs.parse_args and filtered_args[0] not in ctx.command.parse_args:
+        if ctx.command.docs.parse_args and filtered_args[0] not in ctx.command.docs.parse_args:
             results['pre'] = filtered_args.pop(0)
 
         for arg, data in zip(filtered_args[::2], filtered_args[1::2]):
