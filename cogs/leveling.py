@@ -501,13 +501,23 @@ class Leveling(commands.Cog):
 
         p_level = leveling_user['p_level']
         pp = leveling_user['pp']
-        pp_till_next_level = round(5 / 6 * (p_level + 1) * (2 * (p_level + 1) * (p_level + 1) + 27 * (p_level + 1) + 91))
-        pp_needed = pp_till_next_level - pp
-        avg_msg_needed = math.ceil(pp_needed / 20)
+
+        # points needed until level_up
+        pp_till_next_level = round((5 / 6) * (p_level + 1) * (2 * (p_level + 1) * (p_level + 1) + 27 * (p_level + 1) + 91)) - pp
+        avg_msg_needed = math.ceil(pp_till_next_level / 20)
+
+        # points needed to rank up
+        user_rank = await user_role_level('parliamentary', leveling_user)
+        missing_levels = 6 - user_rank
+
+        rank_up_level = p_level + missing_levels
+        pp_needed_rank_up = round((5 / 6) * rank_up_level * (2 * rank_up_level * rank_up_level + 27 * rank_up_level + 91)) - pp
+        avg_msg_rank_up = math.ceil(pp_needed_rank_up / 20)
 
         return await embed_maker.message(
             ctx,
-            description=f'Messages needed to level up: **{avg_msg_needed}**',
+            description=f'Messages needed to level up: **{avg_msg_needed}**\n'
+                        f'Messages needed to rank up: **{avg_msg_rank_up}**',
             author={'name': 'MLU'},
             send=True
         )
