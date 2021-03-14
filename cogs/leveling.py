@@ -516,8 +516,9 @@ class Leveling(commands.Cog):
 
         return await embed_maker.message(
             ctx,
-            description=f'Messages needed to level up: **{avg_msg_needed}**\n'
-                        f'Messages needed to rank up: **{avg_msg_rank_up}**',
+            description=f'Messages needed to:\n'
+                        f'Level up: **{avg_msg_needed}**\n'
+                        f'Rank up: **{avg_msg_rank_up}**',
             author={'name': 'MLU'},
             send=True
         )
