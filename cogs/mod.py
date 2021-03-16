@@ -6,9 +6,11 @@ import config
 import dateparser
 import discord
 import asyncio
+import functools
 
 from io import StringIO
 from bson import ObjectId
+from modules.reaction_menus import BookMenu
 from discord.ext import commands
 from typing import Union
 from bot import TLDR
@@ -228,41 +230,29 @@ class Mod(commands.Cog):
             if page > max_page_num:
                 return await embed_maker.error(ctx, 'Exceeded maximum page number')
 
-            embed = await self.construct_dd_embed(ctx, daily_debates_data, max_page_num, page, page_size_limit, topics)
+            page_constructor = functools.partial(
+                self.construct_dd_embed,
+                ctx,
+                daily_debates_data,
+                max_page_num,
+                page_size_limit,
+                topics
+            )
+
+            embed = await page_constructor(page=page)
             dd_message = await ctx.send(embed=embed)
 
-            async def previous_page(reaction: discord.Reaction, user: discord.User, *, pages_remove: int = 1):
-                nonlocal page
+            menu = BookMenu(
+                dd_message,
+                author=ctx.author,
+                page=page,
+                max_page_num=max_page_num,
+                page_constructor=page_constructor,
+            )
 
-                page -= pages_remove
-                page %= max_page_num
+            self.bot.reaction_menus.add(menu)
 
-                if page == 0:
-                    page = max_page_num
-
-                new_leaderboard_embed = await self.construct_dd_embed(ctx, daily_debates_data, max_page_num, page, page_size_limit, topics)
-                return await dd_message.edit(embed=new_leaderboard_embed)
-
-            async def next_page(reaction: discord.Reaction, user: discord.User, *, pages_add: int = 1):
-                nonlocal page
-
-                page += pages_add
-                page %= max_page_num
-
-                if page == 0:
-                    page = 1
-
-                new_leaderboard_embed = await self.construct_dd_embed(ctx, daily_debates_data, max_page_num, page, page_size_limit, topics)
-                return await dd_message.edit(embed=new_leaderboard_embed)
-
-            buttons = {
-                '⬅️': previous_page,
-                '➡️': next_page,
-            }
-
-            await self.bot.reaction_menus.add(dd_message, buttons)
-
-    async def construct_dd_embed(self, ctx: commands.Context, daily_debates_data: dict, max_page_num: int, page: int, page_size_limit: int, topics: list):
+    async def construct_dd_embed(self, ctx: commands.Context, daily_debates_data: dict, max_page_num: int, page_size_limit: int, topics: list, *, page: int):
         if not topics:
             topics_str = f'Currently there are no debate topics set up'
         else:

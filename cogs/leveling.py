@@ -2,6 +2,7 @@ import discord
 import time
 import math
 import datetime
+import functools
 
 from bot import TLDR
 from modules.utils import (
@@ -18,6 +19,7 @@ from typing import Union, Optional
 from modules import embed_maker, cls, database, format_time
 from random import randint
 from discord.ext import commands
+from modules.reaction_menus import BookMenu
 
 db = database.Connection()
 
@@ -565,7 +567,7 @@ class Leveling(commands.Cog):
 
         return lb_str
 
-    async def construct_lb_embed(self, ctx: commands.Context, branch: str, sorted_users: list, page_size_limit: int, page: int, user_index: int, max_page_num: int):
+    async def construct_lb_embed(self, ctx: commands.Context, branch: str, sorted_users: list, page_size_limit: int, user_index: int, max_page_num: int, *, page: int):
         sorted_users_page = sorted_users[page_size_limit * (page - 1):page_size_limit * page]
         leaderboard_str = await self.construct_lb_str(ctx, branch, sorted_users_page, index=page_size_limit * (page - 1))
         description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
@@ -624,49 +626,30 @@ class Leveling(commands.Cog):
         except ValueError:
             user_index = len(sorted_users)
 
-        leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
+        page_constructor = functools.partial(
+            self.construct_lb_embed,
+            ctx,
+            branch,
+            sorted_users,
+            page_size_limit,
+            user_index,
+            max_page_num
+        )
+
+        leaderboard_embed = await page_constructor(page=page)
         leaderboard_message = await ctx.send(embed=leaderboard_embed)
 
-        async def previous_page(reaction: discord.Reaction, user: discord.User, *, pages_remove: int = 1):
-            nonlocal page
+        menu = BookMenu(
+            leaderboard_message,
+            author=ctx.author,
+            page=page,
+            max_page_num=max_page_num,
+            page_constructor=page_constructor,
+            extra_back=5,
+            extra_forward=5
+        )
 
-            page -= pages_remove
-            page %= max_page_num
-
-            if page == 0:
-                page = max_page_num
-
-            new_leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
-            return await leaderboard_message.edit(embed=new_leaderboard_embed)
-
-        async def next_page(reaction: discord.Reaction, user: discord.User, *, pages_add: int = 1):
-            nonlocal page
-
-            page += pages_add
-            page %= max_page_num
-
-            if page == 0:
-                page = 1
-
-            new_leaderboard_embed = await self.construct_lb_embed(ctx, branch, sorted_users, page_size_limit, page, user_index, max_page_num)
-            return await leaderboard_message.edit(embed=new_leaderboard_embed)
-
-        async def five_pages_forward(reaction: discord.Reaction, user: discord.User):
-            nonlocal page
-            return await next_page(reaction, user, pages_add=5)
-
-        async def five_pages_backward(reaction: discord.Reaction, user: discord.User):
-            nonlocal page
-            return await previous_page(reaction, user, pages_remove=5)
-
-        buttons = {
-            '⏪': five_pages_backward,
-            '⬅️': previous_page,
-            '➡️': next_page,
-            '⏩': five_pages_forward
-        }
-
-        await self.bot.reaction_menus.add(leaderboard_message, buttons)
+        self.bot.reaction_menus.add(menu)
 
     async def branch_rank_str(self, branch: str, guild: discord.Guild, member: discord.Member, leveling_user: dict, verbose: bool):
         prefix = branch[0]
