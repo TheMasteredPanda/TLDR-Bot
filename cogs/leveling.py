@@ -610,7 +610,7 @@ class Leveling(commands.Cog):
         page_size_limit = 10
 
         # calculate max page number
-        max_page_num = math.ceil(len(list(sorted_users)) / page_size_limit)
+        max_page_num = math.ceil(len(sorted_users) / page_size_limit)
         if max_page_num == 0:
             max_page_num = 1
 
@@ -618,12 +618,9 @@ class Leveling(commands.Cog):
             return await embed_maker.error(ctx, 'Exceeded maximum page number')
 
         leveling_user = db.get_leveling_user(ctx.guild.id, ctx.author.id)
+        user_index = sorted_users.index(leveling_user) if leveling_user in sorted_users else len(sorted_users)
 
-        try:
-            user_index = sorted_users.index(leveling_user)
-        except ValueError:
-            user_index = len(sorted_users)
-
+        # create function with all the needed values except page, so the function can be called with only the page kwarg
         page_constructor = functools.partial(
             self.construct_lb_embed,
             ctx,
@@ -634,6 +631,7 @@ class Leveling(commands.Cog):
             max_page_num
         )
 
+        # make and send initial leaderboard page
         leaderboard_embed = await page_constructor(page=page)
         leaderboard_message = await ctx.send(embed=leaderboard_embed)
 
