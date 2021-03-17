@@ -3,6 +3,7 @@ import re
 import asyncio
 import config
 import time
+import argparse
 
 from typing import Optional
 from modules import embed_maker, database
@@ -40,20 +41,19 @@ class Branch(commands.Converter):
 
 class ParseArgs(commands.Converter):
     async def convert(self, ctx: commands.Context, argument: str = ''):
-        regex = r' ?-(\w+) ' if not ctx.command.docs.parse_args else rf' ?-({"|".join(ctx.command.docs.parse_args)})'
-        filtered_args = list(filter(lambda a: bool(a), re.split(regex, argument)))
-        results = {}
+        try:
+            parser = argparse.ArgumentParser()
+            parser.add_argument('pre', type=str, nargs='*')
+            for arg, description in ctx.command.docs.command_args:
+                kwargs = arg[2] if len(arg) == 3 else {}
+                parser.add_argument(arg[1], arg[0], **kwargs)
 
-        if ctx.command.docs.parse_args and filtered_args[0] not in ctx.command.docs.parse_args:
-            results['pre'] = filtered_args.pop(0)
+            result = parser.parse_args(argument.split(' ')).__dict__
+            result['pre'] = ' '.join(result['pre'])
 
-        for arg, data in zip(filtered_args[::2], filtered_args[1::2]):
-            if arg not in results:
-                results[arg] = [data.strip()]
-            else:
-                results[arg].append(data.strip())
-
-        return results
+            return result
+        except Exception as e:
+            print(e)
 
 
 def id_match(identifier, extra):

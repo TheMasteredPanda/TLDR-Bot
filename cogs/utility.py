@@ -54,16 +54,20 @@ class Utility(commands.Cog):
 
     @commands.command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'
-             'Poll can be restricted to a specific role. An update interval can be set, every x aomunt of time results are updated',
-        usage='anon_poll [-q question] -o [option1] -o [option2] / -o [emote: option] -o [emote: option] '
-              '-t (time <m/h/d>) '
-              '-u (update interval) '
-              '-p (how many options users can pick) '
-              '-r (role needed to vote)',
+             'Poll can be restricted to a specific role. An update interval can be set, every x amount of time results are updated',
+        usage='anon_poll [args]',
         examples=[
             'anon_poll -q best food? -o pizza | burger | fish and chips | salad',
             'anon_poll -q Do you guys like pizza? -t 2m',
             'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m -p 2 -r Mayor'
+        ],
+        command_args=[
+            (('--question', '-q'), 'The question for the poll'),
+            (('--option', '-o', {"action": "append"}), 'Option for the poll'),
+            (('--time', '-t', {'default': '5m', 'type': format_time.parse}), '[Optional] How long the poll will stay active for e.g. 5d 5h 5m'),
+            (('--update_interval', '-u'), '[Optional] If set, the bot will update the poll with data in given interval of time'),
+            (('--pick_count', '-p'), '[Optional] How many options users can pick'),
+            (('--role', '-r'), '[Optional] The role the poll will be restricted to')
         ],
         clearance='Mod',
         cls=cls.Command
@@ -72,21 +76,23 @@ class Utility(commands.Cog):
         if not args:
             return await embed_maker.command_error(ctx)
 
+        question = args['question']
+        options = args['option']
+
         # return error if required variables are not given
-        if 'q' not in args or not args['q']:
+        if not question:
             return await embed_maker.error(ctx, "Missing question arg")
 
-        if 'o' not in args or not args['o']:
-            return await embed_maker.error(ctx, "Missing options arg")
+        if not options:
+            return await embed_maker.error(ctx, "Missing option args")
 
         # get all optional variables
-        poll_time = format_time.parse(args['t'][0]) if 't' in args and args['t'] else format_time.parse('5m')
-        update_interval = args['u'][0] if 'u' in args and args['u'] else ''
-        pick_count = args['p'][0] if 'p' in args and args['p'] else '1'
-        restrict_role_identifier = args['r'][0] if 'r' in args and args['r'] else ''
+        poll_time = args['time']
+        update_interval = args['update_interval']
+        pick_count = args['pick_count']
+        restrict_role_identifier = args['role']
 
-        question = args['q'][0]
-        emote_options = await self.parse_poll_options(ctx, args['o'])
+        emote_options = await self.parse_poll_options(ctx, options)
         if type(emote_options) == discord.Message:
             return
 
@@ -285,10 +291,14 @@ class Utility(commands.Cog):
 
     @commands.command(
         help='Create a poll, without custom emotes, adds numbers as reactions',
-        usage='poll [-q question] -o (option1) -o (option2) / -o (emote: option) -o (emote: option)',
+        usage='poll [args]',
         examples=[
             'poll -q best food? -o pizza -o burger -o fish and chips -o salad',
             'poll -q Where are you from? -o 🇩🇪: Germany -o 🇬🇧: UK'
+        ],
+        command_args=[
+            (('--question', '-q'), 'The question for the poll'),
+            (('--option', '-o', {"action": "append"}), 'Option for the poll'),
         ],
         clearance='Mod',
         cls=cls.Command
@@ -297,14 +307,14 @@ class Utility(commands.Cog):
         if not args:
             return await embed_maker.command_error(ctx)
 
-        if 'q' not in args or not args['q']:
+        question = args['question']
+        options = args['option']
+
+        if not question:
             return await embed_maker.error(ctx, "Missing question arg")
 
-        if 'o' not in args or not args['o']:
-            return await embed_maker.error(ctx, "Missing options arg")
-
-        question = args['q']
-        options = args['o']
+        if not options:
+            return await embed_maker.error(ctx, "Missing option arg(s)")
 
         emote_options = await self.parse_poll_options(ctx, options)
         # return if error message was sent
@@ -515,7 +525,7 @@ class Utility(commands.Cog):
         clearance='User',
         cls=cls.Command
     )
-    async def help(self, ctx, *, command=None):
+    async def help(self, ctx: commands.Context, *, command: str = None):
         help_object = {}
 
         user_clearance = get_user_clearance(ctx.author)
@@ -546,10 +556,10 @@ class Utility(commands.Cog):
 
             return await ctx.send(embed=embed)
         elif command:
-            command = self.bot.get_command(command)
-            if command is None:
+            if self.bot.get_command(command) is None:
                 return await embed_maker.error(ctx, f"Couldn't find a command by: `{command}`")
 
+            command = self.bot.get_command(command)
             command.docs = command.get_help(ctx.author)
 
             if command.cog_name not in help_object:
@@ -570,10 +580,14 @@ class Utility(commands.Cog):
                        f"**Usage:** {command.docs.usage}\n" \
                        f"**Examples:**\n{examples}"
 
-            if hasattr(command.docs, 'sub_commands') and command.docs.sub_commands:
+            if command.docs.sub_commands:
                 sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command.docs.sub_commands)
-                sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
+                sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
                 cmd_help += sub_commands_str
+
+            if command.docs.command_args:
+                command_args_str = '**\nCommand Args:**\n```' + '\n\n'.join(f'({arg[0]}, {arg[1]}) - {description}' for arg, description in command.docs.command_args) + '```'
+                cmd_help += command_args_str
 
             author_name = f'Help: {command}'
             if command.special_help:

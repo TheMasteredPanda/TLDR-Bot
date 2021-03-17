@@ -16,7 +16,7 @@ class Help:
         self.clearance = kwargs.get('clearance', 'User')
         self.sub_commands = kwargs.get('sub_commands', [])
         self.dm_only = kwargs.get('dm_only', False)
-        self.parse_args = kwargs.get('parse_args', False)
+        self.command_args = kwargs.get('command_args', [])
 
 
 class Command(commands.Command):

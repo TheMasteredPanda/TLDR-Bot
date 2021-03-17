@@ -372,14 +372,14 @@ class Leveling(commands.Cog):
         if args is None:
             return await embed_maker.command_error(ctx)
 
-        if 'r' not in args or not args['r']:
+        role_name = args['r']
+        new_perks = args['p']
+
+        if not role_name:
             return await embed_maker.error(ctx, "Missing role arg")
 
-        if ('p' not in args or not args['p']) and command != 'pull':
+        if not new_perks and command != 'pull':
             return await embed_maker.error(ctx, "Missing perks arg")
-
-        role_name = args['r'][0]
-        new_perks = args['p']
 
         branch, role = get_branch_role(ctx.guild.id, role_name)
 
@@ -419,8 +419,12 @@ class Leveling(commands.Cog):
     @perks.command(
         name='set',
         help='set the perks of a role',
-        usage='perks set -r [role name] -p [perk 1] -p (perk 2)',
+        usage='perks set [args]',
         examples=['perks set -r Party Member -p Monthly giveaways -p some cool perk'],
+        command_args=[
+            (('--role', '-r'), 'The name of the role you want to set the perks for'),
+            (('--perk', '-p', {'action': 'append'}), 'Perk for the role')
+        ],
         clearance='Mod',
         cls=cls.Command
     )
@@ -430,8 +434,12 @@ class Leveling(commands.Cog):
     @perks.command(
         name='add',
         help='Add perks to a role',
-        usage='perks add -r [role name] -p [perk 1] -p (perk 2)',
+        usage='perks add [args]',
         examples=['perks add -r Party Member -p Monthly giveaways -p some cool perk'],
+        command_args=[
+            (('--role', '-r'), 'The name of the role you want to add the perks to'),
+            (('--perk', '-p', {'action': 'append'}), 'Perk for the role')
+        ],
         clearance='Mod',
         cls=cls.Command
     )
@@ -445,6 +453,10 @@ class Leveling(commands.Cog):
         examples=[
             'perks remove -r Party Member -p 1 -p 2',
             'perks remove -r Party Member'
+        ],
+        command_args=[
+            (('--role', '-r'), 'The name of the role you want to remove perks from'),
+            (('--perk', '-p', {'action': 'append'}), 'Index of the perk you want to remove, can be seen by doing >perks [role]')
         ],
         clearance='Mod',
         cls=cls.Command
@@ -1043,10 +1055,8 @@ async def user_role_level(branch: str, leveling_user: dict) -> int:
 
 
 def percent_till_next_level(branch: str, leveling_user: dict) -> float:
-    prefix = branch[0]
-
-    user_points = leveling_user[f'{prefix}p']
-    user_level = leveling_user[f'{prefix}_level']
+    user_points = leveling_user[f'{branch[0]}p']
+    user_level = leveling_user[f'{branch[0]}_level']
 
     # points needed to gain next level from beginning of user level
     points_to_level_up = (5 * (user_level ** 2) + 50 * user_level + 100)

@@ -73,8 +73,11 @@ class Mod(commands.Cog):
     @watchlist.command(
         name='add',
         help='add a user to the watchlist, with optionl filters (mathces are found with regex)',
-        usage='watchlist add [user] -f (filter1) -f (filter2)...',
+        usage='watchlist add [user] (args)',
         examples=[r'watchlist add hattyot -f hattyot -f \sot\s -f \ssus\s'],
+        command_args=[
+            (('--filter', '-f', {'action': 'append'}), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
+        ],
         clearance='Mod',
         parse_args=['f'],
         cls=cls.Command
@@ -83,11 +86,12 @@ class Mod(commands.Cog):
         if not args:
             return await embed_maker.command_error(ctx)
 
-        if 'pre' not in args or not args['pre']:
+        user_identifier = args['pre']
+
+        if not user_identifier:
             return await embed_maker.error(ctx, 'Missing user')
 
-        user_identifier = args['pre']
-        filters = args['f'] if 'f' in args else []
+        filters = args['filter']
 
         member = await get_member(ctx, user_identifier)
         if type(member) == discord.Message:
@@ -164,9 +168,11 @@ class Mod(commands.Cog):
     @watchlist.command(
         name='add_filters',
         help='Add filters to a user on the watchlist, when a user message matches the filter, mods are pinged.',
-        usage='watchlist add_filters [user] -f (filter 1 | filter 2)',
+        usage='watchlist add_filters [user] (args)',
         examples=[r'watchlist add_filters hattyot -f filter 1 -f \sfilter 2\s'],
-        parse_args=['f'],
+        command_args=[
+            (('--filter', '-f', {'action': 'append'}), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
+        ],
         clearance='Mod',
         cls=cls.Command
     )
@@ -174,18 +180,18 @@ class Mod(commands.Cog):
         if not args:
             return await embed_maker.command_error(ctx)
 
-        if 'f' not in args or not args['f']:
-            return await embed_maker.error(ctx, 'Missing filters')
-
-        if 'pre' not in args or not args['pre']:
-            return await embed_maker.error(ctx, 'Missing user')
-
         user_identifier = args['pre']
         filters = args['f']
 
+        if not filters:
+            return await embed_maker.error(ctx, 'Missing filters')
+
+        if not user_identifier:
+            return await embed_maker.error(ctx, 'Missing user')
+
         member = await get_member(ctx, user_identifier)
-        if type(member) == discord.Embed:
-            return await embed_maker.error(ctx, 'Invalid member')
+        if type(member) == discord.Message:
+            return
 
         watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': member.id})
         if watchlist_user is None:
@@ -204,7 +210,54 @@ class Mod(commands.Cog):
             send=True
         )
 
+    @staticmethod
+    async def construct_dd_embed(ctx: commands.Context, daily_debates_data: dict, max_page_num: int, page_size_limit: int, topics: list, *, page: int):
+        if not topics:
+            topics_str = f'Currently there are no debate topics set up'
+        else:
+            # generate topics string
+            topics_str = '**Topics:**\n'
+            for i, topic in enumerate(topics[page_size_limit * (page - 1):page_size_limit * page]):
+                if i == 10:
+                    break
+
+                topic_str = topic['topic']
+                topic_author_id = topic['topic_author_id']
+                topic_options = topic['topic_options']
+
+                topic_author = None
+                if topic_author_id:
+                    topic_author = ctx.guild.get_member(int(topic_author_id))
+                    if not topic_author:
+                        topic_author = await ctx.guild.fetch_member(int(topic_author_id))
+
+                topics_str += f'`#{page_size_limit * (page - 1) + i + 1}`: {topic_str}\n'
+                if topic_author:
+                    topics_str += f'**Topic Author:** {str(topic_author)}\n'
+
+                if topic_options:
+                    topics_str += '**Poll Options:**' + ' |'.join(
+                        [f' `{o}`' for i, o in enumerate(topic_options.values())]) + '\n'
+
+        dd_time = daily_debates_data['time'] if daily_debates_data['time'] else 'Not set'
+        dd_channel = f'<#{daily_debates_data["channel_id"]}>' if daily_debates_data['channel_id'] else 'Not set'
+        dd_poll_channel = f'<#{daily_debates_data["poll_channel_id"]}>' if daily_debates_data[
+            'poll_channel_id'] else 'Not set'
+        dd_role = f'<@&{daily_debates_data["role_id"]}>' if daily_debates_data['role_id'] else 'Not set'
+        embed = await embed_maker.message(
+            ctx,
+            description=topics_str,
+            author={'name': 'Daily Debates'},
+            footer={'text': f'Page {page}/{max_page_num}'}
+        )
+        embed.add_field(
+            name='Attributes',
+            value=f'**Time:** {dd_time}\n**Channel:** {dd_channel}\n**Poll Channel:** {dd_poll_channel}\n**Role:** {dd_role}'
+        )
+        return embed
+
     @commands.group(
+        invoke_without_command=True,
         help='Daily debate scheduler/manager',
         usage='dailydebates (sub command) (arg(s))',
         clearance='Mod',
@@ -212,11 +265,16 @@ class Mod(commands.Cog):
         examples=['dailydebates'],
         sub_commands=['add', 'insert', 'remove', 'set_time', 'set_channel', 'set_role', 'set_poll_channel', 'set_poll_options', 'disable'],
         cls=cls.Group,
-
     )
-    async def dailydebates(self, ctx: commands.Context, page: int = 1):
-        daily_debates_data = db.get_daily_debates(ctx.guild.id)
+    async def dailydebates(self, ctx: commands.Context, page: str = 1):
         if ctx.subcommand_passed is None:
+            daily_debates_data = db.get_daily_debates(ctx.guild.id)
+
+            if type(page) == str and page.isdigit():
+                page = int(page)
+            else:
+                page = 1
+
             page_size_limit = 10
 
             # List currently set up daily debate topics
@@ -252,49 +310,6 @@ class Mod(commands.Cog):
 
             self.bot.reaction_menus.add(menu)
 
-    async def construct_dd_embed(self, ctx: commands.Context, daily_debates_data: dict, max_page_num: int, page_size_limit: int, topics: list, *, page: int):
-        if not topics:
-            topics_str = f'Currently there are no debate topics set up'
-        else:
-            # generate topics string
-            topics_str = '**Topics:**\n'
-            for i, topic in enumerate(topics[page_size_limit * (page - 1):page_size_limit * page]):
-                if i == 10:
-                    break
-
-                topic_str = topic['topic']
-                topic_author_id = topic['topic_author_id']
-                topic_options = topic['topic_options']
-
-                topic_author = None
-                if topic_author_id:
-                    topic_author = ctx.guild.get_member(int(topic_author_id))
-                    if not topic_author:
-                        topic_author = await ctx.guild.fetch_member(int(topic_author_id))
-
-                topics_str += f'`#{page_size_limit * (page - 1) + i + 1}`: {topic_str}\n'
-                if topic_author:
-                    topics_str += f'**Topic Author:** {str(topic_author)}\n'
-
-                if topic_options:
-                    topics_str += '**Poll Options:**' + ' |'.join([f' `{o}`' for i, o in enumerate(topic_options.values())]) + '\n'
-
-        dd_time = daily_debates_data['time'] if daily_debates_data['time'] else 'Not set'
-        dd_channel = f'<#{daily_debates_data["channel_id"]}>' if daily_debates_data['channel_id'] else 'Not set'
-        dd_poll_channel = f'<#{daily_debates_data["poll_channel_id"]}>' if daily_debates_data['poll_channel_id'] else 'Not set'
-        dd_role = f'<@&{daily_debates_data["role_id"]}>' if daily_debates_data['role_id'] else 'Not set'
-        embed = await embed_maker.message(
-            ctx,
-            description=topics_str,
-            author={'name': 'Daily Debates'},
-            footer={'text': f'Page {page}/{max_page_num}'}
-        )
-        embed.add_field(
-            name='Attributes',
-            value=f'**Time:** {dd_time}\n**Channel:** {dd_channel}\n**Poll Channel:** {dd_poll_channel}\n**Role:** {dd_role}'
-        )
-        return embed
-
     @dailydebates.command(
         name='disable',
         help='Disable the daily debates system, time will be set to 0',
@@ -318,10 +333,13 @@ class Mod(commands.Cog):
     @dailydebates.command(
         name='set_poll_options',
         help='Set the poll options for a daily debate topic',
-        usage='dailydebates set_poll_options [index of topic] -o [option 1] -o [option 2] -o (emote: option 3)...',
+        usage='dailydebates set_poll_options [index of topic] [args]',
         examples=[
             'dailydebates set_poll_options 1 -o yes -o no -o double yes -o double no',
             'dailydebates set_poll_options 1 -o 🇩🇪: Germany -o 🇬🇧: UK'
+        ],
+        command_args=[
+            (('--option', '-o', {'action': 'append'}), 'Option for the poll'),
         ],
         clearance='Mod',
         cls=cls.Command
@@ -333,10 +351,12 @@ class Mod(commands.Cog):
         if not index.isdigit():
             return await embed_maker.command_error(ctx, '[index of topic]')
 
-        if 'o' not in args or not args['o']:
+        options = args['option']
+
+        if not options:
             return await embed_maker.error(ctx, 'Missing options')
 
-        emote_options = await utility.Utility.parse_poll_options(ctx, args['o'])
+        emote_options = await utility.Utility.parse_poll_options(ctx, options)
         if type(emote_options) == discord.Message:
             return
 
@@ -366,11 +386,14 @@ class Mod(commands.Cog):
     @dailydebates.command(
         name='add',
         help='add a topic to the list topics along with optional options and topic author',
-        usage='dailydebates add [topic] -ta (topic author) -o (option1) -o (option2)',
+        usage='dailydebates add [topic] (args)',
         examples=[
             'dailydebates add is ross mega cool? -ta hattyot -o yes -o double yes -o triple yes'
         ],
-        parse_args=['ta', 'o'],
+        command_args=[
+            (('--topic_author', '-ta'), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
+            (('--option', '-o', {'action': 'append'}), 'Option for the poll'),
+        ],
         clearance='Mod',
         cls=cls.Command
     )
@@ -383,8 +406,8 @@ class Mod(commands.Cog):
             return
 
         topic = args['pre']
-        topic_author = args['ta']
-        topic_options = args['o']
+        topic_author = args['topic_author']
+        topic_options = args['option']
 
         topic_obj = {
             'topic': topic,
@@ -410,10 +433,13 @@ class Mod(commands.Cog):
     @dailydebates.command(
         name='insert',
         help='insert a topic into the first place on the list of topics along with optional options and topic author',
-        usage='dailydebates insert [topic] -ta (topic author) -o (poll options)',
+        usage='dailydebates insert [topic] (args)',
         examples=['dailydebates insert is ross mega cool? -ta hattyot -o yes | double yes | triple yes'],
         clearance='Mod',
-        parse_args=['ta', 'o'],
+        command_args=[
+            (('--topic_author', '-ta'), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
+            (('--option', '-o', {'action': 'append'}), 'Option for the poll'),
+        ],
         cls=cls.Command
     )
     async def _dailydebates_insert(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
@@ -425,8 +451,8 @@ class Mod(commands.Cog):
             return
 
         topic = args['pre']
-        topic_author = args['ta']
-        topic_options = args['o']
+        topic_author = args['topic_author']
+        topic_options = args['option']
 
         topic_obj = {
             'topic': topic,
@@ -593,21 +619,19 @@ class Mod(commands.Cog):
 
     @staticmethod
     async def parse_dd_args(ctx: commands.Context, args: dict):
-        if 'pre' not in args or not args['pre']:
+        if args['pre']:
             return await embed_maker.error(ctx, 'Missing topic')
 
-        args['ta'] = args['ta'][0] if 'ta' in args else ''
-        args['o'] = await utility.Utility.parse_poll_options(ctx, args['o']) if 'o' in args else ''
-
-        if type(args['o']) == discord.Message:
+        args['option'] = await utility.Utility.parse_poll_options(ctx, args['option']) if args['option'] else ''
+        if type(args['option']) == discord.Message:
             return
 
-        if args['ta']:
-            member = await get_member(ctx, args['ta'])
+        if args['topic_author']:
+            member = await get_member(ctx, args['topic_author'])
             if type(member) == discord.Message:
                 return member
 
-            args['ta'] = member.id
+            args['topic_author'] = member.id
 
         return args
 
@@ -882,11 +906,15 @@ class Mod(commands.Cog):
 
     @commands.command(
         help='restrict an emote to specific role(s)',
-        usage='emote_role (action) -r [role] -e [emote 1] (emote 2)...',
+        usage='emote_role (action) [args]',
         examples=[
             'emote_role',
             'emote_role add -r Mayor -e :TldrNewsUK:',
             'emote_role remove -r Mayor -e :TldrNewsUK: :TldrNewsUS: :TldrNewsEU:'
+        ],
+        command_args=[
+            (('--role', '-r'), 'The role you want to add the emote to'),
+            (('--emotes', '-e'), 'The emotes you want to be added to the role'),
         ],
         clearance='Mod',
         cls=cls.Command

@@ -1,5 +1,9 @@
 import pymongo
 import config
+import time
+import discord
+
+from bson import ObjectId
 
 
 class Connection:
@@ -13,6 +17,7 @@ class Connection:
         self.commands = self.db['commands']
         self.daily_debates = self.db['daily_debates']
         self.tickets = self.db['tickets']
+        self.custom_commands = self.db['custom_commands']
         self.watchlist = self.db['watchlist']
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
