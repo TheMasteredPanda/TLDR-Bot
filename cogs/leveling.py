@@ -1066,7 +1066,7 @@ def percent_till_next_level(branch: str, leveling_user: dict) -> float:
     total_points_to_next_level = round(5 / 6 * next_level * (2 * next_level * next_level + 27 * next_level + 91))
     points_needed = total_points_to_next_level - int(user_points)
 
-    percent = 100 - math.floor(((points_needed * 100) / points_to_level_up) * 10) / 10
+    percent = math.floor((100 - ((points_needed * 100) / points_to_level_up)) * 10) / 10
 
     return percent
 
