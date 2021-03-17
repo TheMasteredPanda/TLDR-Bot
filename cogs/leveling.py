@@ -122,7 +122,7 @@ class Leveling(commands.Cog):
         # give user rep point
         db.leveling_users.update_one(
             {'guild_id': ctx.guild.id, 'user_id': member.id},
-            {'$inc': {f'reputation': 1}}
+            {'$inc': {f'rp': 1}}
         )
 
         await embed_maker.message(ctx, description=f'Gave +1 rep to <@{member.id}>', send=True)
@@ -562,7 +562,7 @@ class Leveling(commands.Cog):
                 if not your_pos:
                     lb_str += '\n'
             else:
-                rep = leveling_user['reputation']
+                rep = leveling_user['rp']
                 lb_str += f' | **{rep} Reputation**\n'
 
         return lb_str
@@ -603,9 +603,7 @@ class Leveling(commands.Cog):
             branch_switch = {'p': 'parliamentary', 'h': 'honours', 'r': 'reputation'}
             branch = branch_switch.get(branch[0], 'parliamentary')
 
-        key_switch = {'r': 'reputation', 'p': 'pp', 'h': 'hp'}
-        key = key_switch.get(branch[0], 'pp')
-
+        key = f'{branch[0]}p'
         # get list of users sorted by points who have more than 0 points
         sorted_users = [u for u in db.leveling_users.find({'guild_id': ctx.guild.id, key: {'$gt': 0}}).sort(key, -1)]
 
@@ -732,7 +730,7 @@ class Leveling(commands.Cog):
         pp_str = await self.branch_rank_str('parliamentary', ctx.guild, member, leveling_user, verbose)
         rank_embed.add_field(name='>Parliamentary', value=pp_str, inline=False)
 
-        if leveling_user['reputation']:
+        if leveling_user['rp']:
             rank = get_user_rank(ctx.guild.id, 'rep', leveling_user)
             if verbose:
                 rep_time = int(leveling_user['rep_timer']) - round(time.time())
@@ -742,11 +740,11 @@ class Leveling(commands.Cog):
                 rep_time_str = format_time.seconds(rep_time, accuracy=10)
 
                 last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user["last_rep"] else 'None'
-                rep_str = f"**Reputation:** {leveling_user['reputation']}\n" \
+                rep_str = f"**Reputation:** {leveling_user['rp']}\n" \
                           f"**Rep timer:** {rep_time_str}\n" \
                           f"**Last Rep: {last_rep}**\n"
             else:
-                rep_str = f'**#{rank}** | **{leveling_user["reputation"]}** reputation'
+                rep_str = f'**#{rank}** | **{leveling_user["rp"]}** reputation'
 
             rank_embed.add_field(name='>Reputation', value=rep_str, inline=False)
 
@@ -971,8 +969,7 @@ class Leveling(commands.Cog):
 
 
 def get_user_rank(guild_id, branch: str, leveling_user: dict) -> int:
-    points_switch = {'p': 'pp', 'h': 'hp', 'r': 'reputation'}
-    points = points_switch.get(branch[0])
+    points = f'{branch[0]}p'
     if points not in leveling_user:
         leveling_user[points] = 0
 

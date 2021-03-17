@@ -51,7 +51,7 @@ class Connection:
 
         return leveling_data
 
-    def get_command_data(self, guild_id: int, command_name: str, *, insert = False):
+    def get_command_data(self, guild_id: int, command_name: str, *, insert: bool = False):
         command_data = self.commands.find_one({'guild_id': guild_id, 'command_name': command_name})
         if command_data is None:
             command_data = {
@@ -97,7 +97,7 @@ schemas = {
         'settings': {
             '@_me': False  # setting to check if user wants to be @'d when they level up
         },
-        'reputation': 0,
+        'rp': 0,
         'rep_timer': 0,
         'last_rep': 0,
         'boosts': {
