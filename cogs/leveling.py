@@ -49,6 +49,9 @@ class Cooldown:
         else:
             cooldown_time = 0
 
+        if not cooldown_time:
+            self.add_user(guild_id, user_id)
+
         return int(cooldown_time)
 
 
@@ -95,7 +98,6 @@ class Leveling(commands.Cog):
             return await embed_maker.command_error(ctx, '[reason for the rep]')
 
         member = await get_member(ctx, member_identifier)
-
         if type(member) == discord.Message:
             return
 
@@ -119,7 +121,7 @@ class Leveling(commands.Cog):
             {'$set': {'rep_timer': expire, 'last_rep': member.id}}
         )
 
-        # give user rep point
+        # give member rep point
         db.leveling_users.update_one(
             {'guild_id': ctx.guild.id, 'user_id': member.id},
             {'$inc': {f'rp': 1}}
@@ -127,7 +129,7 @@ class Leveling(commands.Cog):
 
         await embed_maker.message(ctx, description=f'Gave +1 rep to <@{member.id}>', send=True)
 
-        # send receiving user rep reason
+        # send member rep reason
         msg = f'<@{ctx.author.id}> gave you a reputation point:\n**"{reason}"**'
         embed = await embed_maker.message(
             ctx,
@@ -135,13 +137,13 @@ class Leveling(commands.Cog):
             author={'name': 'Rep'}
         )
 
-        # add a try because bot might not be able to dm member
+        # except because bot might not be able to dm member
         try:
             await member.send(embed=embed)
         except:
             pass
 
-        # check if user already has rep boost, if they do, extend it by 30 minutes
+        # check if user already has rep boost, if they do, extend it by 30 minutes, otherwise add 10% boost for 6h
         if 'boosts' in member_leveling_user and 'rep' in member_leveling_user['boosts']:
             boost = member_leveling_user['boosts']['rep']
             boost_expires = boost['expires']
@@ -156,7 +158,6 @@ class Leveling(commands.Cog):
                 {'guild_id': ctx.guild.id, 'user_id': member.id},
                 {'$set': {f'boosts.rep.expires': expire}})
 
-        # give user 10% xp boost for 6 hours
         boost_dict = {
             'expires': round(time.time()) + (3600 * 6),
             'multiplier': 0.1,
@@ -692,7 +693,7 @@ class Leveling(commands.Cog):
 
         user_input = user_input.replace('-v', '').strip()
 
-        # set member to author if user_input is just -v or user input isn't provided
+        # set member to author if user_input is just -v or user_input isn't provided
         if not user_input or user_input.rstrip() == '-v':
             member = ctx.author
         else:
@@ -913,8 +914,6 @@ class Leveling(commands.Cog):
 
         # level parliamentary route
         if not self.pp_cooldown.user_cooldown(guild.id, author.id):
-            self.pp_cooldown.add_user(guild.id, author.id)
-
             # adds parliamentary role to user if it's their first parliamentary points gain
             if leveling_user['pp'] == 0:
                 p_role = leveling_routes['parliamentary'][0]
@@ -943,8 +942,6 @@ class Leveling(commands.Cog):
 
         # level honours route
         if message.channel.id in leveling_data['honours_channels'] and not self.hp_cooldown.user_cooldown(guild.id, author.id):
-            self.hp_cooldown.add_user(guild.id, author.id)
-
             # adds honours role to user if it's their first honours points gain
             if leveling_user['hp'] == 0:
                 h_role = leveling_routes['honours'][0]
@@ -987,7 +984,7 @@ def calc_levels_up(branch: Union[Branch, str], leveling_user: dict) -> int:
     total_levels_up = 0
     while total_points <= user_points:
         next_level = user_levels + total_levels_up + 1
-        # total pp needed to gain the next level
+        # total points needed to gain the next level
         total_points = round(5 / 6 * next_level * (2 * next_level * next_level + 27 * next_level + 91))
 
         total_levels_up += 1
@@ -1059,11 +1056,7 @@ def percent_till_next_level(branch: str, leveling_user: dict) -> float:
     total_points_to_next_level = round(5 / 6 * next_level * (2 * next_level * next_level + 27 * next_level + 91))
     points_needed = total_points_to_next_level - int(user_points)
 
-    percent = 100 - int((points_needed * 100) / points_to_level_up)
-
-    # return 99.9 when int rounds to 100, but user hasn't leveled up yet
-    if percent == 100 and points_needed != 0:
-        return 99.9
+    percent = 100 - math.floor(((points_needed * 100) / points_to_level_up) * 10) / 10
 
     return percent
 
