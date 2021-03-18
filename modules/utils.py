@@ -39,21 +39,28 @@ class Branch(commands.Converter):
         return branch_switch.get(argument[0], 'parliamentary')
 
 
-class ParseArgs(commands.Converter):
-    async def convert(self, ctx: commands.Context, argument: str = ''):
-        try:
-            parser = argparse.ArgumentParser()
-            parser.add_argument('pre', type=str, nargs='*')
-            for arg, description in ctx.command.docs.command_args:
-                kwargs = arg[2] if len(arg) == 3 else {}
-                parser.add_argument(arg[1], arg[0], **kwargs)
+class JoinArgs(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, ' '.join(values))
 
-            result = parser.parse_args(argument.split(' ')).__dict__
-            result['pre'] = ' '.join(result['pre'])
 
-            return result
-        except Exception as e:
-            print(e)
+class ParseArgs(commands.Converter, dict):
+    async def convert(self, ctx: commands.Context, argument: str = '') -> dict:
+        parser = argparse.ArgumentParser(exit_on_error=False)
+
+        parser.add_argument('pre', type=str, nargs='*')
+
+        for arg, description in ctx.command.docs.command_args:
+            kwargs = arg[2] if len(arg) == 3 else {}
+            if 'action' not in kwargs:
+                kwargs['action'] = JoinArgs
+
+            parser.add_argument(arg[1], arg[0], **kwargs, type=str, nargs='*')
+
+        result = parser.parse_args(argument.split(' ')).__dict__
+        result['pre'] = ' '.join(result['pre'])
+
+        return result
 
 
 def id_match(identifier, extra):
