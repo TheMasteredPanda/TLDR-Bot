@@ -63,10 +63,15 @@ async def command_error(ctx, bad_arg=None):
         embed_colour = get_colour('red')
         description = f'**Invalid Argument:** {bad_arg}\n\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}'
 
-    if hasattr(ctx.command.docs, 'sub_commands'):
-        sub_commands_str = '\n**Sub Commands:** ' + ' | '.join(s for s in ctx.command.docs.sub_commands)
-        sub_commands_str += f'\n\nTo view more info about sub commands, type `{ctx.prefix}help {ctx.command.name} [sub command]`'
+    if ctx.command.docs.sub_commands:
+        sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in ctx.command.docs.sub_commands)
+        sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {ctx.command.name} [sub command]`'
         description += sub_commands_str
+
+    if ctx.command.docs.command_args:
+        command_args_str = '**\nCommand Args:**\n```' + '\n\n'.join(
+            f'({arg[0]}, {arg[1]}) - {description}' for arg, description in ctx.command.docs.command_args) + '```'
+        description += command_args_str
 
     embed = discord.Embed(colour=embed_colour, description=description, title=f'>{ctx.command.name}', timestamp=datetime.now())
     embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
