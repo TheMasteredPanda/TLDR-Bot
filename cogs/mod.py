@@ -619,7 +619,7 @@ class Mod(commands.Cog):
 
     @staticmethod
     async def parse_dd_args(ctx: commands.Context, args: dict):
-        if args['pre']:
+        if not args['pre']:
             return await embed_maker.error(ctx, 'Missing topic')
 
         args['option'] = await utility.Utility.parse_poll_options(ctx, args['option']) if args['option'] else ''
