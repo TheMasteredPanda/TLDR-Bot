@@ -628,9 +628,9 @@ class Utility(commands.Cog):
         src = new_src
 
         if len(src) > 2000:
-            file = command.__code__.co_filename
+            file = command.callback.__code__.co_filename
             location = os.path.relpath(file)
-            total, fl = __import__('inspect').getsourcelines(command)
+            total, fl = inspect.getsourcelines(command.callback)
             ll = fl + (len(total) - 1)
             return await embed_maker.message(
                 ctx,
