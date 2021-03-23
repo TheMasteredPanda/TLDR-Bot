@@ -321,7 +321,7 @@ class Utility(commands.Cog):
         if type(emote_options) == discord.Message:
             return
 
-        description = f'**"{question[0]}"**\n' + '\n'.join(f'\n{emote} | **{option}**' for emote, option in emote_options.items())
+        description = f'**"{question}"**\n' + '\n'.join(f'\n{emote} | **{option}**' for emote, option in emote_options.items())
         poll_msg = await embed_maker.message(
             ctx,
             description=description,
