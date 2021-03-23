@@ -48,14 +48,16 @@ class ParseArgs(commands.Converter, dict):
     async def convert(self, ctx: commands.Context, argument: str = '') -> dict:
         parser = argparse.ArgumentParser(exit_on_error=False)
 
+        # replace parser error function with a lambda function cause the default error function exits
+        parser.error = lambda *a, **kw: True
         parser.add_argument('pre', type=str, nargs='*')
 
         for arg, description in ctx.command.docs.command_args:
-            kwargs = arg[2] if len(arg) == 3 else {}
+            kwargs = arg[2] if len(arg) == 3 else {'type': str, 'nargs': '*'}
             if 'action' not in kwargs:
                 kwargs['action'] = JoinArgs
 
-            parser.add_argument(arg[1], arg[0], **kwargs, type=str, nargs='*')
+            parser.add_argument(arg[1], arg[0], **kwargs)
 
         result = parser.parse_args(argument.split(' ')).__dict__
         result['pre'] = ' '.join(result['pre'])
