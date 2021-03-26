@@ -21,7 +21,8 @@ from modules.utils import (
     Command,
     get_custom_emote,
     get_guild_role,
-    get_member
+    get_member,
+    get_user_clearance
 )
 
 db = database.Connection()
@@ -30,6 +31,341 @@ db = database.Connection()
 class Mod(commands.Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+
+    @staticmethod
+    async def construct_cc_embed(ctx: commands.Context, custom_commands: dict, max_page_num: int, page_size_limit: int, *, page: int):
+        if custom_commands:
+            custom_commands_str = ''
+            for i, command in enumerate(custom_commands[page_size_limit * (page - 1):page_size_limit * page]):
+                if i == 10:
+                    break
+
+                custom_commands_str += f'**#{i + 1}:** `/{command["name"]}/`\n'
+        else:
+            custom_commands_str = 'Currently no custom commands have been created'
+
+        return await embed_maker.message(
+            ctx,
+            description=custom_commands_str,
+            author={'name': f'Custom Commands - {get_user_clearance(ctx.author)[-1]}'},
+            footer={'text': f'Page {page}/{max_page_num}'}
+        )
+
+    @commands.group(
+        invoke_without_command=True,
+        name='customcommands',
+        # Mod=cls.Help(
+        #     help='Manage the servers custom commands',
+        #     usage='customcommands (sub command) (args)',
+        #     examples=['customcommands', 'customcommands 1'],
+        #     sub_commands=['variables', 'add', 'remove', 'edit']
+        # ),
+        help='View the custom commands the guild has to offer',
+        usage='customcommands (command index)',
+        examples=['customcommands', 'customcommands 1'],
+        clearance='Dev',
+        aliases=['cc'],
+        cls=cls.Group
+    )
+    async def customcommands(self, ctx: commands.Context, index: Union[int, str] = None):
+        if not ctx.subcommand_passed:
+            custom_commands = [*db.custom_commands.find({'guild_id': ctx.guild.id})]
+            if index is None:
+                page = 1
+                page_size_limit = 20
+
+                # calculate max page number
+                max_page_num = math.ceil(len(custom_commands) / page_size_limit)
+                if max_page_num == 0:
+                    max_page_num = 1
+
+                if page > max_page_num:
+                    return await embed_maker.error(ctx, 'Exceeded maximum page number')
+
+                page_constructor = functools.partial(
+                    self.construct_cc_embed,
+                    ctx,
+                    custom_commands,
+                    max_page_num,
+                    page_size_limit,
+                )
+
+                embed = await page_constructor(page=page)
+                cc_message = await ctx.send(embed=embed)
+
+                menu = BookMenu(
+                    cc_message,
+                    author=ctx.author,
+                    page=page,
+                    max_page_num=max_page_num,
+                    page_constructor=page_constructor,
+                )
+
+                self.bot.reaction_menus.add(menu)
+            elif type(index) == int:
+                command = {i: c for i, c in enumerate(custom_commands)}.get(index - 1, None)
+                if not command:
+                    return await embed_maker.error(ctx, 'Invalid command index')
+
+                return await embed_maker.message(
+                    ctx,
+                    description=self.custom_command_args_to_string(command),
+                    author={'name': command['name']},
+                    send=True
+                )
+            else:
+                return await embed_maker.error(ctx, 'Invalid command index')
+
+    async def validate_custom_command_args(self, ctx: commands.Context, args: dict, *, edit: bool = False):
+        if not args['name'] and not edit:
+            return await embed_maker.error(ctx, "A name needs to be given to the command.")
+
+        # check for existing custom command with the same name
+        existing = db.custom_commands.find_one({'guild_id': ctx.guild.id, 'name': args['name']})
+        if existing:
+            return await embed_maker.error(ctx, f"A custom command with the name `{args['name']}` already exists")
+
+        if not args['response'] and not edit and not args['python']:
+            return await embed_maker.error(ctx, "Missing response arg")
+
+        if args['python'] and 'Dev' not in get_user_clearance(ctx.author):
+            return await embed_maker.error(ctx, f'Only devs can {"add" if not edit else "edit"} the python arg')
+
+        # convert roles to ids
+        if args['role']:
+            for i, role_identifier in enumerate(args['role']):
+                try:
+                    role = await commands.RoleConverter().convert(ctx, role_identifier)
+                    args['role'][i] = role.id
+                except:
+                    return await embed_maker.error(ctx, f'Invalid role arg: `{role_identifier}`')
+
+        # convert response_channel to id
+        if args['response_channel']:
+            try:
+                response_channel = await commands.TextChannelConverter().convert(ctx, args['response_channel'])
+                args['response_channel'] = response_channel.id
+            except commands.ChannelNotFound:
+                return await embed_maker.error(ctx, f'Invalid response_channel arg: `{args["response_channel"]}`')
+
+        # convert command_channels to ids
+        if args['command_channels']:
+            args['command_channels'] = args['command_channels'].split()
+            for i, channel in enumerate(args['command_channels']):
+                try:
+                    command_channel = await commands.TextChannelConverter().convert(ctx, channel)
+                    args['command_channels'][i] = command_channel.id
+                except commands.ChannelNotFound:
+                    return await embed_maker.error(ctx, f'Invalid command_channel arg: `{channel}`')
+
+        # split reactions into list
+        args['reactions'] = args['reactions'].split() if args['reactions'] else []
+        # replace surrounding ``` and newline char in response
+        if args['response']:
+            args['response'] = re.findall(r'^(?:```\n)?(.*)(?:(?:\n```)$)?', args['response'], re.MULTILINE)[0]
+
+        # check if clearance is valid
+        if args['clearance'] and args['clearance'] not in [*config.CLEARANCE.keys()]:
+            return await embed_maker.error(ctx, f'Clearance needs to be one of these: {" | ".join(config.CLEARANCE.keys())}')
+        # default clearance to User
+        elif not args['clearance']:
+            args['clearance'] = 'User'
+
+        # set clearance to Dev if python arg is defined
+        if args['python']:
+            args['clearance'] = 'Dev'
+
+        # check if set clearance is higher than user clearance
+        clearances = [*config.CLEARANCE.keys()]
+        if args['clearance'] not in get_user_clearance(ctx.author):
+            return await embed_maker.error(ctx, 'You cant create a custom command with higher clearance than you have.')
+
+        if args['response']:
+            # validate command calls in response and check if command has higher clearance than custom command
+            command_matches = re.findall(r'{>(\w+)', args['response'])
+            for command_name in command_matches:
+                command = self.bot.get_command(command_name)
+                command.docs = command.get_help(ctx.author)
+                if not command:
+                    return await embed_maker.error(ctx, f'Invalid command: `>{command_name}`')
+                if clearances.index(command.docs.clearance) > clearances.index(args['clearance']):
+                    return await embed_maker.error(ctx, f'Command called in variable cant have higher clearance than custom command clearance: `>{command_name}`')
+        return args
+
+    @staticmethod
+    def custom_command_arg_value_to_string(key: str, value: Union[list, str]) -> str:
+        # if value is a list, first convert ids into mentions
+        if type(value) == list:
+            if key == 'command_channels':
+                value = [f'<#{c}>' for c in value]
+            elif key == 'role':
+                value = [f'<@&{r}>' for r in value]
+
+            value = ' '.join(value)
+        # convert response channel id to channel mention
+        elif key == 'response_channel':
+            value = f'<#{value}>'
+
+        return value
+
+    def custom_command_args_to_string(self, args: dict, *, old: dict = None) -> str:
+        attributes_str = ''
+        for key, value in args.items():
+            # check if value exists key isnt in list of values that dont need to be presented
+            if value and key not in ['pre', 'guild_id', '_id']:
+                value = self.custom_command_arg_value_to_string(key, value)
+                # replace underscore with space and make key into title
+                if old is None:
+                    key = key.replace('_', ' ').title()
+                    attributes_str += f'**{key}**: `{value}`\n'
+                else:
+                    old_value = self.custom_command_arg_value_to_string(key, old[key])
+                    key = key.replace('_', ' ').title()
+                    attributes_str += f'**{key}**: `{old_value}` --> `{value}`\n'
+
+        return attributes_str
+
+    @customcommands.command(
+        name='add',
+        help='Add a custom command',
+        usage='customcommands add (args)',
+        examples=[
+            'customcommands add -n ^Suggestion:(.*) -r Suggestion By {user.mention}: $g1 -c User -rl Member -rl 697184342614474785 -rc suggestion-voting -cc daily-debate-suggestions 696345548453707857 -rs 👍 👎'
+        ],
+        command_args=[
+            (('--name', '-n', str), 'The name given to the command, matched with regex.'),
+            (('--response', '-r', str), r'Response that will be sent when custom command is called, If you want to do multiline response, please put response between \`\`\`'),
+            (('--clearance', '-c', str), f'[Optional] Restrict who can run the command by clearance, {" | ".join([*config.CLEARANCE.keys()])}, Defaults to User'),
+            (('--role', '-rl', list), '[Optional] Restrict custom command to role(s)'),
+            (('--response_channel', '-rc', str), '[Optional] When set, response will be sent in given channel instead of where custom command was called'),
+            (('--command_channels', '-cc', str), '[Optional] Restrict custom command to give channel(s)'),
+            (('--reactions', '-rs', str), '[Optional] Reactions that will be added to response, emotes only ofc.'),
+            (('--python', '-p', str), r'[Dev only] Run a python script when custom command is called, please put code between \`\`\`'),
+        ],
+        clearance='Dev',
+        cls=cls.Command
+    )
+    async def customcommands_add(self, ctx: commands.Context, *, args: ParseArgs = None):
+        if args is None:
+            return await embed_maker.command_error(ctx)
+
+        # validate args
+        args = await self.validate_custom_command_args(ctx, args)
+        # return value is a message if an error has occured
+        if type(args) == discord.Message:
+            return
+
+        # add guild id to args
+        args['guild_id'] = ctx.guild.id
+        # insert into database
+        db.custom_commands.insert(args)
+
+        # convert args into string that can be presented to user who created the command
+        attributes_str = self.custom_command_args_to_string(args)
+
+        return await embed_maker.message(
+            ctx,
+            description=f'A new custom command has been added with these attributes:\n{attributes_str}',
+            colour='green',
+            send=True
+        )
+
+    @customcommands.command(
+        name='edit',
+        help='Edit a custom command',
+        usage='customcommands edit [command name] [args]',
+        examples=[],
+        command_args=[
+            (('--name', '-n', str), 'The name given to the command, matched with regex.'),
+            (('--response', '-r', str), r'Response that will be sent when custom command is called, If you want to do multiline response, please put response between \`\`\`'),
+            (('--clearance', '-c', str), f'[Optional] Restrict who can run the command by clearance, {" | ".join([*config.CLEARANCE.keys()])}, Defaults to User'),
+            (('--role', '-rl', list), '[Optional] Restrict custom command to role(s)'),
+            (('--response_channel', '-rc', str), '[Optional] When set, response will be sent in given channel instead of where custom command was called'),
+            (('--command_channels', '-cc', str), '[Optional] Restrict custom command to give channel(s)'),
+            (('--reactions', '-rs', str), '[Optional] Reactions that will be added to response, emotes only ofc.'),
+            (('--python', '-p', str), r'[Dev only] Run a python script when custom command is called, please put code between \`\`\`'),
+        ],
+        clearance='Dev',
+        cls=cls.Command
+    )
+    async def customcommands_edit(self, ctx: commands.Context, *, args: ParseArgs = None):
+        if args is None:
+            return await embed_maker.command_error(ctx)
+
+        old_command_name = args['pre']
+
+        # check if command user wants to edit actually exists
+        existing = db.custom_commands.find_one({'guild_id': ctx.guild.id, 'name': old_command_name})
+        if not existing:
+            return await embed_maker.error(ctx, f'A command with the name `{old_command_name}` doesn\'t exist')
+
+        # validate args
+        args = await self.validate_custom_command_args(ctx, args, edit=True)
+        # return value is a message if an error has occurred
+        if type(args) == discord.Message:
+            return
+
+        # add guild id to args
+        args['guild_id'] = ctx.guild.id
+
+        # filter out args that have not been defined
+        args = {key: value for key, value in args.items() if value and value != existing[key]}
+        # insert into database
+        db.custom_commands.update_one({'guild_id': ctx.guild.id, 'name': old_command_name}, {'$set': args})
+
+        # convert args into string that can be presented to user who created the command
+        attributes_str = self.custom_command_args_to_string(args, old=existing)
+
+        return await embed_maker.message(
+            ctx,
+            description=f'Custom command `{old_command_name}` has been edited:\n{attributes_str}',
+            colour='green',
+            send=True
+        )
+
+    @customcommands.command(
+        name='remove',
+        help=f'Remove a custom command by its index, can be seen by calling `{config.PREFIX}customcommands`',
+        usage='customcommands remove [command index]',
+        examples=[],
+        clearance='Dev',
+        cls=cls.Command
+    )
+    async def customcommands_remove(self, ctx: commands.Context, index: Union[int, str] = None):
+        if index is None:
+            return await embed_maker.command_error(ctx)
+
+        if type(index) != int:
+            return await embed_maker.error(ctx, 'Invalid index')
+
+        custom_commands = [*db.custom_commands.find({'guild_id': ctx.guild.id})]
+        command = {i: c for i, c in enumerate(custom_commands)}.get(index - 1, None)
+
+        # check if command user wants to edit actually exists
+        if not command:
+            return await embed_maker.error(ctx, 'Invalid index')
+
+        db.custom_commands.delete_one({'guild_id': ctx.guild.id, 'name': command['name']})
+
+        return await embed_maker.message(
+            ctx,
+            description=f'Custom command `{command["name"]}` has been deleted.',
+            colour='green',
+            send=True
+        )
+
+    @customcommands.command(
+        name='variables',
+        help='List all the variables that can be used in custom command responses or scripts',
+        usage='customcommands variables',
+        examples=['customcommands variables'],
+        aliases=['vars'],
+        clearance='Dev',
+        cls=cls.Command
+    )
+    async def customcommands_variables(self, ctx: commands.Context):
+        with open('static/custom_commands_variables.txt', 'r') as file:
+            return await embed_maker.message(ctx, description=f'```{file.read()}```', author={'name': 'Custom Command Variables'}, send=True)
 
     @commands.group(
         invoke_without_command=True,

@@ -9,6 +9,7 @@ import modules.embed_maker
 import modules.google_drive
 import modules.reaction_menus
 import modules.timers
+import modules.custom_commands
 
 from discord.ext import commands
 
@@ -38,6 +39,7 @@ class TLDR(commands.Bot):
         self.google_drive = modules.google_drive.Drive()
         self.timers = modules.timers.Timers(self)
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
+        self.custom_commands = modules.custom_commands.CustomCommands(self)
 
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
@@ -54,6 +56,36 @@ class TLDR(commands.Bot):
             pm_cog = self.get_cog('PrivateMessages')
             ctx = await self.get_context(message)
             return await pm_cog.process_pm(ctx)
+
+        # check if message matches any custom commands
+        custom_command = self.custom_commands.match_message(message)
+        if custom_command:
+            # get ctx
+            ctx = await self.get_context(message)
+            # check if user can run the custom command
+            can_run = await self.custom_commands.can_run(ctx, custom_command)
+            if can_run:
+                # get response for the custom command
+                response = await self.custom_commands.get_response(ctx, custom_command)
+                if response:
+                    # if command channel has set response channel, send response there, otherwise send to channel where command was called
+                    if custom_command['response_channel']:
+                        channel = self.get_channel(custom_command['response_channel'])
+                        message = await channel.send(response)
+                    else:
+                        message = await ctx.send(response)
+
+                    # add reactions to message if needed
+                    if custom_command['reactions']:
+                        for reaction in custom_command['reactions']:
+                            await message.add_reaction(reaction)
+
+                # execute python script if use has dev clearance
+                if 'Dev' in modules.utils.get_user_clearance(ctx.author) and custom_command['python']:
+                    dev_cog = self.get_cog('Dev')
+                    await dev_cog.eval(ctx, cmd=custom_command['python'])
+
+                return
 
         # invoke command if message starts with prefix
         if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, '').strip():

@@ -1,0 +1,53 @@
+{user} - User who called the command
+{guild} - Guild where the channel was called
+{channel} - Channel where the message was called
+{message} - Message sent to call the command
+
+{%user} - Get user by their name or ID eg. {%436228721033216009} or {%Hattyot}
+{*channel} - Get channel on the guild by name or ID eg. {*685230486188326940} or {*bot-testing}
+{&role} - Get role by its name or ID eg. {&530701922299281408} or {&Patrons}
+
+
+{user} variables:
+
+{user.mention} - Users @
+{user.id} - ID of the user
+{user.name} - Name of the user
+{user.avatar} - Avatar url of the user
+{user.discrim} - Discriminator of the user
+{user.nick} - Nickname of the user
+
+
+{guild} variables:
+
+{guild.id} - ID of the guild
+{guild.name} - Name of the guild
+{guild.icon} - Icon url of the guild
+
+
+{channel} variables:
+
+{channel.id} - ID of the channel
+{channel.name} - Name of the channel
+{channel.mention} - Mention the channel
+
+
+{message} variables:
+
+{message.id} - ID of the message
+{message.content} - Content of the message
+{message.link} - Link to message
+
+
+{role} variables:
+
+{role.id} - ID of the role
+{role.name} - Name of the role
+{role.colour} - Hex colour of the role
+{role.mention} - Mention the role
+
+
+Other variables:
+
+{>command} - Call bot command, eg. {>poll -q test poll -o o1 -o o2}
+$gN - If regex is used, a group match can be used as an argument eg. {>poll -q $g1 -o $g2 -o $g3}
