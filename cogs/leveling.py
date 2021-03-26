@@ -422,8 +422,8 @@ class Leveling(commands.Cog):
         usage='perks set [args]',
         examples=['perks set -r Party Member -p Monthly giveaways -p some cool perk'],
         command_args=[
-            (('--role', '-r'), 'The name of the role you want to set the perks for'),
-            (('--perk', '-p', {'action': 'append'}), 'Perk for the role')
+            (('--role', '-r', str), 'The name of the role you want to set the perks for'),
+            (('--perk', '-p', list), 'Perk for the role')
         ],
         clearance='Mod',
         cls=cls.Command
@@ -437,8 +437,8 @@ class Leveling(commands.Cog):
         usage='perks add [args]',
         examples=['perks add -r Party Member -p Monthly giveaways -p some cool perk'],
         command_args=[
-            (('--role', '-r'), 'The name of the role you want to add the perks to'),
-            (('--perk', '-p', {'action': 'append'}), 'Perk for the role')
+            (('--role', '-r', str), 'The name of the role you want to add the perks to'),
+            (('--perk', '-p', list), 'Perk for the role')
         ],
         clearance='Mod',
         cls=cls.Command
@@ -455,8 +455,8 @@ class Leveling(commands.Cog):
             'perks remove -r Party Member'
         ],
         command_args=[
-            (('--role', '-r'), 'The name of the role you want to remove perks from'),
-            (('--perk', '-p', {'action': 'append'}), 'Index of the perk you want to remove, can be seen by doing >perks [role]')
+            (('--role', '-r', str), 'The name of the role you want to remove perks from'),
+            (('--perk', '-p', list), 'Index of the perk you want to remove, can be seen by doing >perks [role]')
         ],
         clearance='Mod',
         cls=cls.Command

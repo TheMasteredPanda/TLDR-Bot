@@ -39,28 +39,31 @@ class Branch(commands.Converter):
         return branch_switch.get(argument[0], 'parliamentary')
 
 
-class JoinArgs(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        setattr(namespace, self.dest, ' '.join(values))
-
-
 class ParseArgs(commands.Converter, dict):
     async def convert(self, ctx: commands.Context, argument: str = '') -> dict:
-        parser = argparse.ArgumentParser(exit_on_error=False)
+        result = {}
+        # replace short-form args with long-form args
+        for arg, _ in ctx.command.docs.command_args:
+            argument = re.sub(arg[1], arg[0], argument)
+            result[arg[0][2:]] = None
 
-        # replace parser error function with a lambda function cause the default error function exits
-        parser.error = lambda *a, **kw: True
-        parser.add_argument('pre', type=str, nargs='*')
+        # create regex to match command args
+        regex = rf'--({"|".join(arg[0][2:] for arg, _, in ctx.command.docs.command_args)})'
+        split_argument = re.split(regex, argument)
+        result['pre'] = split_argument.pop(0)
 
-        for arg, description in ctx.command.docs.command_args:
-            kwargs = arg[2] if len(arg) == 3 else {'type': str, 'nargs': '*'}
-            if 'action' not in kwargs:
-                kwargs['action'] = JoinArgs
-
-            parser.add_argument(arg[1], arg[0], **kwargs)
-
-        result = parser.parse_args(argument.split(' ')).__dict__
-        result['pre'] = ' '.join(result['pre'])
+        for arg, data in zip(split_argument[::2], split_argument[1::2]):
+            data_type = next(filter(lambda x: x[0][0] == f'--{arg}', ctx.command.docs.command_args))[0][2]
+            if not result[arg]:
+                try:
+                    if data_type == list:
+                        result[arg] = [data.strip()]
+                    else:
+                        result[arg] = data_type(data.strip())
+                except ValueError:
+                    pass
+            elif type(result[arg]) == list:
+                result[arg].append(data.strip())
 
         return result
 

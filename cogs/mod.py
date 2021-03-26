@@ -32,6 +32,7 @@ class Mod(commands.Cog):
         self.bot = bot
 
     @commands.group(
+        invoke_without_command=True,
         name='watchlist',
         help='Manage the watchlist, which logs all the users message to a channel',
         usage='watchlist (sub command) (args)',
@@ -76,10 +77,9 @@ class Mod(commands.Cog):
         usage='watchlist add [user] (args)',
         examples=[r'watchlist add hattyot -f hattyot -f \sot\s -f \ssus\s'],
         command_args=[
-            (('--filter', '-f', {'action': 'append'}), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
+            (('--filter', '-f', list), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
         ],
         clearance='Mod',
-        parse_args=['f'],
         cls=cls.Command
     )
     async def watchlist_add(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
@@ -171,7 +171,7 @@ class Mod(commands.Cog):
         usage='watchlist add_filters [user] (args)',
         examples=[r'watchlist add_filters hattyot -f filter 1 -f \sfilter 2\s'],
         command_args=[
-            (('--filter', '-f', {'action': 'append'}), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
+            (('--filter', '-f', list), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
         ],
         clearance='Mod',
         cls=cls.Command
@@ -339,7 +339,7 @@ class Mod(commands.Cog):
             'dailydebates set_poll_options 1 -o 🇩🇪: Germany -o 🇬🇧: UK'
         ],
         command_args=[
-            (('--option', '-o', {'action': 'append'}), 'Option for the poll'),
+            (('--option', '-o', list), 'Option for the poll'),
         ],
         clearance='Mod',
         cls=cls.Command
@@ -391,8 +391,8 @@ class Mod(commands.Cog):
             'dailydebates add is ross mega cool? -ta hattyot -o yes -o double yes -o triple yes'
         ],
         command_args=[
-            (('--topic_author', '-ta'), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
-            (('--option', '-o', {'action': 'append'}), 'Option for the poll'),
+            (('--topic_author', '-ta', str), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
+            (('--option', '-o', list), 'Option for the poll'),
         ],
         clearance='Mod',
         cls=cls.Command
@@ -437,8 +437,8 @@ class Mod(commands.Cog):
         examples=['dailydebates insert is ross mega cool? -ta hattyot -o yes | double yes | triple yes'],
         clearance='Mod',
         command_args=[
-            (('--topic_author', '-ta'), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
-            (('--option', '-o', {'action': 'append'}), 'Option for the poll'),
+            (('--topic_author', '-ta', str), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
+            (('--option', '-o', list), 'Option for the poll'),
         ],
         cls=cls.Command
     )
@@ -913,8 +913,8 @@ class Mod(commands.Cog):
             'emote_role remove -r Mayor -e :TldrNewsUK: :TldrNewsUS: :TldrNewsEU:'
         ],
         command_args=[
-            (('--role', '-r'), 'The role you want to add the emote to'),
-            (('--emotes', '-e'), 'The emotes you want to be added to the role'),
+            (('--role', '-r', str), 'The role you want to add the emote to'),
+            (('--emotes', '-e', str), 'The emotes you want to be added to the role'),
         ],
         clearance='Mod',
         cls=cls.Command

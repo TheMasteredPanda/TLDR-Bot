@@ -62,12 +62,12 @@ class Utility(commands.Cog):
             'anon_poll -q Where are you from? -o [🇩🇪: Germany], [🇬🇧: UK] -t 1d -u 1m -p 2 -r Mayor'
         ],
         command_args=[
-            (('--question', '-q'), 'The question for the poll'),
-            (('--option', '-o', {"action": "append"}), 'Option for the poll'),
-            (('--time', '-t', {'default': '5m', 'type': format_time.parse}), '[Optional] How long the poll will stay active for e.g. 5d 5h 5m'),
-            (('--update_interval', '-u'), '[Optional] If set, the bot will update the poll with data in given interval of time'),
-            (('--pick_count', '-p'), '[Optional] How many options users can pick'),
-            (('--role', '-r'), '[Optional] The role the poll will be restricted to')
+            (('--question', '-q', str), 'The question for the poll'),
+            (('--option', '-o', list), 'Option for the poll'),
+            (('--time', '-t', format_time.parse), '[Optional] How long the poll will stay active for e.g. 5d 5h 5m'),
+            (('--update_interval', '-u', str), '[Optional] If set, the bot will update the poll with data in given interval of time'),
+            (('--pick_count', '-p', str), '[Optional] How many options users can pick'),
+            (('--role', '-r', str), '[Optional] The role the poll will be restricted to')
         ],
         clearance='Mod',
         cls=cls.Command
@@ -88,6 +88,9 @@ class Utility(commands.Cog):
 
         # get all optional variables
         poll_time = args['time']
+        if not poll_time:
+            poll_time = 300  # 5 minutes
+
         update_interval = args['update_interval']
         pick_count = args['pick_count']
         restrict_role_identifier = args['role']
@@ -297,8 +300,8 @@ class Utility(commands.Cog):
             'poll -q Where are you from? -o 🇩🇪: Germany -o 🇬🇧: UK'
         ],
         command_args=[
-            (('--question', '-q'), 'The question for the poll'),
-            (('--option', '-o', {"action": "append"}), 'Option for the poll'),
+            (('--question', '-q', str), 'The question for the poll'),
+            (('--option', '-o', list), 'Option for the poll'),
         ],
         clearance='Mod',
         cls=cls.Command
