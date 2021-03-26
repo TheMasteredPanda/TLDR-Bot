@@ -81,10 +81,6 @@ class Dev(commands.Cog):
         if member is None:
             return await embed_maker.error(ctx, 'Invalid user')
 
-        cmd_obj = self.bot.get_command(cmd)
-        if cmd_obj is None:
-            return await embed_maker.error(ctx, 'Invalid command')
-
         msg = copy.copy(ctx.message)
         msg.channel = ctx.channel
         msg.author = member

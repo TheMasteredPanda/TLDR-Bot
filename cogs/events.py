@@ -279,7 +279,11 @@ class Events(commands.Cog):
         abstain = results["😐"]
 
         who_has_it = 'noes' if noes > ayes else 'ayes'
-        results_str = f'**ORDER! ORDER!**\n\nThe ayes to the right: **{ayes}**\nThe noes to the left: **{noes}**\nAbstentions: **{abstain}**\n\nThe **{who_has_it}** have it. The **{who_has_it}** have it. Unlock!'
+        results_str = f'**ORDER! ORDER!**\n\n' \
+                      f'The ayes to the right: **{ayes}**\n' \
+                      f'The noes to the left: **{noes}**\n' \
+                      f'Abstentions: **{abstain}**\n\n' \
+                      f'The **{who_has_it}** have it. The **{who_has_it}** have it. Unlock!'
         # send results string in dd poll channel
         return await channel.send(results_str)
 
