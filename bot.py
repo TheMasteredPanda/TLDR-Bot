@@ -2,6 +2,7 @@ import discord
 import os
 import config
 import asyncio
+import traceback
 import modules.utils
 import modules.cls
 import modules.database
@@ -11,6 +12,7 @@ import modules.reaction_menus
 import modules.timers
 import modules.custom_commands
 
+from datetime import datetime
 from discord.ext import commands
 
 intents = discord.Intents.all()
@@ -40,6 +42,44 @@ class TLDR(commands.Bot):
         self.timers = modules.timers.Timers(self)
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
+
+    async def _run_event(self, coroutine, event_name, *args, **kwargs):
+        try:
+            await coroutine(*args, **kwargs)
+        except asyncio.CancelledError:
+            pass
+        except Exception as error:
+            try:
+                await self.on_event_error(error, event_name, *args, **kwargs)
+            except asyncio.CancelledError:
+                pass
+
+    async def on_event_error(self, exception: Exception, event_method, *args, **kwarg):
+        trace = exception.__traceback__
+        verbosity = 4
+        lines = traceback.format_exception(type(exception), exception, trace, verbosity)
+        traceback_text = ''.join(lines)
+
+        print(traceback_text)
+        print(exception)
+
+        # send error message to certain channel in a guild if error happens during bot runtime
+        guild = self.get_guild(config.ERROR_SERVER)
+        if guild is None:
+            return print('Invalid error server id')
+
+        channel = self.get_channel(config.ERROR_CHANNEL)
+        if channel is None:
+            return print('Invalid error channel id')
+
+        embed = discord.Embed(
+            colour=config.EMBED_COLOUR,
+            timestamp=datetime.now(),
+            description=f'```{exception}\n{traceback_text}```',
+        )
+        embed.set_author(name=f'Event Error - {event_method}', icon_url=guild.icon_url)
+
+        return await channel.send(embed=embed)
 
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
