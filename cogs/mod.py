@@ -54,16 +54,11 @@ class Mod(commands.Cog):
     @commands.group(
         invoke_without_command=True,
         name='customcommands',
-        # Mod=cls.Help(
-        #     help='Manage the servers custom commands',
-        #     usage='customcommands (sub command) (args)',
-        #     examples=['customcommands', 'customcommands 1'],
-        #     sub_commands=['variables', 'add', 'remove', 'edit']
-        # ),
-        help='View the custom commands the guild has to offer',
-        usage='customcommands (command index)',
+        help='Manage the servers custom commands',
+        usage='customcommands (sub command) (args)',
         examples=['customcommands', 'customcommands 1'],
-        clearance='Dev',
+        sub_commands=['variables', 'add', 'remove', 'edit'],
+        clearance='Mod',
         aliases=['cc'],
         cls=cls.Group
     )
@@ -242,12 +237,14 @@ class Mod(commands.Cog):
             (('--reactions', '-rs', str), '[Optional] Reactions that will be added to response, emotes only ofc.'),
             (('--python', '-p', str), r'[Dev only] Run a python script when custom command is called, please put code between \`\`\`'),
         ],
-        clearance='Dev',
+        clearance='Mod',
         cls=cls.Command
     )
     async def customcommands_add(self, ctx: commands.Context, *, args: ParseArgs = None):
         if args is None:
             return await embed_maker.command_error(ctx)
+
+        # TODO: embed responses
 
         # validate args
         args = await self.validate_custom_command_args(ctx, args)
@@ -285,7 +282,7 @@ class Mod(commands.Cog):
             (('--reactions', '-rs', str), '[Optional] Reactions that will be added to response, emotes only ofc.'),
             (('--python', '-p', str), r'[Dev only] Run a python script when custom command is called, please put code between \`\`\`'),
         ],
-        clearance='Dev',
+        clearance='Mod',
         cls=cls.Command
     )
     async def customcommands_edit(self, ctx: commands.Context, *, args: ParseArgs = None):
@@ -328,7 +325,7 @@ class Mod(commands.Cog):
         help=f'Remove a custom command by its index, can be seen by calling `{config.PREFIX}customcommands`',
         usage='customcommands remove [command index]',
         examples=[],
-        clearance='Dev',
+        clearance='Mod',
         cls=cls.Command
     )
     async def customcommands_remove(self, ctx: commands.Context, index: Union[int, str] = None):
@@ -360,7 +357,7 @@ class Mod(commands.Cog):
         usage='customcommands variables',
         examples=['customcommands variables'],
         aliases=['vars'],
-        clearance='Dev',
+        clearance='Mod',
         cls=cls.Command
     )
     async def customcommands_variables(self, ctx: commands.Context):
