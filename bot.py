@@ -1,5 +1,6 @@
 import discord
 import os
+import sys
 import config
 import asyncio
 import traceback
@@ -34,7 +35,7 @@ class TLDR(commands.Bot):
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
-            if filename.endswith('.py'):
+            if filename.endswith('.py') and filename[:-3] != 'template_cog':
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
