@@ -61,10 +61,10 @@ class PrivateMessages(commands.Cog):
         else:
             if help_cmd in all_commands:
                 cmd = getattr(self, help_cmd)
-                examples = f' | '.join(cmd.examples)
+                examples = f' | '.join(cmd.docs.examples)
                 cmd_help = f"""
-                        **Description:** {cmd.docs}
-                        **Usage:** {cmd.usage}
+                        **Description:** {cmd.docs.help}
+                        **Usage:** {cmd.docs.usage}
                         **Examples:** {examples}
                         """
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=cmd_help)
