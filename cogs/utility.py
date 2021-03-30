@@ -439,7 +439,11 @@ class Utility(commands.Cog):
         embed = discord.Embed(colour=embed_colour, description=f'Reminder: `{reminder}`', timestamp=datetime.datetime.now())
         embed.set_footer(text=f'{member}', icon_url=member.avatar_url)
 
-        return await member.send(embed=embed)
+        try:
+            return await member.send(embed=embed)
+        except Exception:
+            bot_channel = self.bot.get_channel(config.BOT_CHANNEL_ID)
+            return await bot_channel.send(f'I wasn\'t able to dm you, so here\'s the reminder <@{member.id}>', embed=embed)
 
     @commands.command(
         help='Get bot\'s latency',
