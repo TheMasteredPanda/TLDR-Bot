@@ -1513,7 +1513,7 @@ class Mod(commands.Cog):
         cls=cls.Command
     )
     async def auto_member(self, ctx: commands.Context):
-        new_automember = not db.get_automember(ctx.guild.id)
+        new_automember = db.get_automember(ctx.guild.id)
 
         if new_automember:
             msg = 'Disabling automember'
