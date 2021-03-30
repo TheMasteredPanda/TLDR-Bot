@@ -26,9 +26,11 @@ class ReactionMenus:
         if user.bot:
             return
 
-        if reaction.message.id in self.menus:
-            menu = self.menus[reaction.message.id]
-            await menu.call_function(reaction, user)
+        menu = self.menus.get(reaction.message.id, None)
+        if menu is None:
+            return
+
+        await menu.call_function(reaction, user)
 
 
 class ReactionMenu:
