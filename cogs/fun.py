@@ -90,10 +90,10 @@ class Fun(commands.Cog):
         cls=cls.Command
     )
     async def dog(self, ctx):
-        url = 'https://random.dog/woof.json'
+        url = 'https://dog.ceo/api/breeds/image/random'
         response = requests.get(url)
         json_text = response.text.encode("ascii", "ignore").decode('ascii')
-        img_url = json.loads(json_text)['url']
+        img_url = json.loads(json_text)['message']
 
         return await ctx.send(img_url)
 
