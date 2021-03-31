@@ -6,6 +6,7 @@ import emoji
 import os
 import requests
 import inspect
+import copy
 
 from bs4 import BeautifulSoup
 from typing import Union
@@ -537,6 +538,8 @@ class Utility(commands.Cog):
 
         user_clearance = get_user_clearance(ctx.author)
         for cmd in self.bot.commands:
+            # create copy of original command so we don't modify the original when adding docs or other values
+            cmd = copy.copy(cmd)
             cmd.docs = cmd.get_help(ctx.author)
             if not cmd.docs.can_run:
                 continue
@@ -566,9 +569,7 @@ class Utility(commands.Cog):
             if self.bot.get_command(command) is None:
                 return await embed_maker.error(ctx, f"Couldn't find a command by: `{command}`")
 
-            command = self.bot.get_command(command)
-            command.docs = command.get_help(ctx.author)
-
+            command = self.bot.get_command(command, member=ctx.author)
             if command.cog_name not in help_object:
                 return
 

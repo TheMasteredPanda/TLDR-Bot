@@ -31,7 +31,10 @@ class Command(commands.Command):
                 self.special_help = True
                 break
 
-    def get_help(self, member: discord.Member):
+    def get_help(self, member: discord.Member = None):
+        if member is None:
+            return self.docs
+
         help_object = self.docs
         user_clearance = modules.utils.get_user_clearance(member)
         if self.special_help:
@@ -41,6 +44,7 @@ class Command(commands.Command):
                 if hasattr(self, clearance):
                     help_object = getattr(self, clearance)
                     help_object.clearance = clearance
+                    break
 
         command_data = db.get_command_data(member.guild.id, self.name)
 

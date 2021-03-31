@@ -179,8 +179,7 @@ class Mod(commands.Cog):
             # validate command calls in response and check if command has higher clearance than custom command
             command_matches = re.findall(r'{>(\w+)', args['response'])
             for command_name in command_matches:
-                command = self.bot.get_command(command_name)
-                command.docs = command.get_help(ctx.author)
+                command = self.bot.get_command(command_name, member=ctx.author)
                 if not command:
                     return await embed_maker.error(ctx, f'Invalid command: `>{command_name}`')
                 if clearances.index(command.docs.clearance) > clearances.index(args['clearance']):
@@ -1081,7 +1080,7 @@ class Mod(commands.Cog):
                 )
 
             # can user run command
-            can_access_command = command.get_help(user_input).can_run
+            can_access_command = command.docs.can_run
 
         elif access_type == 'role':
             top_author_role = ctx.author.roles[-1]

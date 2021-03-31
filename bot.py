@@ -1,6 +1,6 @@
 import discord
 import os
-import sys
+import copy
 import config
 import asyncio
 import traceback
@@ -15,6 +15,7 @@ import modules.custom_commands
 
 from datetime import datetime
 from discord.ext import commands
+from typing import Union
 
 intents = discord.Intents.all()
 db = modules.database.Connection()
@@ -82,6 +83,29 @@ class TLDR(commands.Bot):
 
         return await channel.send(embed=embed)
 
+    def get_command(self, name: str, *, member: discord.Member = None) -> Union[modules.cls.Command, modules.cls.Group, None]:
+        if ' ' not in name:
+            command = self.all_commands.get(name)
+        else:
+            names = name.split()
+            if not names:
+                return None
+
+            command = self.all_commands.get(names[0])
+            if isinstance(command, commands.GroupMixin):
+                for name in names[1:]:
+                    try:
+                        command = command.all_commands[name]
+                    except (AttributeError, KeyError):
+                        return None
+
+        # create copy so original values arent modifies
+        command = copy.copy(command)
+        # add docs value
+        command.docs = command.get_help(member)
+
+        return command
+
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
 
@@ -138,7 +162,10 @@ class TLDR(commands.Bot):
         if not ctx.command:
             return
 
+        # create copy of original so values of original aren't modified
+        ctx.command = copy.copy(ctx.command)
         ctx.command.docs = ctx.command.get_help(ctx.author)
+
         # check if command has been disabled
         if ctx.command.docs.disabled:
             return await modules.embed_maker.error(ctx, 'This command has been disabled')

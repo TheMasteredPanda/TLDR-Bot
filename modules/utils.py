@@ -14,7 +14,7 @@ db = database.Connection()
 
 class Command(commands.Converter):
     async def convert(self, ctx: commands.Context, argument: str = ''):
-        return ctx.bot.get_command(argument, ctx.author)
+        return ctx.bot.get_command(argument, member=ctx.author)
 
 
 class Role(commands.Converter):
