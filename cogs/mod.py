@@ -840,7 +840,7 @@ class Mod(commands.Cog):
 
         return await embed_maker.message(
             ctx,
-            description='`{topic_to_delete["topic"]}` has been removed from the list of daily debate topics'
+            description=f'`{topic_to_delete["topic"]}` has been removed from the list of daily debate topics'
                         f'\nThere are now **{len(daily_debate_data["topics"]) - 1}** topics on the list',
             send=True
         )
