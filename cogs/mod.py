@@ -800,7 +800,7 @@ class Mod(commands.Cog):
         daily_debate_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
         await embed_maker.message(
             ctx,
-            description='`{topic}` has been inserted into first place in the list of daily debate topics'
+            description=f'`{topic}` has been inserted into first place in the list of daily debate topics'
                         f'\nThere are now **{len(daily_debate_data["topics"])}** topics on the list',
             send=True
         )
