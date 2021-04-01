@@ -561,7 +561,10 @@ class Mod(commands.Cog):
                 if topic_author_id:
                     topic_author = ctx.guild.get_member(int(topic_author_id))
                     if not topic_author:
-                        topic_author = await ctx.guild.fetch_member(int(topic_author_id))
+                        try:
+                            topic_author = await ctx.guild.fetch_member(int(topic_author_id))
+                        except Exception:
+                            topic_author = None
 
                 topics_str += f'`#{page_size_limit * (page - 1) + i + 1}`: {topic_str}\n'
                 if topic_author:
