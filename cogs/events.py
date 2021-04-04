@@ -67,11 +67,12 @@ class Events(commands.Cog):
 
             filters = watchlist['filters']
             content = ''
-            for f in filters:
-                match = re.findall(rf'({f})', str(message.content.lower()))
-                if match:
-                    content = f'<@&{config.MOD_ROLE_ID}> - Filter Match: `{f}`'
-                    break
+            if filters:
+                for f in filters:
+                    match = re.findall(rf'({f})', str(message.content.lower()))
+                    if match:
+                        content = f'<@&{config.MOD_ROLE_ID}> - Filter Match: `{f}`'
+                        break
 
             # send images sent by user
             files = []
