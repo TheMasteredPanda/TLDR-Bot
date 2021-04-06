@@ -80,6 +80,8 @@ class TLDR(commands.Bot):
             description=f'```{exception}\n{traceback_text}```',
         )
         embed.set_author(name=f'Event Error - {event_method}', icon_url=guild.icon_url)
+        embed.add_field(name='args', value=str(args))
+        embed.add_field(name='kwargs', value=str(kwarg))
 
         return await channel.send(embed=embed)
 
