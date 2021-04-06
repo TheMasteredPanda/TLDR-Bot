@@ -176,7 +176,11 @@ def get_user_clearance(member: discord.Member) -> list:
     return member_clearance
 
 
-async def get_member_from_string(ctx: commands.Context, string: str, *, multi: bool = True) -> Union[Tuple[Union[discord.Member, None], str], None]:
+async def get_member_from_string(ctx: commands.Context, string: str) -> Union[Tuple[Union[discord.Member, None], str], None]:
+    # check if source is member mention
+    if ctx.message.mentions:
+        return ctx.message.mentions[0], ' '.join(string.split()[1:])
+
     member_name = ""
     previous_result = None
     for part in string.split():
@@ -186,11 +190,8 @@ async def get_member_from_string(ctx: commands.Context, string: str, *, multi: b
             if previous_result is None:
                 return None, string
             # if member is None, but previous result is a list, return Normal get_member call and allow user to choose member
-            elif type(previous_result) == list and multi:
+            elif type(previous_result) == list:
                 return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
-            # if multi is false, return error message
-            elif type(previous_result) == list and not multi:
-                return await embed_maker.error(ctx, 'Multiple user matches found.')
             elif previous_result == discord.Member:
                 return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
         else:
