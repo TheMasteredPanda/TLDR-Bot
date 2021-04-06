@@ -103,10 +103,6 @@ class Leveling(commands.Cog):
         if reason is None:
             return await embed_maker.command_error(ctx, '[reason for the rep]')
 
-        member = await get_member(ctx, member_identifier)
-        if type(member) == discord.Message:
-            return
-
         if member.id == ctx.author.id:
             return await embed_maker.error(ctx, f'You can\'t give rep points to yourself')
 
