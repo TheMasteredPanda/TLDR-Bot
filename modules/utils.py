@@ -3,9 +3,8 @@ import re
 import asyncio
 import config
 import time
-import argparse
 
-from typing import Optional
+from typing import Optional, Tuple, Union
 from modules import embed_maker, database
 from discord.ext import commands
 
@@ -177,10 +176,41 @@ def get_user_clearance(member: discord.Member) -> list:
     return member_clearance
 
 
-async def get_member(ctx: commands.Context, source) -> Optional[discord.Member]:
+async def get_member_from_string(ctx: commands.Context, string: str, *, multi: bool = True) -> Union[Tuple[Union[discord.Member, None], str], None]:
+    member_name = ""
+    previous_result = None
+    for part in string.split():
+        member_match = await get_member(ctx, f'{member_name} {part}'.strip(), multi=False, return_message=False)
+        if member_match is None:
+            # if both member and previous result are None, nothing can be found from the string, return None and the string
+            if previous_result is None:
+                return None, string
+            # if member is None, but previous result is a list, return Normal get_member call and allow user to choose member
+            elif type(previous_result) == list and multi:
+                return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
+            # if multi is false, return error message
+            elif type(previous_result) == list and not multi:
+                return await embed_maker.error(ctx, 'Multiple user matches found.')
+            elif previous_result == discord.Member:
+                return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
+        else:
+            # update variables
+            previous_result = member_match
+            member_name = f'{member_name} {part}'
+
+    return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
+
+
+async def get_member(ctx: commands.Context, source, *, multi: bool = True, return_message: bool = True) -> Union[discord.Member, discord.Message, list, None]:
+    """
+    :param ctx: context
+    :param source: identifier to which members are matched, can be id, member mention or name
+    :param multi: If true, when multiple matches are found, user will presented the option and allowed to choose, if False, list of matched members will be returned
+    :param return_message: If true, when and error is encountered, a message about the error will be returned
+    """
     # just in case source is empty
     if not source:
-        return await embed_maker.error(ctx, 'Input is empty')
+        return await embed_maker.error(ctx, 'Input is empty') if return_message else None
 
     if type(source) == int:
         source = str(source)
@@ -196,53 +226,58 @@ async def get_member(ctx: commands.Context, source) -> Optional[discord.Member]:
         # if member isn't found by get, maybe they aren't in the cache, fetch them by making an api call
         if not member:
             try:
+                # if member hasnt been cached yet, fetching them should work, if member is inaccessible, it will return None
                 member = await ctx.guild.fetch_member(int(source))
                 if member is None:
-                    return await embed_maker.error(ctx, f'Member not found by id: `{source}`')
+                    return await embed_maker.error(ctx, f'Member not found by ID: `{source}`') if return_message else None
             except discord.Forbidden:
-                return await embed_maker.error(ctx, 'Bot does not have access to the guild')
+                return await embed_maker.error(ctx, 'Bot does not have access to the guild members') if return_message else None
             except discord.HTTPException:
-                return await embed_maker.error(ctx, f'Member not found by id: `{source}`')
+                return await embed_maker.error(ctx, f'Member not found by id: `{source}`') if return_message else None
 
         if member:
             return member
 
-    # Check if source is member's name
+    # if source length is less than 3, don't bother searching, too many matches will come
     if len(source) < 3:
-        return await embed_maker.error(ctx, 'User name input needs to be at least 3 characters long')
+        return await embed_maker.error(ctx, 'User name input needs to be at least 3 characters long') if return_message else None
 
     # checks first for a direct name match
     members = list(
         filter(
-            lambda m: m.name.lower() == source.lower() or m.display_name.lower() == source.lower(),
+            lambda m: m.name.lower() == source.lower() or  # username match
+                      m.display_name.lower() == source.lower() or  # nickname match (if user doesnt have a nickname, it'll match the name again)
+                      str(m).lower() == source.lower(),  # name and discriminator match
             ctx.guild.members
         )
     )
 
     # if can't find direct name match, check for a match with regex
     if not members:
-        regex = re.compile(fr'({source.lower()})')
         # checks for regex match
         members = list(
             filter(
-                lambda m: re.findall(regex, str(m).lower()) or re.findall(regex, m.display_name.lower()),
+                lambda m: re.findall(fr'({source.lower()})', str(m).lower()) or  # regex match name and discriminator
+                          re.findall(fr'({source.lower()})', m.display_name.lower()),  # regex match nickname
                 ctx.guild.members
             )
         )
 
         if not members:
-            return await embed_maker.error(ctx, f'No members found by the name `{source}`')
+            return await embed_maker.error(ctx, f'No members found by the name `{source}`') if return_message else None
 
     # too many matches
-    if len(members) > 10:
-        return await embed_maker.error(ctx, 'Too many username matches')
+    if len(members) > 10 and multi:
+        return await embed_maker.error(ctx, 'Too many user matches') if return_message else None
 
     # only one match, return member
     if len(members) == 1:
         return members[0]
+    elif not multi:
+        return members
 
     # send embed containing member matches and let member choose which one they meant
-    description = 'Found multiple users, which one did you mean? `type number of member`\n\n'
+    description = 'Found multiple users, which one did you mean? `type index of member`\n\n'
     for i, member in enumerate(members):
         description += f'`#{i + 1}` | {member.display_name}#{member.discriminator}'
 

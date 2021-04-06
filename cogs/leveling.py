@@ -13,7 +13,8 @@ from modules.utils import (
     get_user_clearance,
     get_member,
     get_branch_role,
-    get_user_boost_multiplier
+    get_user_boost_multiplier,
+    get_member_from_string
 )
 from typing import Union, Optional
 from modules import embed_maker, cls, database, format_time
@@ -71,7 +72,7 @@ class Leveling(commands.Cog):
         cls=cls.Command,
         aliases=['reputation']
     )
-    async def rep(self, ctx: commands.Context, member_identifier: str = None, *, reason: str = None):
+    async def rep(self, ctx: commands.Context, *, member_reason: str = None):
         # check if user has been in server for more than 7 days
         now_datetime = datetime.datetime.now()
         joined_at = ctx.author.joined_at
@@ -91,8 +92,13 @@ class Leveling(commands.Cog):
                 send=True
             )
 
-        if member_identifier is None:
+        if member_reason is None:
             return await embed_maker.command_error(ctx)
+
+        member, reason = await get_member_from_string(ctx, member_reason)
+
+        if member is None:
+            return await embed_maker.error(ctx, 'Invalid member')
 
         if reason is None:
             return await embed_maker.command_error(ctx, '[reason for the rep]')
