@@ -405,7 +405,11 @@ class Utility(commands.Cog):
         if not reminder:
             return await embed_maker.error(ctx, 'You cannot have an empty reminder')
 
-        parsed_time = sum(remind_times)
+        try:
+            parsed_time = sum(remind_times)
+        except Exception:
+            return await embed_maker.command_error(ctx, '[time]')
+
         expires = round(time.time()) + parsed_time
         self.bot.timers.create(
             expires=expires,
