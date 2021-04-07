@@ -4,7 +4,7 @@ import time
 from bson import ObjectId
 from modules import database
 
-db = database.Connection()
+db = database.get_connection()
 
 
 class Timers:

@@ -25,7 +25,7 @@ from modules.utils import (
     get_user_clearance
 )
 
-db = database.Connection()
+db = database.get_connection()
 
 
 class Mod(commands.Cog):

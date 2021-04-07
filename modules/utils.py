@@ -7,7 +7,7 @@ from typing import Tuple, Union
 from modules import embed_maker, database
 from discord.ext import commands
 
-db = database.Connection()
+db = database.get_connection()
 
 
 class Command(commands.Converter):

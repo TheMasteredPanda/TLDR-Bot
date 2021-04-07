@@ -6,7 +6,7 @@ from modules import cls, embed_maker, database
 from datetime import datetime, date
 from discord.ext import commands
 
-db = database.Connection()
+db = database.get_connection()
 
 
 class PrivateMessages(commands.Cog):

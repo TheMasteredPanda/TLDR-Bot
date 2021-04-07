@@ -10,7 +10,7 @@ from modules import database, cls, embed_maker
 from modules.utils import get_member
 from bot import TLDR
 
-db = database.Connection()
+db = database.get_connection()
 
 
 def insert_returns(body):

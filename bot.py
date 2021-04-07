@@ -19,7 +19,7 @@ from discord.ext import commands
 from typing import Union
 
 intents = discord.Intents.all()
-db = modules.database.Connection()
+db = modules.database.get_connection()
 
 
 async def get_prefix(bot, message):

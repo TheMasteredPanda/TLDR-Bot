@@ -6,7 +6,7 @@ from discord.ext import commands
 from modules import database, cls, embed_maker
 from datetime import datetime
 
-db = database.Connection()
+db = database.get_connection()
 
 
 class Settings(commands.Cog):
@@ -43,7 +43,6 @@ class Settings(commands.Cog):
             if channel.id == current_channel_id:
                 return await embed_maker.error(ctx, f'Level up channel is already set to <#{channel.id}>')
 
-            db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'level_up_channel': channel.id}})
             leveling_guild.level_up_channel = channel.id
             return await embed_maker.message(
                 ctx,

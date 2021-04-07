@@ -21,7 +21,7 @@ from modules.utils import (
 from discord.ext import commands
 from bot import TLDR
 
-db = database.Connection()
+db = database.get_connection()
 
 
 class Utility(commands.Cog):

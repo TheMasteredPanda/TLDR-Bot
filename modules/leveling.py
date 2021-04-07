@@ -5,12 +5,57 @@ import discord
 import time
 import config
 
+from pymongo.collection import Collection
 from typing import Tuple, Union
 from datetime import datetime
 from modules import database
 from modules.utils import get_guild_role
 
-db = database.Connection()
+db = database.get_connection()
+
+# TODO: bring back __setattr__ system
+
+# TODO: do this sort of thing for commands too
+
+
+class DatabaseList(list):
+    """Special list which co-opts the append and remove method, so the same values can be updated in the database."""
+    def __init__(self, collection: Collection, query_filter: dict, key: str, *args):
+        self.collection = collection
+        self.query_filter = query_filter
+        self.key = key
+
+        super().__init__()
+        self.extend(list(args))
+
+    def __delitem__(self, index: int):
+        raise Exception('Del operation not allowed on DatabaseList')
+
+    def __setitem__(self, index: int, value):
+        self.collection.update_one(
+            self.query_filter,
+            {'$set': {f'{self.key}.{index}': value if type(value) != LevelingRole else value.values()}}
+        )
+        super()[index] = value
+
+    def insert(self, index: int, value):
+        raise Exception('Insert operation not allowed on DatabaseList')
+
+    def append(self, item) -> None:
+        """Method that pushes item to list and database list."""
+        self.collection.update_one(
+            self.query_filter,
+            {'$push': {self.key: item if type(item) != LevelingRole else item.values()}}
+        )
+        super().append(item)
+
+    def remove(self, item) -> None:
+        """Method that removes item from list and database list."""
+        self.collection.update_one(
+            self.query_filter,
+            {'$pull': {self.key: item if type(item) != LevelingRole else item.values()}}
+        )
+        super().remove(item)
 
 
 class Boost:
@@ -34,6 +79,15 @@ class Boost:
             {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
             {'$unset': {f'boosts.{self.boost_type}': 1}}
         )
+
+    def __setattr__(self, key, value):
+        """For some variables, changing their value will allo edit the entry in the database."""
+        if key in ['multiplier', 'expires'] and key in self.__dict__ and self.__dict__[key] != value:
+            db.leveling_users.update_one(
+                {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
+                {'$set': {f'boosts.{self.boost_type}.{key}': value}}
+            )
+        self.__dict__[key] = value
 
 
 class LevelingUserBoosts:
@@ -59,6 +113,16 @@ class LevelingUserBoosts:
     def get_multiplier(self):
         return 1 + sum(boost.multiplier for boost in self)
 
+    def __setattr__(self, key, value):
+        """For some variables, changing their value will allo edit the entry in the database."""
+        if key in ['rep', 'daily_debate'] and key in self.__dict__ and self.__dict__[key] != value:
+            db.leveling_users.update_one(
+                {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
+                {'$set': {f'boosts.{key}': value}}
+            )
+
+        self.__dict__[key] = value
+
 
 class LevelingUserSettings:
     """Class for storing leveling user settings"""
@@ -83,6 +147,21 @@ class LevelingUserBranch:
         self.points = points
         self.level = level
         self.role = role
+
+    def __setattr__(self, key, value):
+        """For some variables, changing their value will allo edit the entry in the database."""
+        if key in ['points', 'level', 'role'] and key in self.__dict__ and self.__dict__[key] != value:
+            key_switch = {
+                'points': f'{self.branch[0]}p',
+                'level': f'{self.branch[0]}_level',
+                'role': f'{self.branch[0]}_role'
+            }
+            db.leveling_users.update_one(
+                {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
+                {'$set': {key_switch.get(key): value}}
+            )
+
+        self.__dict__[key] = value
 
 
 class LevelingUser:
@@ -133,6 +212,16 @@ class LevelingUser:
         """:return: Seconds left until timer expires"""
         return self.rep_timer - round(time.time())
 
+    def __setattr__(self, key, value):
+        """For some variables, changing their value will allo edit the entry in the database."""
+        if key in ['rp', 'rep_timer', 'last_rep'] and key in self.__dict__ and self.__dict__[key] != value:
+            db.leveling_users.update_one(
+                {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
+                {'$set': {key: value}}
+            )
+
+        self.__dict__[key] = value
+
 
 class LevelingRole:
     """Class for leveling roles"""
@@ -140,19 +229,48 @@ class LevelingRole:
         self.guild = guild
         self.branch = branch
         self.name = leveling_role.get('name', '')
-        self.perks = leveling_role.get('perks', [])
+        self.perks = DatabaseList(
+            db.leveling_data,
+            {'guild_id': self.guild.id, f'leveling_routes.{self.branch}': {'$elemMatch': {'name': self.name}}},
+            f'leveling_routes.{self.name}.$.perks',
+            *leveling_role.get('perks', [])
+        )
+
+    def values(self):
+        return {
+            'name': self.name,
+            'perks': self.perks
+        }
 
     async def get_guild_role(self) -> discord.Role:
         """
         Get guild's role
         :return: discord.Role
         """
+        # TODO: maybe cache this value?
         role = await get_guild_role(self.guild, self.name)
         # if role doesnt exist, create it
         if role is None:
             role = await self.guild.create_role(name=self.name)
 
+
         return role
+
+    def __setattr__(self, key, value):
+        """For some variables, changing their value will allo edit the entry in the database."""
+        if key in ['name', 'perks'] and key in self.__dict__ and self.__dict__[key] != value:
+            db.leveling_data.update_one({
+                'guild_id': self.guild.id,
+                f'leveling_routes.{self.branch}': {'$elemMatch': {'name': self.name}}},
+                {f'$set': {f'leveling_routes.{self.name}.$.{key}': value}}
+            )
+
+        # special case for perks
+        if key == 'perks' and 'perks' in self.__dict__:
+            self.__dict__[key].list = value
+            return
+
+        self.__dict__[key] = value
 
 
 class LevelingRoute:
@@ -160,7 +278,12 @@ class LevelingRoute:
     def __init__(self, guild: discord.Guild, name: str, roles: list):
         self.guild = guild
         self.name = name
-        self.roles = [LevelingRole(guild, name, role) for role in roles]
+        self.roles = DatabaseList(
+            db.leveling_data,
+            {'guild_id': self.guild.id},
+            f'leveling_routes.{self.name}',
+            *[LevelingRole(guild, name, role) for role in roles]
+        )
 
     def find_role(self, role_name: str) -> Union[LevelingRole, None]:
         """
@@ -205,7 +328,12 @@ class LevelingData:
         self.guild = guild
         self.level_up_channel = leveling_data.get('level_up_channel', 0)
         self.leveling_routes = LevelingRoutes(guild, leveling_data.get('leveling_routes', {}))
-        self.honours_channels = leveling_data.get('honours_channels', [])
+        self.honours_channels = DatabaseList(
+            db.leveling_data,
+            {'guild_id': self.guild.id},
+            f'honours_channels',
+            *leveling_data.get('honours_channels', [])
+        )
         self.automember = leveling_data.get('automember', False)
 
     def toggle_automember(self):
@@ -215,6 +343,21 @@ class LevelingData:
             {'guild_id': self.guild.id},
             {'$set': {'automember': self.automember}}
         )
+
+    def __setattr__(self, key, value):
+        """For some variables, changing their value will allo edit the entry in the database."""
+        if key in ['level_up_channel', 'honours_channels'] and key in self.__dict__ and self.__dict__[key] != value:
+            db.leveling_data.update_one(
+                {'guild_id': self.guild.id},
+                {'$set': {key: value}}
+            )
+
+        # special case for honours_channels
+        if key == 'honours_channels' and 'honours_channels' in self.__dict__:
+            self.__dict__[key].list = value
+            return
+
+        self.__dict__[key] = value
 
 
 class LevelingGuild(LevelingData):
@@ -319,46 +462,13 @@ class LevelingMember(LevelingUser):
         user_branch = self.parliamentary if branch.name == 'parliamentary' else self.honours
         # if user is receiving their first points give them the first role
         if user_branch.points == 0:
-            role = branch.roles[0]
-            await self.set_role(branch, role)
+            user_branch.role = branch.roles[0].name
 
         # increase amount if user has boost
         boost_multiplier = self.boosts.get_multiplier()
         amount = round(amount * boost_multiplier)
 
         user_branch.points += amount
-
-        key = f'{branch.name[0]}p'
-        db.leveling_users.update_one({
-            'guild_id': self.guild.id,
-            'user_id': self.id},
-            {
-                '$inc': {key: amount}
-            }
-        )
-
-    async def set_role(self, branch: LevelingRoute, role: LevelingRole) -> discord.Role:
-        """
-        Set the role for a branch for a user
-        :param branch: which branches role will be set
-        :param role: the role that it will be set to
-        :return: discord.Role (needed in some functions)
-        """
-        guild_role = await self.add_role(role)
-
-        key = f'{branch.name[0]}_role'  # e.g "p_role"
-        self.__dict__[key] = role
-
-        # update user entry in the database
-        db.leveling_users.update_one({
-            'guild_id': self.guild.id,
-            'user_id': self.id},
-            {
-                '$set': {key: role.name}
-            }
-        )
-
-        return guild_role
 
     async def add_role(self, role: LevelingRole) -> discord.Role:
         # get discord.Role role
@@ -378,25 +488,25 @@ class LevelingMember(LevelingUser):
         user_branch.level += levels_up
 
         # Checks if user has current role
-        current_role = await  branch.find_role(user_branch.role).get_guild_role()
-        if current_role not in self.member.roles:
-            await self.member.add_roles(current_role)
+        current_role = branch.find_role(user_branch.role)
+        current_guild_role = await current_role.get_guild_role()
+        if current_guild_role not in self.member.roles:
+            await self.member.add_roles(current_guild_role)
 
         # get user role level
         role_level = self.user_role_level(user_branch)
 
         # user needs to go up a role
         if role_level < 0:
-            current_role = await self.advance_user_role(user_branch, role_level)
-            user_branch.role = current_role.name
+            role_index = branch.roles.index(current_role)
+            new_role = branch.roles[-1] if len(branch.roles) - 1 < role_index + abs(role_level) else branch.roles[role_index + abs(role_level)]
 
-        db.leveling_users.update_one({
-            'guild_id': self.guild.id,
-            'user_id': self.id},
-            {
-                '$inc': {f'{branch.name[0]}_level': levels_up}
-            }
-        )
+            user_branch.role = new_role.name
+            await self.add_role(new_role)
+
+            await self.notify_perks(new_role)
+
+            current_role = new_role
 
         return current_role, levels_up, abs(role_level)
 
@@ -495,26 +605,14 @@ class LevelingMember(LevelingUser):
 
         return total_levels_up - 1
 
-    async def advance_user_role(self, user_branch: LevelingUserBranch, role_level: int) -> discord.Role:
+    async def notify_perks(self, role: LevelingRole):
         """
-        Rank up member (give them new role)
-        :param user_branch: branch which will be used
-        :param role_level: users new role level
-        :return: discord.Role
+        Sends user info about perks if role has them
+        :param role: leveling role
         """
-        branch = self.guild.get_leveling_route(user_branch.branch)
-
-        current_role = branch.find_role(user_branch.role)
-        role_index = branch.roles.index(current_role)
-
-        # check if user is on last role else set according to role index and new role level
-        new_role = branch.roles[-1] if len(branch.roles) - 1 < role_index + abs(role_level) else branch.roles[role_index + abs(role_level)]
-        guild_role = await self.set_role(branch, new_role)
-
-        # Sends user info about perks if role has them
-        if new_role.perks:
-            perks_str = "\n • ".join(new_role.perks)
-            perks_message = f'**Congrats** again on advancing to **{new_role.name}**!' \
+        if role.perks:
+            perks_str = "\n • ".join(role.perks)
+            perks_message = f'**Congrats** again on advancing to **{role.name}**!' \
                             f'\nThis role also gives you new **perks:**' \
                             f'\n • {perks_str}' \
                             f'\n\nFor more info on these perks ask one of the TLDR server mods'
@@ -530,8 +628,6 @@ class LevelingMember(LevelingUser):
             except Exception:
                 # TODO: maybe send message to bot channel
                 pass
-
-        return guild_role
 
     def rank(self, user_branch: LevelingUserBranch) -> int:
         """

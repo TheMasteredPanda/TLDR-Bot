@@ -5,7 +5,7 @@ import modules.database
 
 from discord.ext import commands
 
-db = modules.database.Connection()
+db = modules.database.get_connection()
 
 
 class Help:

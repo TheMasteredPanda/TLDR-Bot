@@ -13,7 +13,7 @@ from modules import database, format_time, embed_maker
 from discord.ext import commands
 
 
-db = database.Connection()
+db = database.get_connection()
 
 
 class Events(commands.Cog):
@@ -458,20 +458,12 @@ class Events(commands.Cog):
                     if role.name == before.name:
                         role.name = after.name
 
-                        result = db.leveling_data.update_one({
+                        db.leveling_users.update_many({
                             'guild_id': after.guild.id,
-                            f'leveling_routes.{branch.name[0]}': {'$elemMatch': {'name': before.name}}},
-                            {f'$set': {f'leveling_routes.{branch.name}.$.name': after.name}}
+                            f'{branch.name[0]}_role': before.name
+                        },
+                            {'$set': {f'{branch.name[0]}_role': after.name}}
                         )
-
-                        # check if any actual changes were made, if any were made, update users who had the role by the old name
-                        if result.modified_count > 0:
-                            db.leveling_users.update_many({
-                                'guild_id': after.guild.id,
-                                f'{branch.name[0]}_role': before.name
-                            },
-                                {'$set': {f'{branch.name[0]}_role': after.name}}
-                            )
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):

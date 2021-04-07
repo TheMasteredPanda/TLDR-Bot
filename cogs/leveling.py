@@ -16,7 +16,7 @@ from modules import embed_maker, cls, database, format_time, leveling
 from random import randint
 from discord.ext import commands
 from modules.reaction_menus import BookMenu
-db = database.Connection()
+db = database.get_connection()
 
 
 class Cooldown:
@@ -110,18 +110,10 @@ class Leveling(commands.Cog):
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time.time()) + 86400  # 24 hours
-        db.leveling_users.update_one(
-            {'guild_id': ctx.guild.id, 'user_id': ctx.author.id},
-            {'$set': {'rep_timer': expire, 'last_rep': member.id}}
-        )
         member_leveling_member.rep_timer = expire
         member_leveling_member.last_rep = member.id
 
         # give member rep point
-        db.leveling_users.update_one(
-            {'guild_id': ctx.guild.id, 'user_id': member.id},
-            {'$inc': {f'rp': 1}}
-        )
         member_leveling_member.rp += 1
 
         await embed_maker.message(ctx, description=f'Gave +1 rep to <@{member.id}>', send=True)
@@ -150,18 +142,12 @@ class Leveling(commands.Cog):
             else:
                 member_leveling_member.boosts.rep.expires = boost.expires + 1800  # 30 min
 
-            return db.leveling_users.update_one(
-                {'guild_id': ctx.guild.id, 'user_id': member.id},
-                {'$set': {f'boosts.rep.expires': member_leveling_member.boosts.rep.expires}})
+            return
 
         boost_dict = {
             'expires': round(time.time()) + (3600 * 6),
             'multiplier': 0.1,
         }
-        db.leveling_users.update_one(
-            {'guild_id': ctx.guild.id, 'user_id': member.id},
-            {'$set': {'boosts.rep': boost_dict}}
-        )
         member_leveling_member.boosts.rep = leveling.Boost(member_leveling_member, 'rep', boost_dict)
 
     @commands.command(
@@ -257,10 +243,8 @@ class Leveling(commands.Cog):
             'perks': []
         }
 
-        db.leveling_data.update_one(
-            {'guild_id': ctx.guild.id},
-            {'$push': {f'leveling_routes.{branch.name}': new_role}}
-        )
+        leveling_role = leveling.LevelingRole(ctx.guild, branch, new_role)
+        branch.roles.append(leveling_role)
 
         await embed_maker.message(
             ctx,
@@ -294,10 +278,7 @@ class Leveling(commands.Cog):
         if leveling_role is None:
             return await embed_maker.error(ctx, f"Couldn't find a {branch.name} role by the name {role}")
 
-        db.leveling_data.update_one(
-            {'guild_id': ctx.guild.id},
-            {'$pull': {f'leveling_routes.{branch.name}': leveling_role.name}}
-        )
+        branch.roles.remove(leveling_role)
 
         await embed_maker.message(
             ctx,
@@ -404,12 +385,6 @@ class Leveling(commands.Cog):
             to_remove = [int(num) - 1 for num in new_perks if num.isdigit() and 0 < int(num) <= len(leveling_role.perks)]
             leveling_role.perks = [perk for i, perk in enumerate(leveling_role.perks) if i not in to_remove]
 
-        db.leveling_data.update_one({
-            'guild_id': ctx.guild.id,
-            f'leveling_routes.{leveling_role.branch}': {'$elemMatch': {'name': leveling_role.name}}},
-            {f'$set': {f'leveling_routes.{leveling_role.branch}.$.perks': leveling_role.perks}}
-        )
-
         await embed_maker.message(
             ctx,
             description=message.format(**{'role': leveling_role}),
@@ -502,7 +477,6 @@ class Leveling(commands.Cog):
             if channel.id in leveling_guild.honours_channels:
                 return await embed_maker.message(ctx, description='That channel is already on the list', colour='red', send=True)
 
-            db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'honours_channels': channel.id}})
             leveling_guild.honours_channels.append(channel.id)
             msg = f'<#{channel.id}> has been added to the list of honours channels'
 
@@ -510,7 +484,6 @@ class Leveling(commands.Cog):
             if channel.id not in leveling_guild.honours_channels:
                 return await embed_maker.message(ctx, description='That channel is not on the list', colour='red', send=True)
 
-            db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'honours_channels': channel.id}})
             leveling_guild.honours_channels.remove(channel.id)
             msg = f'<#{channel.id}> has been removed from the list of honours channels'
 

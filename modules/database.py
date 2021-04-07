@@ -5,6 +5,8 @@ import discord
 
 from bson import ObjectId
 
+active_connection = None
+
 
 class Connection:
     def __init__(self):
@@ -19,6 +21,7 @@ class Connection:
         self.tickets = self.db['tickets']
         self.custom_commands = self.db['custom_commands']
         self.watchlist = self.db['watchlist']
+        self.cases = self.db['cases']
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
         leveling_user = self.leveling_users.find_one({
@@ -84,6 +87,39 @@ class Connection:
             automember = leveling_data['automember']
 
         return automember
+
+    def add_case(self, guild_id: int, type: str, reason: str, member: discord.member, moderator: discord.Member) -> dict:
+        case_number = self.cases.find({'guild_id': guild_id, 'user_id': member.id, 'type': type}).count() + 1
+
+        case_data = {
+            'guild_id': guild_id,
+            'user_id': member.id,
+            'type': type,
+            'reason': reason,
+            'created_at': time.time(),
+            'moderator': moderator.id,
+            'case_number': case_number
+        }
+        result = self.cases.insert_one(case_data)
+        case_data['_id'] = result.inserted_id
+
+        return case_data
+
+    def get_cases(self, guild_id: int, **kwargs):
+        query = {'guild_id': guild_id, **kwargs}
+        return [c for c in self.cases.find(query).sort({'created_at': 1})]
+
+    def add_case_logs(self, case_id: ObjectId, logs_url: str):
+        self.cases.update_one({'_id': case_id}, {'$set': {'logs_url': logs_url}})
+
+
+
+def get_connection():
+    global active_connection
+    if active_connection is None:
+        active_connection = Connection()
+
+    return active_connection
 
 
 schemas = {
