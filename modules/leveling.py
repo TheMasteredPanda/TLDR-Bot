@@ -111,7 +111,14 @@ class LevelingUserBoosts:
         return bool([*filter(lambda boost: boost.expires > 0, [self.rep, self.daily_debate])])
 
     def get_multiplier(self):
-        return 1 + sum(boost.multiplier for boost in self)
+        multiplier = 1
+        for boost in self:
+            if boost.has_expired():
+                boost.remove()
+
+            multiplier += boost.multiplier
+
+        return multiplier
 
     def __setattr__(self, key, value):
         """For some variables, changing their value will allo edit the entry in the database."""
