@@ -110,8 +110,8 @@ class Leveling(commands.Cog):
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time.time()) + 86400  # 24 hours
-        member_leveling_member.rep_timer = expire
-        member_leveling_member.last_rep = member.id
+        leveling_member.rep_timer = expire
+        leveling_member.last_rep = member.id
 
         # give member rep point
         member_leveling_member.rp += 1
