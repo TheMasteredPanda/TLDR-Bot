@@ -64,7 +64,7 @@ class LevelingUserSettings:
     """Class for storing leveling user settings"""
     def __init__(self, leveling_member: LevelingMember, settings: dict):
         self.member = leveling_member
-        self.at_me = settings['@_me']
+        self.at_me = settings.get('@_me', False)
 
     def toggle_at_me(self):
         """Toggle @_me setting"""
@@ -106,7 +106,7 @@ class LevelingUser:
             leveling_user_data['h_role']
         )
 
-        self.settings = LevelingUserSettings(leveling_member, leveling_user_data['settings'])
+        self.settings = LevelingUserSettings(leveling_member, leveling_user_data.get('settings', {}))
 
         # this is needed in some places like the leaderboard command
         self.reputation = LevelingUserBranch(
@@ -117,9 +117,9 @@ class LevelingUser:
             ''
         )
 
-        self.rp = leveling_user_data['rp']
-        self.last_rep = leveling_user_data['last_rep']
-        self.rep_timer = leveling_user_data['rep_timer']
+        self.rp = leveling_user_data.get('rp', 0)
+        self.last_rep = leveling_user_data.get('last_rep', 0)
+        self.rep_timer = leveling_user_data.get('rep_timer', 0)
 
         self.boosts = LevelingUserBoosts(leveling_member, leveling_user_data.get('boosts', {}))
 
@@ -139,8 +139,8 @@ class LevelingRole:
     def __init__(self, guild: discord.Guild, branch: str, leveling_role: dict):
         self.guild = guild
         self.branch = branch
-        self.name = leveling_role['name']
-        self.perks = leveling_role['perks']
+        self.name = leveling_role.get('name', '')
+        self.perks = leveling_role.get('perks', [])
 
     async def get_guild_role(self) -> discord.Role:
         """
@@ -179,8 +179,8 @@ class LevelingRoutes:
     """Class for the leveling routes in a guild."""
     def __init__(self, guild: discord.Guild, leveling_routes: dict):
         self.guild = guild
-        self.parliamentary = LevelingRoute(guild, 'parliamentary', leveling_routes['parliamentary'])
-        self.honours = LevelingRoute(guild, 'honours', leveling_routes['honours'])
+        self.parliamentary = LevelingRoute(guild, 'parliamentary', leveling_routes.get('parliamentary', []))
+        self.honours = LevelingRoute(guild, 'honours', leveling_routes.get('honours', []))
         self.reputation = LevelingRoute(guild, 'reputation', [])  # need in some places
 
     def get_leveling_role(self, role_name: str) -> LevelingRole:
@@ -204,8 +204,8 @@ class LevelingData:
     def __init__(self, guild: discord.Guild, leveling_data: dict):
         self.guild = guild
         self.level_up_channel = leveling_data.get('level_up_channel', 0)
-        self.leveling_routes = LevelingRoutes(guild, leveling_data['leveling_routes'])
-        self.honours_channels = leveling_data['honours_channels']
+        self.leveling_routes = LevelingRoutes(guild, leveling_data.get('leveling_routes', {}))
+        self.honours_channels = leveling_data.get('honours_channels', [])
         self.automember = leveling_data.get('automember', False)
 
     def toggle_automember(self):
