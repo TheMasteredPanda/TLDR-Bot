@@ -102,7 +102,7 @@ class LevelingUserBoosts:
         Iter over list of boosts, where boost is included if it has an actual expires time.
         If i a boost has an expires time of 0, it means it isn't set in the database
         """
-        yield from [*filter(lambda boost: boost.expires > 0 and not boost.has_expired(), [self.rep, self.daily_debate])]
+        yield from [*filter(lambda boost: boost.expires > 0 and boost.multiplier > 0 and not boost.has_expired(), [self.rep, self.daily_debate])]
 
     def __bool__(self):
         """
