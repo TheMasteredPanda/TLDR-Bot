@@ -35,20 +35,15 @@ class Connection:
 
         return leveling_user
 
-    def add_points(self, branch: str, guild_id: int, member_id: int, points: int):
-        self.leveling_users.update_one({
-            'guild_id': guild_id,
-            'user_id': member_id},
-            {
-                '$inc': {f'{branch[0]}p': points}
-            }
-        )
-
     def get_leveling_data(self, guild_id: int, fields: dict = None):
         if fields is None:
             fields = {}
 
-        leveling_data = self.leveling_data.find_one({'guild_id': guild_id}, fields)
+        if fields:
+            leveling_data = self.leveling_data.find_one({'guild_id': guild_id}, fields)
+        else:
+            leveling_data = self.leveling_data.find_one({'guild_id': guild_id})
+
         if not leveling_data:
             leveling_data = schemas['leveling_data']
             leveling_data['guild_id'] = guild_id

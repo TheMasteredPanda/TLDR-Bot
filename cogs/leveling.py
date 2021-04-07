@@ -3,25 +3,19 @@ import time
 import math
 import datetime
 import functools
-
+import re
 from bot import TLDR
 from modules.utils import (
-    Branch,
-    Role,
     ParseArgs,
-    get_leveling_role,
     get_user_clearance,
     get_member,
-    get_branch_role,
-    get_user_boost_multiplier,
     get_member_from_string
 )
 from typing import Union, Optional
-from modules import embed_maker, cls, database, format_time
+from modules import embed_maker, cls, database, format_time, leveling
 from random import randint
 from discord.ext import commands
 from modules.reaction_menus import BookMenu
-
 db = database.Connection()
 
 
@@ -81,14 +75,13 @@ class Leveling(commands.Cog):
             return await embed_maker.error(ctx, f'You need to be on this server for at least 7 days to give rep points')
 
         # check if user can give rep point
-        leveling_user = db.leveling_users.find_one({'guild_id': ctx.guild.id, 'user_id': ctx.author.id})
-        now = time.time()
-        if 'rep_timer' in leveling_user and now < leveling_user['rep_timer']:
-            rep_time = leveling_user['rep_timer'] - round(time.time())
+        leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
+        if not leveling_member.rep_timer_expired:
+            time_left = leveling_member.rep_time_left
             return await embed_maker.message(
                 ctx,
                 description=f'You can give someone a reputation point again in:\n'
-                            f'**{format_time.seconds(rep_time, accuracy=3)}**',
+                            f'**{format_time.seconds(time_left, accuracy=3)}**',
                 send=True
             )
 
@@ -110,11 +103,10 @@ class Leveling(commands.Cog):
             return await embed_maker.error(ctx, f'You can\'t give rep points to bots')
 
         # check last rep
-        if 'last_rep' in leveling_user and int(leveling_user['last_rep']) == member.id:
+        if leveling_member.last_rep == member.id:
             return await embed_maker.error(ctx, f'You can\'t give rep to the same person twice in a row')
 
-        # check if member is in database
-        member_leveling_user = db.get_leveling_user(ctx.guild.id, member.id)
+        member_leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, member.id)
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time.time()) + 86400  # 24 hours
@@ -122,12 +114,15 @@ class Leveling(commands.Cog):
             {'guild_id': ctx.guild.id, 'user_id': ctx.author.id},
             {'$set': {'rep_timer': expire, 'last_rep': member.id}}
         )
+        member_leveling_member.rep_timer = expire
+        member_leveling_member.last_rep = member.id
 
         # give member rep point
         db.leveling_users.update_one(
             {'guild_id': ctx.guild.id, 'user_id': member.id},
             {'$inc': {f'rp': 1}}
         )
+        member_leveling_member.rp += 1
 
         await embed_maker.message(ctx, description=f'Gave +1 rep to <@{member.id}>', send=True)
 
@@ -146,19 +141,18 @@ class Leveling(commands.Cog):
             pass
 
         # check if user already has rep boost, if they do, extend it by 30 minutes, otherwise add 10% boost for 6h
-        if 'boosts' in member_leveling_user and 'rep' in member_leveling_user['boosts']:
-            boost = member_leveling_user['boosts']['rep']
-            boost_expires = boost['expires']
+        if member_leveling_member.boosts.rep:
+            boost = member_leveling_member.boosts.rep
             # if boost is expired or boost + 30min is bigger than 6 hours set expire to 6 hours
-            if boost_expires < round(time.time()) or (boost_expires + 1800) - round(time.time()) > (3600 * 6):
-                expire = round(time.time()) + (3600 * 6)
+            if boost.expires < round(time.time()) or (boost.expires + 1800) - round(time.time()) > (3600 * 6):
+                member_leveling_member.boosts.rep.expires = round(time.time()) + (3600 * 6)
             # otherwise just expand expire by 30 minutes
             else:
-                expire = boost_expires + 1800  # 30 min
+                member_leveling_member.boosts.rep.expires = boost.expires + 1800  # 30 min
 
             return db.leveling_users.update_one(
                 {'guild_id': ctx.guild.id, 'user_id': member.id},
-                {'$set': {f'boosts.rep.expires': expire}})
+                {'$set': {f'boosts.rep.expires': member_leveling_member.boosts.rep.expires}})
 
         boost_dict = {
             'expires': round(time.time()) + (3600 * 6),
@@ -168,6 +162,7 @@ class Leveling(commands.Cog):
             {'guild_id': ctx.guild.id, 'user_id': member.id},
             {'$set': {'boosts.rep': boost_dict}}
         )
+        member_leveling_member.boosts.rep = leveling.Boost(member_leveling_member, 'rep', boost_dict)
 
     @commands.command(
         name='@_me',
@@ -178,19 +173,17 @@ class Leveling(commands.Cog):
         cls=cls.Command
     )
     async def at_me(self, ctx):
-        leveling_user = db.get_leveling_user(ctx.guild.id, ctx.author.id)
+        leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
 
-        if leveling_user['settings']['@_me']:
+        if leveling_member.settings.at_me:
             msg = 'Disabling @ when you level up'
             colour = 'orange'
         else:
             msg = 'Enabling @ when you level up'
             colour = 'green'
 
-        db.leveling_users.update_one(
-            {'guild_id': ctx.guild.id, 'user_id': ctx.author.id},
-            {'$set': {'settings': {'@_me': not bool(leveling_user['settings']['@_me'])}}}
-        )
+        leveling_member.settings.toggle_at_me()
+
         return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
 
     @commands.group(
@@ -213,22 +206,23 @@ class Leveling(commands.Cog):
 
         cls=cls.Group
     )
-    async def ranks(self, ctx: commands.Context, branch: Union[Branch, str] = 'parliamentary'):
+    async def ranks(self, ctx: commands.Context, branch: str = 'parliamentary'):
         if ctx.subcommand_passed is None and branch:
-            leveling_data = db.leveling_data.find_one({'guild_id': ctx.guild.id}, {'leveling_routes': 1})
-            leveling_routes = leveling_data['leveling_routes']
+            leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+            branch = leveling_guild.get_leveling_route(branch)
+
             embed = await embed_maker.message(ctx, author={'name': 'Ranks'})
 
             # Looks up how many people have a role
             count = {
-                role['name']: db.leveling_users.count({'guild_id': ctx.guild.id, f'{branch[0]}_role': role['name']})
-                for role in leveling_routes[branch]
+                role.name: db.leveling_users.count({'guild_id': ctx.guild.id, f'{branch.name[0]}_role': role.name, f'{branch.name[0]}p': {'$gt': 0}})
+                for role in branch.roles
             }
 
             value = ''
-            for i, role in enumerate(leveling_routes[branch]):
-                role_object = await get_leveling_role(ctx.guild, role['name'])
-                value += f'\n**#{i + 1}:** <@&{role_object.id}> - {count[role_object.name]} People'
+            for i, role in enumerate(branch.roles):
+                guild_role = await role.get_guild_role()
+                value += f'\n**#{i + 1}:** <@&{guild_role.id}> - {count[guild_role.name]} People'
 
             if not value:
                 value = 'This branch currently has no roles'
@@ -246,9 +240,14 @@ class Leveling(commands.Cog):
         clearance='admin',
         cls=cls.Command
     )
-    async def ranks_add(self, ctx: commands.Context, branch: Union[Branch, str] = None, *, role_name: str = None):
-        if not branch or type(branch) == int:
+    async def ranks_add(self, ctx: commands.Context, branch: str = None, *, role_name: str = None):
+        if branch is None:
             return await embed_maker.command_error(ctx)
+
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+        branch = leveling_guild.get_leveling_route(branch)
+        if branch is None:
+            branch = leveling_guild.leveling_routes.parliamentary
 
         if not role_name:
             return await embed_maker.command_error(ctx, '[role name]')
@@ -260,18 +259,18 @@ class Leveling(commands.Cog):
 
         db.leveling_data.update_one(
             {'guild_id': ctx.guild.id},
-            {'$push': {f'leveling_routes.{branch}': new_role}}
+            {'$push': {f'leveling_routes.{branch.name}': new_role}}
         )
 
         await embed_maker.message(
             ctx,
-            description=f'`{role_name}` has been added to the list of `{branch}` roles',
+            description=f'`{role_name}` has been added to the list of `{branch.name}` roles',
             colour='green',
             send=True
         )
 
         ctx.invoked_subcommand = ''
-        return await self.ranks(ctx, branch)
+        return await self.ranks(ctx, branch.name)
 
     @ranks.command(
         name='remove',
@@ -281,27 +280,34 @@ class Leveling(commands.Cog):
         clearance='admin',
         cls=cls.Command
     )
-    async def ranks_remove(self, ctx: commands.Context, branch: Union[Branch, str] = None, *, role: Union[Role, dict, str]):
+    async def ranks_remove(self, ctx: commands.Context, branch: str = None, *, role: str):
         if not branch or type(branch) == int:
             return await embed_maker.command_error(ctx)
 
-        if type(role) != dict:
-            return await embed_maker.error(ctx, f"Couldn't find a {branch} role by the name {role}")
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+        leveling_role = leveling_guild.get_leveling_role(role)
+
+        branch = leveling_guild.get_leveling_route(branch)
+        if branch is None:
+            branch = leveling_guild.leveling_routes.parliamentary
+
+        if leveling_role is None:
+            return await embed_maker.error(ctx, f"Couldn't find a {branch.name} role by the name {role}")
 
         db.leveling_data.update_one(
             {'guild_id': ctx.guild.id},
-            {'$pull': {f'leveling_routes.{branch}': role}}
+            {'$pull': {f'leveling_routes.{branch.name}': leveling_role.name}}
         )
 
         await embed_maker.message(
             ctx,
-            description=f'`{role["name"]}` has been remove from the list of `{branch}` roles',
+            description=f'`{leveling_role.name}` has been remove from the list of `{branch.name}` roles',
             colour='green',
             send=True
         )
 
         ctx.invoked_subcommand = ''
-        return await self.ranks(ctx, branch)
+        return await self.ranks(ctx, branch.name)
 
     @commands.group(
         invoke_without_command=True,
@@ -319,18 +325,18 @@ class Leveling(commands.Cog):
 
         cls=cls.Group
     )
-    async def perks(self, ctx: commands.Context, *, role: Union[Role, dict] = None):
+    async def perks(self, ctx: commands.Context, *, role: str = None):
         if ctx.subcommand_passed is None:
-            leveling_data = db.leveling_data.find_one({'guild_id': ctx.guild.id}, {'leveling_routes': 1})
+            leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
 
-            leveling_routes = leveling_data['leveling_routes']
-            honours_branch = leveling_routes['honours']
-            parliamentary_branch = leveling_routes['parliamentary']
+            leveling_routes = leveling_guild.leveling_routes
+            honours_branch = leveling_routes.honours
+            parliamentary_branch = leveling_routes.parliamentary
 
             if role is None:
                 # find roles that have perks
-                filtered_parliamentary = list(filter(lambda r: r['perks'], parliamentary_branch))
-                filtered_honours = list(filter(lambda r: r['perks'], honours_branch))
+                filtered_parliamentary = list(filter(lambda r: r.perks, parliamentary_branch))
+                filtered_honours = list(filter(lambda r: r.perks, honours_branch))
 
                 embed = await embed_maker.message(
                     ctx,
@@ -339,12 +345,12 @@ class Leveling(commands.Cog):
                 )
 
                 if filtered_parliamentary:
-                    parliamentary_str = '\n'.join(r['name'] for r in filtered_parliamentary)
+                    parliamentary_str = '\n'.join(r.name for r in filtered_parliamentary)
                 else:
                     parliamentary_str = 'Currently no Parliamentary roles offer any perks'
 
                 if filtered_honours:
-                    honours_str = '\n'.join(r['name'] for r in filtered_honours)
+                    honours_str = '\n'.join(r.name for r in filtered_honours)
                 else:
                     honours_str = 'Currently no Honours roles offer any perks'
 
@@ -353,29 +359,29 @@ class Leveling(commands.Cog):
 
                 return await ctx.send(embed=embed)
 
-            if type(role) == dict:
-                if not role['perks']:
-                    perks_str = f'**{role["name"]}** currently offers no perks'
+            if role:
+                leveling_role = leveling_guild.get_leveling_role(role)
+                if not leveling_role.perks:
+                    perks_str = f'**{leveling_role.name}** currently offers no perks'
                 else:
-                    perks_str = "\n".join([f'`#{i + 1}` - {perk}' for i, perk in enumerate(role['perks'])])
+                    perks_str = "\n".join([f'`#{i + 1}` - {perk}' for i, perk in enumerate(leveling_role.perks)])
 
                 return await embed_maker.message(
                     ctx,
                     description=perks_str,
-                    author={'name': f'{role["name"]} - Perks'},
+                    author={'name': f'{leveling_role.name} - Perks'},
                     send=True
                 )
 
             if 'Mod' in get_user_clearance(ctx.author):
                 return await embed_maker.error(ctx, 'Invalid sub command')
 
-    @staticmethod
-    async def modify_perks(ctx: commands.Context, command: str, args: dict, message: str) -> Optional[dict]:
+    async def modify_perks(self, ctx: commands.Context, command: str, args: dict, message: str) -> Optional[dict]:
         if args is None:
             return await embed_maker.command_error(ctx)
 
-        role_name = args['r']
-        new_perks = args['p']
+        role_name = args['role']
+        new_perks = args['perk']
 
         if not role_name:
             return await embed_maker.error(ctx, "Missing role arg")
@@ -383,38 +389,41 @@ class Leveling(commands.Cog):
         if not new_perks and command != 'pull':
             return await embed_maker.error(ctx, "Missing perks arg")
 
-        branch, role = get_branch_role(ctx.guild.id, role_name)
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+        leveling_role = leveling_guild.get_leveling_role(role_name)
+        if not leveling_role:
+            return await embed_maker.error(ctx, 'Invalid role provided.')
 
         if command == 'add':
-            role['perks'] += new_perks
+            leveling_role.perks += new_perks
         elif command == 'set':
-            role['perks'] = new_perks
+            leveling_role.perks = new_perks
         elif command == 'remove' and not new_perks:
-            role['perks'] = []
+            leveling_role.perks = []
         elif command == 'remove' and new_perks:
-            to_remove = [int(num) - 1 for num in new_perks if num.isdigit() and 0 < int(num) <= len(role['perks'])]
-            role['perks'] = [perk for i, perk in enumerate(role['perks']) if i not in to_remove]
+            to_remove = [int(num) - 1 for num in new_perks if num.isdigit() and 0 < int(num) <= len(leveling_role.perks)]
+            leveling_role.perks = [perk for i, perk in enumerate(leveling_role.perks) if i not in to_remove]
 
         db.leveling_data.update_one({
             'guild_id': ctx.guild.id,
-            f'leveling_routes.{branch}': {'$elemMatch': {'name': role['name']}}},
-            {f'$set': {f'leveling_routes.{branch}.$.perks': role['perks']}}
+            f'leveling_routes.{leveling_role.branch}': {'$elemMatch': {'name': leveling_role.name}}},
+            {f'$set': {f'leveling_routes.{leveling_role.branch}.$.perks': leveling_role.perks}}
         )
 
         await embed_maker.message(
             ctx,
-            description=message.format(**role),
+            description=message.format(**{'role': leveling_role}),
             colour='green',
             send=True
         )
 
         # send embed of role perks
-        perks_str = "\n".join([f'`#{i + 1}` - {perk}' for i, perk in enumerate(role['perks'])])
+        perks_str = "\n".join([f'`#{i + 1}` - {perk}' for i, perk in enumerate(leveling_role.perks)])
 
         return await embed_maker.message(
             ctx,
             description=perks_str,
-            author={'name': f'{role["name"]} - New Perks'},
+            author={'name': f'{leveling_role.name} - New Perks'},
             send=True
         )
 
@@ -431,7 +440,7 @@ class Leveling(commands.Cog):
         cls=cls.Command
     )
     async def perks_set(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
-        return await self.modify_perks(ctx, 'set', args, 'New perks have been set for role `{name}`')
+        return await self.modify_perks(ctx, 'set', args, 'New perks have been set for role `{role.name}`')
 
     @perks.command(
         name='add',
@@ -446,7 +455,7 @@ class Leveling(commands.Cog):
         cls=cls.Command
     )
     async def perks_add(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
-        return await self.modify_perks(ctx, 'add', args, 'New perks have been added for role `{name}`')
+        return await self.modify_perks(ctx, 'add', args, 'New perks have been added for role `{role.name}`')
 
     @perks.command(
         name='remove',
@@ -464,7 +473,7 @@ class Leveling(commands.Cog):
         cls=cls.Command
     )
     async def perks_remove(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
-        return await self.modify_perks(ctx, 'remove', args, 'Perks have been removed from role `{name}`')
+        return await self.modify_perks(ctx, 'remove', args, 'Perks have been removed from role `{role.name}`')
 
     @commands.command(
         help='See all the honours channels or add or remove a channel from the list of honours channels',
@@ -474,12 +483,11 @@ class Leveling(commands.Cog):
         cls=cls.Command
     )
     async def honours_channels(self, ctx, action: str = None, channel: discord.TextChannel = None):
-        leveling_data = db.leveling_data.find_one({'guild_id': ctx.guild.id}, {'honours_channels': 1})
-        honours_channels = leveling_data['honours_channels']
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
 
         if action is None:
             # display list of honours channels
-            channel_list_str = ', '.join(f'<#{channel}>' for channel in honours_channels) if honours_channels else 'None'
+            channel_list_str = ', '.join(f'<#{channel}>' for channel in leveling_guild.honours_channels) if leveling_guild.honours_channels else 'None'
             return await embed_maker.message(ctx, description=channel_list_str, send=True)
 
         if action not in ['add', 'remove']:
@@ -491,17 +499,19 @@ class Leveling(commands.Cog):
         msg = ''
 
         if action == 'add':
-            if channel.id in honours_channels:
+            if channel.id in leveling_guild.honours_channels:
                 return await embed_maker.message(ctx, description='That channel is already on the list', colour='red', send=True)
 
             db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$push': {f'honours_channels': channel.id}})
+            leveling_guild.honours_channels.append(channel.id)
             msg = f'<#{channel.id}> has been added to the list of honours channels'
 
         if action == 'remove':
-            if channel.id not in honours_channels:
+            if channel.id not in leveling_guild.honours_channels:
                 return await embed_maker.message(ctx, description='That channel is not on the list', colour='red', send=True)
 
             db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$pull': {f'honours_channels': channel.id}})
+            leveling_guild.honours_channels.remove(channel.id)
             msg = f'<#{channel.id}> has been removed from the list of honours channels'
 
         return await embed_maker.message(ctx, description=msg, colour='green', send=True)
@@ -513,29 +523,31 @@ class Leveling(commands.Cog):
         clearance='User',
         cls=cls.Command
     )
-    async def mlu(self, ctx: commands.Context, level: float = None):
-        leveling_user = db.get_leveling_user(ctx.guild.id, ctx.author.id)
+    async def mlu(self, ctx: commands.Context, level: Union[float, str] = None):
+        # incase somebody typed something that isnt a level
+        if type(level) == str:
+            level = None
 
-        p_level = leveling_user['p_level']
-        pp = leveling_user['pp']
-
+        leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
+        user_level = leveling_member.parliamentary.level
+        points = leveling_member.parliamentary.points
         if not level:
             # points needed until level_up
-            pp_till_next_level = round((5 / 6) * (p_level + 1) * (2 * (p_level + 1) * (p_level + 1) + 27 * (p_level + 1) + 91)) - pp
+            pp_till_next_level = round((5 / 6) * (user_level + 1) * (2 * (user_level + 1) * (user_level + 1) + 27 * (user_level + 1) + 91)) - points
             avg_msg_needed = math.ceil(pp_till_next_level / 20)
 
             # points needed to rank up
-            user_rank = await user_role_level('parliamentary', leveling_user)
+            user_rank = leveling_member.user_role_level(leveling_member.parliamentary)
             missing_levels = 6 - user_rank
 
-            rank_up_level = p_level + missing_levels
-            pp_needed_rank_up = round((5 / 6) * rank_up_level * (2 * rank_up_level * rank_up_level + 27 * rank_up_level + 91)) - pp
+            rank_up_level = user_level + missing_levels
+            pp_needed_rank_up = round((5 / 6) * rank_up_level * (2 * rank_up_level * rank_up_level + 27 * rank_up_level + 91)) - points
             avg_msg_rank_up = math.ceil(pp_needed_rank_up / 20)
             description = f'Messages needed to:\n'\
                           f'Level up: **{avg_msg_needed}**\n'\
                           f'Rank up: **{avg_msg_rank_up}**'
         else:
-            pp_needed = round((5 / 6) * level * (2 * level * level + 27 * level + 91)) - pp
+            pp_needed = round((5 / 6) * level * (2 * level * level + 27 * level + 91)) - points
             avg_msg_needed = math.ceil(pp_needed / 20)
             description = f'Messages needed to reach level `{level}`: **{avg_msg_needed}**'
 
@@ -546,19 +558,14 @@ class Leveling(commands.Cog):
             send=True
         )
 
-    @staticmethod
-    async def construct_lb_str(ctx: commands.Context, branch: str, sorted_users: list, index: int, your_pos: bool = False):
+    async def construct_lb_str(self, ctx: commands.Context, branch: leveling.LevelingRoute, sorted_users: list, index: int, your_pos: bool = False):
         lb_str = ''
         for i, leveling_user in enumerate(sorted_users):
-            user_id = leveling_user['user_id']
-
-            member = ctx.guild.get_member(int(user_id))
-            if member is None:
-                member = await ctx.guild.fetch_member(int(user_id))
-
+            leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, leveling_user['user_id'])
             addition = 0 if your_pos else 1
 
-            if user_id == ctx.author.id:
+            member = leveling_member.member
+            if leveling_member.id == ctx.author.id:
                 lb_str += rf'**`#{index + i + addition}`**\* - {member.display_name}'
             else:
                 lb_str += f'`#{index + i + addition}` - {member.display_name}'
@@ -568,21 +575,22 @@ class Leveling(commands.Cog):
 
             pre = '\n' if not your_pos else ' | '
 
-            if branch[0] in ['p', 'h']:
-                user_role_name = leveling_user[f'{branch[0]}_role']
-                user_role = await get_leveling_role(ctx.guild, user_role_name)
-                role_level = await user_role_level(branch, leveling_user)
-                progress_percent = percent_till_next_level(branch, leveling_user)
+            # parliamentary and honours branches need different things from rep
+            if branch.name[0] in ['p', 'h']:
+                user_branch = leveling_member.parliamentary if branch.name[0] == 'p' else leveling_member.honours
+                user_role = await leveling_member.guild.get_leveling_role(user_branch.role).get_guild_role()
+                role_level = leveling_member.user_role_level(user_branch)
+                progress_percent = leveling_member.percent_till_next_level(user_branch)
+
                 lb_str += f'{pre}**Level {role_level}** <@&{user_role.id}> | Progress: **{progress_percent}%**\n'
                 if not your_pos:
                     lb_str += '\n'
             else:
-                rep = leveling_user['rp']
-                lb_str += f' | **{rep} Reputation**\n'
+                lb_str += f' | **{leveling_member.rp} Reputation**\n'
 
         return lb_str
 
-    async def construct_lb_embed(self, ctx: commands.Context, branch: str, sorted_users: list, page_size_limit: int, user_index: int, max_page_num: int, *, page: int):
+    async def construct_lb_embed(self, ctx: commands.Context, branch: leveling.LevelingRoute, user_index: int, sorted_users: list, page_size_limit: int, max_page_num: int, *, page: int):
         sorted_users_page = sorted_users[page_size_limit * (page - 1):page_size_limit * page]
         leaderboard_str = await self.construct_lb_str(ctx, branch, sorted_users_page, index=page_size_limit * (page - 1))
         description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
@@ -591,7 +599,7 @@ class Leveling(commands.Cog):
             ctx,
             description=description,
             footer={'text': f'{ctx.author} | Page {page}/{max_page_num}'},
-            author={'name': f'{branch.title()} Leaderboard'}
+            author={'name': f'{branch.name.title()} Leaderboard'}
         )
 
         # Displays user position under leaderboard and users above and below them if user is below position 10
@@ -611,14 +619,17 @@ class Leveling(commands.Cog):
         cls=cls.Command
     )
     async def leaderboard(self, ctx: commands.Context, branch: str = 'parliamentary', page: int = 1):
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+        leveling_routes = leveling_guild.leveling_routes
+
         if branch.isdigit():
             page = int(branch)
-            branch = 'parliamentary'
+            branch = leveling_guild.leveling_routes.parliamentary
         else:
-            branch_switch = {'p': 'parliamentary', 'h': 'honours', 'r': 'reputation'}
-            branch = branch_switch.get(branch[0], 'parliamentary')
+            branch_switch = {'p': leveling_routes.parliamentary, 'h': leveling_routes.honours, 'r': leveling_routes.reputation}
+            branch = branch_switch.get(branch[0], leveling_routes.parliamentary)
 
-        key = f'{branch[0]}p'
+        key = f'{branch.name[0]}p'
         # get list of users sorted by points who have more than 0 points
         sorted_users = [u for u in db.leveling_users.find({'guild_id': ctx.guild.id, key: {'$gt': 0}}).sort(key, -1)]
 
@@ -640,9 +651,9 @@ class Leveling(commands.Cog):
             self.construct_lb_embed,
             ctx,
             branch,
+            user_index,
             sorted_users,
             page_size_limit,
-            user_index,
             max_page_num
         )
 
@@ -662,38 +673,54 @@ class Leveling(commands.Cog):
 
         self.bot.reaction_menus.add(menu)
 
-    async def branch_rank_str(self, branch: str, guild: discord.Guild, member: discord.Member, leveling_user: dict, verbose: bool):
-        prefix = branch[0]
-        # add parliamentary section
-        role_level = await user_role_level(branch, leveling_user)
-        role_name = leveling_user[f'{prefix}_role']
+    async def branch_rank_str(self, user_branch: leveling.LevelingUserBranch, leveling_member: leveling.LevelingMember, verbose: bool):
+        role_level = leveling_member.user_role_level(user_branch)
 
         # calculate user rank by counting users who have more points than user
-        rank = get_user_rank(guild.id, branch, leveling_user)
+        rank = leveling_member.rank(user_branch)
 
-        role_object = await get_leveling_role(guild, role_name, member)
-        progress = percent_till_next_level(branch, leveling_user)
+        leveling_role = leveling_member.guild.get_leveling_role(user_branch.role)
+        guild_role = await leveling_role.get_guild_role()
+
+        progress = leveling_member.percent_till_next_level(user_branch)
 
         if verbose:
-            points = int(leveling_user[f'{prefix}p'])
-            level = int(leveling_user[f'{prefix}_level'])
-
-            points_till_next_level = round(5 / 6 * (level + 1) * (2 * (level + 1) * (level + 1) + 27 * (level + 1) + 91))
+            points_till_next_level = round(5 / 6 * (user_branch.level + 1) * (2 * (user_branch.level + 1) * (user_branch.level + 1) + 27 * (user_branch.level + 1) + 91))
             cooldown_object = self.pp_cooldown
 
-            cooldown = f'{cooldown_object.user_cooldown(guild.id, member.id)} seconds'
+            cooldown = f'{cooldown_object.user_cooldown(leveling_member.guild.id, leveling_member.id)} seconds'
 
             rank_str = f'**Rank:** `#{rank}`\n' \
-                       f'**Role:** <@&{role_object.id}>\n' \
+                       f'**Role:** <@&{guild_role.id}>\n' \
                        f'**Role Level:** {role_level}\n' \
-                       f'**Total Level:** {level}\n' \
-                       f'**Points:** {points}/{points_till_next_level}\n' \
+                       f'**Total Level:** {user_branch.level}\n' \
+                       f'**Points:** {user_branch.points}/{points_till_next_level}\n' \
                        f'**Progress:** {progress}%\n' \
                        f'**Cooldown**: {cooldown}'
         else:
-            rank_str = f'**#{rank}** | **Level** {role_level} <@&{role_object.id}> | Progress: **{progress}%**'
+            rank_str = f'**#{rank}** | **Level** {role_level} <@&{guild_role.id}> | Progress: **{progress}%**'
 
         return rank_str
+
+    @staticmethod
+    async def rep_rank_str(leveling_member: leveling.LevelingMember, verbose: bool):
+        # this is kind of scuffed, but it works
+        rank = leveling_member.rank(leveling.LevelingUserBranch(leveling_member, 'rep', leveling_member.rp, 0, ''))
+        if verbose:
+            rep_time = int(leveling_member.rep_timer) - round(time.time())
+            if rep_time < 0:
+                rep_time = 0
+
+            rep_time_str = format_time.seconds(rep_time, accuracy=10)
+
+            last_rep = f'<@{leveling_member.last_rep}>' if leveling_member.last_rep else 'None'
+            rep_str = f"**Reputation:** {leveling_member.rp}\n" \
+                      f"**Rep timer:** {rep_time_str}\n" \
+                      f"**Last Rep: {last_rep}**\n"
+        else:
+            rep_str = f'**#{rank}** | **{leveling_member.rp}** reputation'
+
+        return rep_str
 
     @commands.command(
         help='Shows your (or someone else\'s) rank and level, add -v too see all the data',
@@ -703,12 +730,12 @@ class Leveling(commands.Cog):
         cls=cls.Command
     )
     async def rank(self, ctx: commands.Context, *, user_input: str = ''):
-        verbose = '-v' in user_input
+        verbose = bool(re.findall(r'(?:\s|^)(-v)(?:\s|$)', user_input))
 
-        user_input = user_input.replace('-v', '').strip()
+        user_input = re.sub(r'((\s|^)-v(\s|$))', '', user_input)
 
         # set member to author if user_input is just -v or user_input isn't provided
-        if not user_input or user_input.rstrip() == '-v':
+        if not user_input:
             member = ctx.author
         else:
             member = await get_member(ctx, user_input)
@@ -724,353 +751,74 @@ class Leveling(commands.Cog):
             author={'name': f'{member.name} - Rank'}
         )
 
+        leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, member.id)
+
         # inform user of boost, if they have it
-        boost_multiplier = get_user_boost_multiplier(member)
-        if boost_multiplier > 0:
-            boost_percent = round(boost_multiplier * 100, 1)
+        boost_multiplier = leveling_member.boosts.get_multiplier()
+        if boost_multiplier > 1:
+            boost_percent = round((boost_multiplier - 1) * 100, 1)
 
             if boost_percent.is_integer():
                 boost_percent = int(boost_percent)
 
             rank_embed.description = f'Active boost: **{boost_percent}%** parliamentary points gain!'
 
-        leveling_user = db.get_leveling_user(ctx.guild.id, member.id)
-
-        if leveling_user['hp'] > 0:
-            hp_str = await self.branch_rank_str('honours', ctx.guild, member, leveling_user, verbose)
+        if leveling_member.honours.points > 0:
+            user_branch = leveling_member.honours
+            hp_str = await self.branch_rank_str(user_branch, leveling_member, verbose)
             rank_embed.add_field(name='>Honours', value=hp_str, inline=False)
 
-        pp_str = await self.branch_rank_str('parliamentary', ctx.guild, member, leveling_user, verbose)
+        user_branch = leveling_member.parliamentary
+        pp_str = await self.branch_rank_str(user_branch, leveling_member, verbose)
         rank_embed.add_field(name='>Parliamentary', value=pp_str, inline=False)
 
-        if leveling_user['rp']:
-            rank = get_user_rank(ctx.guild.id, 'rep', leveling_user)
-            if verbose:
-                rep_time = int(leveling_user['rep_timer']) - round(time.time())
-                if rep_time < 0:
-                    rep_time = 0
-
-                rep_time_str = format_time.seconds(rep_time, accuracy=10)
-
-                last_rep = f'<@{leveling_user["last_rep"]}>' if leveling_user["last_rep"] else 'None'
-                rep_str = f"**Reputation:** {leveling_user['rp']}\n" \
-                          f"**Rep timer:** {rep_time_str}\n" \
-                          f"**Last Rep: {last_rep}**\n"
-            else:
-                rep_str = f'**#{rank}** | **{leveling_user["rp"]}** reputation'
-
+        if leveling_member.rp:
+            rep_str = await self.rep_rank_str(leveling_member, verbose)
             rank_embed.add_field(name='>Reputation', value=rep_str, inline=False)
 
         # add boosts field
-        if verbose and 'boosts' in leveling_user:
+        if verbose and leveling_member.boosts:
             boost_str = ''
-            i = 1
-            user_boosts = leveling_user['boosts']
-            for boost_type, boost_data in user_boosts.items():
-                expires = boost_data["expires"]
-                if expires < round(time.time()):
-                    db.leveling_users(
-                        {'guild_id': ctx.guild.id, 'user_id': member.id},
-                        {'$unset': f'boosts.{boost_type}'}
-                    )
-                    continue
-
-                multiplier = boost_data["multiplier"]
-                percent = round(multiplier * 100, 1)
-
-                if percent.is_integer():
-                    percent = int(percent)
-
-                boost_str += f'`#{i}` - {percent}% boost | Expires: {format_time.seconds(expires - round(time.time()), accuracy=5)}'
-                boost_str += f' | Type: {boost_type}\n'
-
-                i += 1
+            for i, boost in enumerate(leveling_member.boosts):
+                percent = round((boost.multiplier - 1) * 100, 1)
+                boost_str += f'`#{i + 1}` - {percent}% boost | Expires: {format_time.seconds(boost.expires - round(time.time()), accuracy=5)}'
+                boost_str += f' | Type: {boost.boost_type}\n'
 
             boost_str = 'None' if not boost_str else boost_str
             rank_embed.add_field(name='>Boosts', value=boost_str)
 
         if verbose:
-            if "settings" not in leveling_user or "@_me" not in leveling_user['settings']:
-                leveling_user["settings"] = {}
-                leveling_user["settings"]["@_me"] = False
-
-            rank_embed.add_field(name='>Settings', value=f'**@_me:** {leveling_user["settings"]["@_me"]}', inline=False)
+            rank_embed.add_field(name='>Settings', value=f'**@_me:** {leveling_member.settings.at_me}', inline=False)
 
         return await ctx.send(embed=rank_embed)
-
-    @staticmethod
-    async def advance_user_role(message: discord.Message, branch: str, leveling_user: dict, leveling_data: dict, role_level: int) -> discord.Role:
-        prefix = branch[0]
-
-        leveling_routes = leveling_data['leveling_routes']
-        roles = leveling_routes[branch]
-
-        branch_role = next(filter(lambda rl: rl['name'] == leveling_user[f'{prefix}_role'], roles))
-        role_index = roles.index(branch_role)
-
-        # check if user is on last role else set according to role index and new role level
-        new_role = roles[-1] if len(roles) - 1 < role_index + abs(role_level) else roles[role_index + abs(role_level)]
-        new_role_obj = await get_leveling_role(message.guild, new_role['name'], message.author)
-
-        db.leveling_users.update_one({
-            'guild_id': message.guild.id,
-            'user_id': message.author.id},
-            {
-                '$set': {f'{prefix}_role': new_role_obj.name}
-            }
-        )
-
-        # Sends user info about perks if role has them
-        if new_role['perks']:
-            perks_str = "\n • ".join(new_role['perks'])
-            perks_message = f'**Congrats** again on advancing to **{new_role["name"]}**!' \
-                            f'\nThis role also gives you new **perks:**' \
-                            f'\n • {perks_str}' \
-                            f'\n\nFor more info on these perks ask one of the TLDR server mods'
-
-            perks_embed = await embed_maker.message(
-                message,
-                description=perks_message,
-                author={'name': 'New Perks!'}
-            )
-
-            try:
-                await message.author.send(embed=perks_embed)
-            # in case user doesnt allow dms from bot
-            except:
-                pass
-
-        return new_role_obj
-
-    async def level_up_message(self, message: discord.Message, leveling_user: dict, reward_text: str):
-        embed = await embed_maker.message(
-            message,
-            description=reward_text,
-            author={'name': 'Level Up!'}
-        )
-
-        leveling_data = db.get_leveling_data(message.guild.id, {'level_up_channel': 1})
-        channel_id = leveling_data['level_up_channel']
-
-        # get channel where to send level up message
-        channel = self.bot.get_channel(channel_id)
-        if channel is None:
-            channel = message.channel
-
-        # check if settings needs to be added to user document
-        if 'settings' not in leveling_user:
-            db.leveling_users.update_one({
-                'guild_id': message.guild.id,
-                'user_id': message.author.id},
-                {
-                    '$set': {'settings': {'@_me': False}}
-                }
-            )
-            leveling_user['settings'] = {'@_me': False}
-
-        # true if user wants to be @'d when they level up
-        enabled = leveling_user['settings']['@_me']
-
-        content = f'<@{message.author.id}>' if enabled else ''
-
-        await channel.send(embed=embed, content=content)
-
-    async def level_up(self, branch: str, leveling_user: dict, message: discord.Message):
-        prefix = branch[0]
-        levels_up = calc_levels_up(branch, leveling_user)
-        leveling_user[f'{prefix}_level'] += levels_up
-        user_role_name = leveling_user[f'{prefix}_role']
-
-        if not user_role_name:
-            return
-
-        # Checks if user has role
-        new_role = await get_leveling_role(message.guild, user_role_name, message.author)
-        # get user role level
-        role_level = await user_role_level(branch, leveling_user)
-
-        # return if user hasn't leveled up and they dont need to go up roles
-        if not levels_up and role_level >= 0:
-            return
-
-        leveling_data = db.get_leveling_data(message.guild.id, {'level_up_channel': 1, 'leveling_routes': 1})
-
-        # user needs to go up a role
-        if role_level < 0:
-            new_role = await self.advance_user_role(message, branch, leveling_user, leveling_data, role_level)
-            leveling_user[f'{prefix}_role'] = new_role.name
-
-            role_level = await user_role_level(branch, leveling_user)
-            reward_text = f'Congrats **{message.author.name}** you\'ve advanced to a level **{role_level}** <@&{new_role.id}>'
-
-        else:
-            reward_text = f'Congrats **{message.author.name}** you\'ve become a level **{role_level}** <@&{new_role.id}>'
-
-        reward_text += ' due to your contributions!' if branch == 'honours' else '!'
-
-        db.leveling_users.update_one({
-            'guild_id': message.guild.id,
-            'user_id': message.author.id},
-            {
-                '$inc': {f'{prefix}_level': levels_up}
-            }
-        )
-
-        await self.level_up_message(message, leveling_user, reward_text)
 
     async def process_message(self, message: discord.Message):
         author = message.author
         guild = message.guild
 
-        leveling_user = db.get_leveling_user(guild.id, author.id)
-        leveling_data = db.get_leveling_data(guild.id, {'leveling_routes': 1, 'honours_channels': 1})
-        leveling_routes = leveling_data['leveling_routes']
+        leveling_member = await self.bot.leveling_system.get_member(guild.id, author.id)
 
         # level parliamentary route
         if not self.pp_cooldown.user_cooldown(guild.id, author.id):
-            # adds parliamentary role to user if it's their first parliamentary points gain
-            if leveling_user['pp'] == 0:
-                p_role = leveling_routes['parliamentary'][0]
-                await get_leveling_role(guild, p_role['name'], author)
-                db.leveling_users.update_one({
-                    'guild_id': guild.id,
-                    'user_id': author.id},
-                    {
-                        '$set': {'p_role': p_role['name']}
-                    }
-                )
-
-                leveling_user['p_role'] = p_role['name']
-
             pp_add = randint(15, 25)
+            await leveling_member.add_points('parliamentary', pp_add)
 
-            # check for active boost and add to pp_add if active
-            boost_multiplier = get_user_boost_multiplier(message.author)
-            if boost_multiplier > 0:
-                pp_add = round(pp_add * (1 + boost_multiplier))
+            branch = leveling_member.guild.get_leveling_route('parliamentary')
+            current_role, levels_up, roles_up = await leveling_member.level_up(branch)
 
-            leveling_user['pp'] += pp_add
-            db.add_points('parliamentary', guild.id, author.id, pp_add)
-
-            await self.level_up('parliamentary', leveling_user, message)
+            if levels_up:
+                await leveling_member.level_up_message(message, leveling_member.parliamentary, current_role, roles_up)
 
         # level honours route
-        if message.channel.id in leveling_data['honours_channels'] and not self.hp_cooldown.user_cooldown(guild.id, author.id):
-            # adds honours role to user if it's their first honours points gain
-            if leveling_user['hp'] == 0:
-                h_role = leveling_routes['honours'][0]
-                await get_leveling_role(guild, h_role['name'], author)
-                db.leveling_users.update_one({
-                    'guild_id': guild.id,
-                    'user_id': author.id},
-                    {
-                        '$set': {'h_role': h_role['name']}
-                    }
-                )
-
-                leveling_user['h_role'] = h_role['name']
-
+        if message.channel.id in leveling_member.guild.honours_channels and not self.hp_cooldown.user_cooldown(guild.id, author.id):
             hp_add = randint(7, 12)
-            leveling_user['hp'] += hp_add
-            db.add_points('honours', guild.id, author.id, hp_add)
+            await leveling_member.add_points('honours', hp_add)
 
-            await self.level_up('honours', leveling_user, message)
+            branch = leveling_member.guild.get_leveling_route('honours')
+            current_role, levels_up, roles_up = await leveling_member.level_up(branch)
 
-
-def get_user_rank(guild_id, branch: str, leveling_user: dict) -> int:
-    points = f'{branch[0]}p'
-    if points not in leveling_user:
-        leveling_user[points] = 0
-
-    sorted_users = [u for u in db.leveling_users.find({
-        'guild_id': guild_id,
-        points: {'$gt': leveling_user[points] - 0.1}
-    }).sort(points, -1)]
-
-    return sorted_users.index(leveling_user) + 1
-
-
-def calc_levels_up(branch: Union[Branch, str], leveling_user: dict) -> int:
-    user_levels = leveling_user[f'{branch[0]}_level']
-    user_points = leveling_user[f'{branch[0]}p']
-
-    total_points = 0
-    total_levels_up = 0
-    while total_points <= user_points:
-        next_level = user_levels + total_levels_up + 1
-        # total points needed to gain the next level
-        total_points = round(5 / 6 * next_level * (2 * next_level * next_level + 27 * next_level + 91))
-
-        total_levels_up += 1
-
-    return total_levels_up - 1
-
-
-async def user_role_level(branch: str, leveling_user: dict) -> int:
-    """Return negative number if user needs to go up role(s) otherwise returns positive number of users role level."""
-
-    prefix = branch[0]
-
-    user_level = leveling_user[f'{prefix}_level']
-    user_role_name = leveling_user[f'{prefix}_role']
-
-    leveling_data = db.get_leveling_data(leveling_user['guild_id'], {'leveling_routes': 1})
-    leveling_routes = leveling_data['leveling_routes']
-    all_roles = leveling_routes[branch]
-
-    user_role = next(filter(lambda role: role['name'] == user_role_name, all_roles), None)
-    if not user_role:
-        # return 0 if user's current role isn't listen in the branch
-        return 0
-
-    role_index = all_roles.index(user_role)
-
-    # + 1 includes current role
-    up_to_current_role = all_roles[:role_index + 1]
-
-    # how many levels to reach current user role
-    current_level_total = 5 * len(up_to_current_role)
-
-    # how many levels to reach previous user role
-    previous_level_total = 5 * len(up_to_current_role[:-1])
-
-    # if user is on last role user level - how many levels it took to reach previous role
-    # or if current level total is bigger than user level
-    if len(all_roles) == role_index + 1 or current_level_total > user_level:
-        return int(user_level - previous_level_total)
-
-    # if current level total equals user level return current roles max level
-    if current_level_total == user_level:
-        return 5
-
-    # if current level total is smaller than user level, user needs to level up
-    if current_level_total < user_level:
-        # calculates how many roles user goes up
-        roles_up = 0
-        # loop through roles above current user role
-        for _ in all_roles[role_index + 1:]:
-            if current_level_total < user_level:
-                roles_up += 1
-                current_level_total += 5
-
-        return -roles_up
-
-
-def percent_till_next_level(branch: str, leveling_user: dict) -> float:
-    user_points = leveling_user[f'{branch[0]}p']
-    user_level = leveling_user[f'{branch[0]}_level']
-
-    # points needed to gain next level from beginning of user level
-    points_to_level_up = (5 * (user_level ** 2) + 50 * user_level + 100)
-
-    next_level = user_level + 1
-    # total points needed to gain next level
-    total_points_to_next_level = round(5 / 6 * next_level * (2 * next_level * next_level + 27 * next_level + 91))
-    points_needed = total_points_to_next_level - int(user_points)
-
-    percent = math.floor((100 - ((points_needed * 100) / points_to_level_up)) * 10) / 10
-
-    return percent
+            if levels_up:
+                await leveling_member.level_up_message(message, leveling_member.honours, current_role, roles_up)
 
 
 def setup(bot):

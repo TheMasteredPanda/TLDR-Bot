@@ -1524,7 +1524,9 @@ class Mod(commands.Cog):
             msg = 'Enabling automember'
             colour = 'green'
 
-        db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$set': {'automember': new_automember}})
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+        leveling_guild.toggle_automember()
+
         return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
 
 

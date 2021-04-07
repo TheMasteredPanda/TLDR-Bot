@@ -2,9 +2,8 @@ import discord
 import re
 import asyncio
 import config
-import time
 
-from typing import Optional, Tuple, Union
+from typing import Tuple, Union
 from modules import embed_maker, database
 from discord.ext import commands
 
@@ -16,34 +15,12 @@ class Command(commands.Converter):
         return ctx.bot.get_command(argument, member=ctx.author)
 
 
-class Role(commands.Converter):
-    async def convert(self, ctx: commands.Context, argument: str = ''):
-        if not ctx.guild:
-            return argument
-
-        # check if role is in a leveling route before fetching discord role
-        branch, role = get_branch_role(ctx.guild.id, argument)
-        if not branch or not role:
-            return argument
-
-        # make sure the role actually exists on the guild
-        await get_leveling_role(ctx.guild, argument)
-
-        return role
-
-
-class Branch(commands.Converter):
-    async def convert(self, ctx: commands.Context, argument: str = ''):
-        branch_switch = {'p': 'parliamentary', 'h': 'honours'}
-        return branch_switch.get(argument[0], 'parliamentary')
-
-
 class ParseArgs(commands.Converter, dict):
     async def convert(self, ctx: commands.Context, argument: str = '') -> dict:
         result = {}
         # replace short-form args with long-form args
         for arg, _ in ctx.command.docs.command_args:
-            argument = re.sub(arg[1], arg[0], argument)
+            argument = re.sub(rf'(?:\s|^)({arg[1]})(?:\s|$)', arg[0], argument)
             result[arg[0][2:]] = None
 
         # create regex to match command args
@@ -99,28 +76,6 @@ def get_custom_emote(ctx, emote):
     return result
 
 
-def get_user_boost_multiplier(member):
-    multiplier = 0
-
-    leveling_user = db.get_leveling_user(member.guild.id, member.id)
-    if 'boosts' not in leveling_user:
-        return multiplier
-
-    user_boosts = leveling_user['boosts']
-    for boost_type, boost_data in user_boosts.items():
-        expires = boost_data['expires']
-        if round(time.time()) > expires:
-            db.leveling_users.update_one(
-                {'guild_id': member.guild.id, 'user_id': member.id},
-                {'$unset': {f'boosts.{boost_type}': 1}}
-            )
-            continue
-
-        multiplier += boost_data['multiplier']
-
-    return multiplier
-
-
 async def get_guild_role(guild: discord.Guild, role_identifier: str):
     match = id_match(role_identifier, r'<@&([0-9]+)>$')
     if match:
@@ -129,41 +84,6 @@ async def get_guild_role(guild: discord.Guild, role_identifier: str):
         role = discord.utils.find(lambda rl: rl.name == role_identifier, guild.roles)
 
     return role
-
-
-async def get_leveling_role(guild: discord.Guild, role_identifier: str, member: discord.Member = None) -> discord.Role:
-    # check if role_identifier is id
-    role = await get_guild_role(guild, role_identifier)
-    if role is None:
-        role = await guild.create_role(name=role_identifier)
-
-    if member and role not in member.roles:
-        # give member role to non-patreon users if they are given the citizen role
-        # also check if this feature has been enabled
-        automember = db.get_automember(member.guild.id)
-        if automember and role.id == 697184342614474785 and 644182117051400220 not in [r.id for r in member.roles]:
-            member_role = discord.utils.find(lambda r: r.id == 662036345526419486, member.guild.roles)
-            await member.add_roles(member_role)
-
-        await member.add_roles(role)
-
-    return role
-
-
-def get_branch_role(guild_id: int, role_name: str) -> tuple:
-    leveling_data = db.get_leveling_data(guild_id, {'leveling_routes': 1})
-    leveling_routes = leveling_data['leveling_routes']
-
-    all_roles = leveling_routes['parliamentary'] + leveling_routes['honours']
-
-    role = next((role for role in all_roles if role['name'].lower() == role_name.lower()), None)
-
-    if role in leveling_routes['parliamentary']:
-        branch = 'parliamentary'
-    else:
-        branch = 'honours'
-
-    return branch, role
 
 
 def get_user_clearance(member: discord.Member) -> list:

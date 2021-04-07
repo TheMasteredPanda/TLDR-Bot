@@ -12,6 +12,7 @@ import modules.google_drive
 import modules.reaction_menus
 import modules.timers
 import modules.custom_commands
+import modules.leveling
 
 from datetime import datetime
 from discord.ext import commands
@@ -31,7 +32,6 @@ class TLDR(commands.Bot):
             command_prefix=get_prefix, case_insensitive=True, help_command=None,
             intents=intents, chunk_guilds_at_startup=True
         )
-
         self.left_check = asyncio.Event()
 
         # Load Cogs
@@ -40,10 +40,11 @@ class TLDR(commands.Bot):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 print(f'{filename[:-3]} is now loaded')
 
-        self.google_drive = modules.google_drive.Drive()
+        # self.google_drive = modules.google_drive.Drive()
         self.timers = modules.timers.Timers(self)
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
+        self.leveling_system = modules.leveling.LevelingSystem(self)
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         try:
@@ -58,7 +59,7 @@ class TLDR(commands.Bot):
 
     async def on_event_error(self, exception: Exception, event_method, *args, **kwarg):
         trace = exception.__traceback__
-        verbosity = 4
+        verbosity = 10
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
         traceback_text = ''.join(lines)
 
@@ -181,7 +182,6 @@ class TLDR(commands.Bot):
             return await modules.embed_maker.error(ctx, f'Your access to this command has been taken away')
 
         await self.invoke(ctx)
-
 
 if __name__ == '__main__':
     TLDR().run(config.BOT_TOKEN)

@@ -1,5 +1,7 @@
 import discord
 import config
+
+from bot import TLDR
 from discord.ext import commands
 from modules import database, cls, embed_maker
 from datetime import datetime
@@ -8,7 +10,7 @@ db = database.Connection()
 
 
 class Settings(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: TLDR):
         self.bot = bot
 
     @commands.command(
@@ -19,8 +21,8 @@ class Settings(commands.Cog):
         cls=cls.Command
     )
     async def level_up_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
-        leveling_data = db.get_leveling_data(ctx.guild.id, {'level_up_channel': 1})
-        current_channel_id = leveling_data['level_up_channel']
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+        current_channel_id = leveling_guild.level_up_channel
 
         if not current_channel_id:
             current_channel_string = 'Not set, defaults to message channel'
@@ -42,6 +44,7 @@ class Settings(commands.Cog):
                 return await embed_maker.error(ctx, f'Level up channel is already set to <#{channel.id}>')
 
             db.leveling_data.update_one({'guild_id': ctx.guild.id}, {'$set': {f'level_up_channel': channel.id}})
+            leveling_guild.level_up_channel = channel.id
             return await embed_maker.message(
                 ctx,
                 description=f'Level up channel has been set to <#{channel.id}>',

@@ -8,7 +8,6 @@ import asyncio
 import re
 
 from bson import ObjectId
-from cogs.leveling import get_leveling_role
 from bot import TLDR
 from modules import database, format_time, embed_maker
 from discord.ext import commands
@@ -39,6 +38,8 @@ class Events(commands.Cog):
                     self.transfer_leveling_data(user)
 
         self.bot.left_check.set()
+
+        self.bot.leveling_system.initialise_guilds()
         await self.bot.timers.run_old()
         print('Left members checked')
 
@@ -240,6 +241,11 @@ class Events(commands.Cog):
 
         # give topic author boost if there is a topic author
         if topic_author:
+
+            leveling_member = await self.bot.leveling_system.get_member(int(guild_id), topic_author_id.id)
+            leveling_member.boosts.daily_debate.expires = round(time.time()) + (3600 * 6)
+            leveling_member.boosts.daily_debate.multiplier = 0.15
+
             db.leveling_users.update_one(
                 {'guild_id': int(guild_id), 'user_id': topic_author.id},
                 {'$set': {'boosts.dailydebate': {
@@ -445,45 +451,27 @@ class Events(commands.Cog):
     async def on_guild_role_update(self, before: discord.Role, after: discord.Role):
         # if name has changed, edit database entry
         if before.name != after.name:
-            leveling_data = db.leveling_data.find_one({
-                'guild_id': after.guild.id
-            }, {'leveling_routes': 1}
-            )
+            leveling_guild = self.bot.leveling_system.get_guild(before.guild.id)
 
-            if not leveling_data:
-                return
+            for branch in leveling_guild.leveling_routes:
+                for role in branch:
+                    if role.name == before.name:
+                        role.name = after.name
 
-            parliamentary = next((role for role in leveling_data['leveling_routes']['parliamentary'] if role['name'] == before.name), None)
-            honours = next((role for role in leveling_data['leveling_routes']['honours'] if role['name'] == before.name), None)
+                        result = db.leveling_data.update_one({
+                            'guild_id': after.guild.id,
+                            f'leveling_routes.{branch.name[0]}': {'$elemMatch': {'name': before.name}}},
+                            {f'$set': {f'leveling_routes.{branch.name}.$.name': after.name}}
+                        )
 
-            if parliamentary:
-                branch = 'parliamentary'
-            elif honours:
-                branch = 'honours'
-            else:
-                return
-
-            result = db.leveling_data.update_one({
-                'guild_id': after.guild.id,
-                f'leveling_routes.{branch}': {'$elemMatch': {'name': before.name}}},
-                {f'$set': {f'leveling_routes.{branch}.$.name': after.name}}
-            )
-
-            # check if any actual changes were made, if any were made, update users who had the role by the old name
-            if result.modified_count > 0:
-                db.leveling_users.update_many({
-                    'guild_id': after.guild.id,
-                    f'{branch[0]}_role': before.name
-                },
-                    {'$set': {f'{branch[0]}_role': after.name}}
-                )
-
-    @staticmethod
-    async def add_up_to_roles(member: discord.Member, user_role: dict, roles: list):
-        user_h_role_index = roles.index(user_role)
-        up_to_role = roles[:user_h_role_index + 1]
-        for role in up_to_role:
-            await get_leveling_role(member.guild, role['name'], member)
+                        # check if any actual changes were made, if any were made, update users who had the role by the old name
+                        if result.modified_count > 0:
+                            db.leveling_users.update_many({
+                                'guild_id': after.guild.id,
+                                f'{branch.name[0]}_role': before.name
+                            },
+                                {'$set': {f'{branch.name[0]}_role': after.name}}
+                            )
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -508,14 +496,15 @@ class Events(commands.Cog):
                 'event': 'leveling_data_expires'
             })
 
-            # add back old roles
-            leveling_data = db.get_leveling_data(guild_id, {'leveling_routes': 1})
-            leveling_routes = leveling_data['leveling_routes']
+            leveling_member = await self.bot.leveling_system.get_member(member.guild.id, member.id)
 
-            for branch in ['parliamentary', 'honours']:
-                user_role = next((role for role in leveling_routes[branch] if role['name'] == left_user[f'{branch[0]}_role']), None)
+            for branch in leveling_member.guild.leveling_routes:
+                user_role = next((role for role in branch.roles if role.name == left_user[f'{branch[0]}_role']), None)
                 if user_role:
-                    await self.add_up_to_roles(member, user_role, leveling_routes[branch])
+                    user_role_index = branch.roles.index(user_role)
+                    up_to_role = branch.roles[:user_role_index + 1]
+                    for role in up_to_role:
+                        await leveling_member.add_role(role)
 
     def transfer_leveling_data(self, leveling_user):
         db.left_leveling_users.insert_one(leveling_user)
