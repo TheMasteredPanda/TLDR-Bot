@@ -112,7 +112,7 @@ class LevelingUser:
         self.reputation = LevelingUserBranch(
             leveling_member,
             'reputation',
-            leveling_user_data['rp'],
+            leveling_user_data.get('rp', 0),
             0,
             ''
         )
