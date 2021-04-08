@@ -8,10 +8,21 @@ db = database.get_connection()
 
 
 class Timers:
+    """
+    Class for implementing functions with timed calls.
+    Functions will be called by dispatching bot events by the name `on_{event}_timer_over`.
+
+    Attributes
+    __________
+    bot: :class:`bot.TLDR`
+        The discord bot.
+    """
+
     def __init__(self, bot):
         self.bot = bot
 
-    async def run_old(self):
+    async def run_old(self) -> None:
+        """Runs all the timers that were cut short, that are still in the database."""
         await self.bot.left_check.wait()
 
         print(f'running old timers')
@@ -19,7 +30,15 @@ class Timers:
         for timer in timers:
             asyncio.create_task(self.run(timer))
 
-    async def run(self, timer):
+    async def run(self, timer) -> None:
+        """
+        Run a timer.
+
+        Parameters
+        ___________
+        timer: :class:`dict`
+            Timer dictionary from :func:`create`
+        """
         now = round(time.time())
 
         if timer['expires'] > now:
@@ -27,7 +46,16 @@ class Timers:
 
         self.call_event(timer)
 
-    def call_event(self, timer):
+    def call_event(self, timer) -> None:
+        """
+        Call timer event.
+        Event will be dispatched with the name `on_{event}_timer_over`.
+
+        Parameters
+        ___________
+        timer: :class:`dict`
+            Timer dictionary from :func:`create`
+        """
         timer = db.timers.find_one({'_id': ObjectId(timer['_id'])})
         if not timer:
             return
@@ -36,6 +64,20 @@ class Timers:
         self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
 
     def create(self, *, guild_id: int, expires: int, event: str, extras: dict):
+        """
+        Create a new timer.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+            ID of the guild the timer will belong to.
+        expires: :class:`int`
+            Time when timer will expire and the event will be dispatched.
+        event: :class:`str`
+            The name of the event that will be dispatched with the name `on_{event}_timer_over`.
+        extras: :class:`dict`
+            Extra data that can be passed to the timer.
+        """
         timer_dict = {
             'guild_id': guild_id,
             'expires': expires,
