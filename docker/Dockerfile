@@ -19,13 +19,13 @@ RUN pip3.8 install --upgrade pip requests
 
 WORKDIR /TLDR-Bot
 
-COPY requirements.txt .
+COPY ../requirements.txt .
 
 RUN python3.8 -m pip install -r requirements.txt
 
 COPY /cogs ./cogs
 COPY /modules ./modules
-COPY bot.py .
-COPY config.py .
+COPY ../bot.py .
+COPY ../config.py .
 
 ENV IN_DOCKER Yes

@@ -7,7 +7,7 @@ services:
     restart: always
   bot:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     command: bash -c "python3.8 bot.py"
     depends_on:
