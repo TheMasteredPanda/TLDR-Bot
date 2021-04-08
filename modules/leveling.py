@@ -521,7 +521,7 @@ class LevelingData:
         self.leveling_routes = LevelingRoutes(guild, leveling_data.get('leveling_routes', {}))
         self.honours_channels = DatabaseList(
             db.leveling_data,
-            {'guild_id': self.guild.id},
+            {'guild_id': guild.id},
             f'honours_channels',
             *leveling_data.get('honours_channels', [])
         )
