@@ -346,7 +346,7 @@ class Utility(commands.Cog):
         clearance='User', cls=cls.Command
     )
     async def reminders(self, ctx: commands.Context, action: str = None, *, index: str = None):
-        user_reminders = [r for r in db.timers.find({'guild_id': ctx.guild.id, 'event': 'reminder', 'extras.member_id': ctx.author.id})]
+        user_reminders = sorted([r for r in db.timers.find({'guild_id': ctx.guild.id, 'event': 'reminder', 'extras.member_id': ctx.author.id})], key=lambda r: r['expires'])
         if action is None:
             if not user_reminders:
                 msg = 'You currently have no reminders'
