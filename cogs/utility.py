@@ -383,34 +383,12 @@ class Utility(commands.Cog):
         if reminder is None:
             return await embed_maker.command_error(ctx)
 
-        # check for time
-        remind_times = []
-        remind_time_str = ''
-        for time_input in reminder.split(' '):
-            formatted = format_time.parse(time_input)
-            if formatted is not None:
-                # check if current parsed time is smaller than the last, so user cant just do 10h 10h 10h
-                if remind_times:
-                    prev_remind_time = remind_times[-1]
-                    if prev_remind_time <= formatted:
-                        break
+        remind_time, reminder = format_time.parse(reminder, return_string=True)
 
-                remind_times.append(formatted)
-                reminder = reminder.replace(time_input, '', 1)
-                remind_time_str += f' {time_input}'
-            else:
-                break
-
-        reminder = reminder.strip()
         if not reminder:
             return await embed_maker.error(ctx, 'You cannot have an empty reminder')
 
-        try:
-            parsed_time = sum(remind_times)
-        except Exception:
-            return await embed_maker.command_error(ctx, '[time]')
-
-        expires = round(time.time()) + parsed_time
+        expires = round(time.time()) + remind_time
         self.bot.timers.create(
             expires=expires,
             guild_id=ctx.guild.id,
@@ -420,7 +398,7 @@ class Utility(commands.Cog):
 
         return await embed_maker.message(
             ctx,
-            description=f'Alright, in {format_time.seconds(parsed_time, accuracy=10)} I will remind you: `{reminder}`',
+            description=f'Alright, in {format_time.seconds(remind_time, accuracy=10)} I will remind you: `{reminder}`',
             send=True
         )
 
