@@ -2,7 +2,6 @@ import pymongo
 import config
 import time
 import discord
-import sys
 
 from bson import ObjectId
 
@@ -10,6 +9,154 @@ active_connection = None
 
 
 class Connection:
+    """
+    Database handler. Creates connection to the database.
+
+    Attributes
+    __________
+    mongo_client: :class:`pymongo.MongoClient`
+        The pymongo client.
+
+    db: :class:`pymongo.database.Database`
+        The TLDR database.
+
+    leveling_users: :class:`pymongo.collection.Collection`
+        The leveling_users collection.
+        {
+            "guild_id" : :class:`int`,
+            "user_id" : :class:`int`,
+            "pp" : :class:`int`,
+            "p_level" : :class:`int`,
+            "hp" : :class:`int`,
+            "h_level" : :class:`int`,
+            "p_role" : :class:`str`,
+            "h_role" : :class:`str`,
+            "settings" : {
+                "@_me" : bool
+            },
+            "rep_timer" : :class:`int`,
+            "last_rep" : :class:`int`,
+            "rep" : :class:`int`,
+            "boosts" : {
+                :class:`str`: {
+                    "expires": :class:`int`,
+                    "multiplier": float
+                }
+            },
+            "rp" : :class:`int`
+        }
+
+    leveling_data: :class:`pymongo.collection.Collection`
+        The leveling_data collection.
+        {
+            "guild_id" : :class:`int`,
+            "level_up_channel" : :class:`int`,
+            "leveling_routes" : {
+                "parliamentary" : [
+                    {
+                        "name" : :class:`str`,
+                        "perks" : List[:class:`str`]
+                    }
+                ],
+                "honours" : [
+                    {
+                        "name" : :class:`str`,
+                        "perks" : List[:class:`str`]
+                    }
+                ]
+            },
+            "honours_channels" : List[:class:`int`],
+            "automember" : bool
+        }
+
+    left_leveling_users: :class:`pymongo.collection.Collection`
+        The left_leveling_users collection for holding members who have left their guild.
+        Same as leveling_users.
+
+    timers: :class:`pymongo.collection.Collection`
+        The timers collection
+        {
+            "guild_id" : :class:`int`,
+            "expires" : :class:`int`,
+            "event" : :class:`str`,
+            "extras" : :class:`dict`
+        }
+
+    commands: :class:`pymongo.collection.Collection`
+        The commands collection
+        {
+            "guild_id" : :class:`int`,
+            "command_name" : :class:`str`,
+            "disabled" : :class:`int`,
+            "user_access" : {
+                "user id" : "take" or "give"
+            },
+            "role_access" : {
+                "role id" : "take" or "give"
+            }
+        }
+
+    daily_debates: :class:`pymongo.collection.Collection`
+        The daily_debates collection
+        {
+            "guild_id" : :class:`int`,
+            "channel_id" : :class:`int`,
+            "poll_channel_id" : :class:`int`,
+            "role_id" : :class:`int`,
+            "time" : :class:`str`,
+            "topics" : [
+                {
+                    "topic" : :class:`str`
+                    "topic_author_id" : :class:`int`,
+                    "topic_options" : :class:`str`
+                },
+            ]
+        }
+
+    tickets: :class:`pymongo.collection.Collection`
+        The tickets collection
+        {
+            "guild_id" : :class:`int`,
+            "ticket_channel_id" : :class:`int`,
+            "ticket_author_id" : :class:`int`
+        }
+
+    custom_commands: :class:`pymongo.collection.Collection`
+        The custom_commands collection
+        {
+            "name" : :class:`str`,
+            "response" : :class:`str`,
+            "clearance" : :class:`str`,
+            "role" : :class:`int`,
+            "response_channel" : :class:`int`,
+            "command_channels" : List[:class:`int`],
+            "reactions" : List[:class:`str`],
+            "python" : :class:`str`,
+            "pre" : :class:`str`,
+            "guild_id" : :class:`int`
+        }
+
+    watchlist: :class:`pymongo.collection.Collection`
+        The watchlist collection
+        {
+            "guild_id" : :class:`int`,
+            "user_id" : :class:`int`,
+            "filters" : List[:class:`str`],
+            "channel_id" : :class:`int`
+        }
+
+    cases: :class:`pymongo.collection.Collection`
+        The cases collection
+        {
+            'guild_id': :class:`int`,
+            'user_id': :class:`int`,
+            'type': :class:`str`,
+            'reason': :class:`str`,
+            'created_at': :class:`int`,
+            'moderator': :class:`int`,
+            'case_number': :class:`int`
+        }
+    """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
         self.db = self.mongo_client['TLDR']
@@ -25,6 +172,21 @@ class Connection:
         self.cases = self.db['cases']
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
+        """
+        Get member's leveling data from the database, if user isn't in the database, they will be added.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+            ID of the member's guild.
+        member_id: :class:`int`
+            ID of the member.
+
+        Returns
+        -------
+        :class:`dict`
+            Leveling data on the member.
+        """
         leveling_user = self.leveling_users.find_one({
             'guild_id': guild_id,
             'user_id': member_id
@@ -39,7 +201,22 @@ class Connection:
 
         return leveling_user
 
-    def get_leveling_data(self, guild_id: int, fields: dict = None):
+    def get_leveling_data(self, guild_id: int, fields: dict = None) -> dict:
+        """
+        Get guild's leveling data from the database, if guild isn't in the database, it will be added.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+            ID of the guild.
+        member_id: Optional[:class:`dict`]
+            what fields to return when querying the database, if not set, all the data will be returned.
+
+        Returns
+        -------
+        :class:`dict`
+            Leveling data of the guild.
+        """
         if fields is None:
             fields = {}
 
@@ -55,7 +232,24 @@ class Connection:
 
         return leveling_data
 
-    def get_command_data(self, guild_id: int, command_name: str, *, insert: bool = False):
+    def get_command_data(self, guild_id: int, command_name: str, *, insert: bool = False) -> dict:
+        """
+        Get data on a command from the database, if command isn't in the database, it will be added, if insert is True.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+            ID of command's guild.
+        command_name: :class:`int`
+            Name of the command
+        insert: Optional[:class:`bool`]
+            If True, command data will be inserted into the database.
+
+        Returns
+        -------
+        :class:`dict`
+            The command data.
+        """
         command_data = self.commands.find_one({'guild_id': guild_id, 'command_name': command_name})
         if command_data is None:
             command_data = {
@@ -70,7 +264,20 @@ class Connection:
 
         return command_data
 
-    def get_daily_debates(self, guild_id: int):
+    def get_daily_debates(self, guild_id: int) -> dict:
+        """
+        Get daily debates data of a guild.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+            ID of the guild.
+
+        Returns
+        -------
+        :class:`dict`
+            The daily debate data.
+        """
         daily_debates = self.daily_debates.find_one({'guild_id': guild_id})
         if not daily_debates:
             daily_debates = schemas['daily_debates']
@@ -79,7 +286,20 @@ class Connection:
 
         return daily_debates
 
-    def get_automember(self, guild_id: int):
+    def get_automember(self, guild_id: int) -> bool:
+        """
+        Get automember setting of guild.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+            ID of the guild.
+
+        Returns
+        -------
+        :class:`bool`
+            True if automember is enabled, False if not.
+        """
         leveling_data = self.get_leveling_data(guild_id, {'automember': 1})
         if not leveling_data or 'automember' not in leveling_data:
             self.leveling_data.update_one({'guild_id': guild_id}, {'$set': {'automember': False}})
@@ -90,6 +310,27 @@ class Connection:
         return automember
 
     def add_case(self, guild_id: int, type: str, reason: str, member: discord.member, moderator: discord.Member) -> dict:
+        """
+        Adds a case to the database.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+            ID of the guild.
+        type: :class:`str`
+            Type of the case. Eg. mute, ban etc etc
+        reason: :class:`str`
+            Reason behind the case.
+        member: :class:`discord.Member`
+            Member who had the action taken upon.
+        moderator: :class:`discord.Member`
+            Member who took action on member.
+
+        Returns
+        -------
+        :class:`dict`
+            The case's data.
+        """
         case_number = self.cases.find({'guild_id': guild_id, 'user_id': member.id, 'type': type}).count() + 1
 
         case_data = {
@@ -106,16 +347,45 @@ class Connection:
 
         return case_data
 
-    def get_cases(self, guild_id: int, **kwargs):
+    def get_cases(self, guild_id: int, **kwargs) -> list:
+        """
+        Get cases based on given kwargs.
+
+        Parameters
+        ___________
+        guild_id: :class:`int`
+           ID of the guild.
+        kwargs: :class:`dict`
+           Different values to search for cases by.
+
+        Returns
+        -------
+        :class:`list`
+           All the found cases.
+        """
         query = {'guild_id': guild_id, **kwargs}
         return [c for c in self.cases.find(query).sort({'created_at': 1})]
 
     def add_case_logs(self, case_id: ObjectId, logs_url: str):
+        """
+        Set the logs url for a case.
+
+        Parameters
+        ___________
+        case_id: :class:`ObjectId`
+           ID of the case.
+        logs_url: :class:`str`
+           url of the logs.
+        """
         self.cases.update_one({'_id': case_id}, {'$set': {'logs_url': logs_url}})
 
 
-
 def get_connection():
+    """
+    Set the global connection variable active_connection to an active connection to the database.
+    If it's already set, it returns active_connection.
+    """
+
     global active_connection
     if active_connection is None:
         active_connection = Connection()
