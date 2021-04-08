@@ -3,20 +3,55 @@ import re
 import asyncio
 import config
 
-from typing import Tuple, Union
-from modules import embed_maker, database
+from typing import Tuple, Union, Optional
+from modules import embed_maker, database, cls
 from discord.ext import commands
 
 db = database.get_connection()
 
 
 class Command(commands.Converter):
-    async def convert(self, ctx: commands.Context, argument: str = ''):
+    """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
+    async def convert(self, ctx: commands.Context, argument: str = '') -> Optional[cls.Command, cls.Group]:
+        """
+        Converts provided argument to command
+
+        Parameters
+        ___________
+        ctx: :class:`discord.ext.commands.Context`
+            Context, will be used to get member.
+        argument: :class:`str`
+            Argument passed that will be used as command name when getting command.
+
+        Returns
+        -------
+        Optional[:class:`modules.cls.Command`, :class:`modules.cls.Group`]
+            Returns command or group command or `None` if nothing is found.
+        """
         return ctx.bot.get_command(argument, member=ctx.author)
 
 
 class ParseArgs(commands.Converter, dict):
+    """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
     async def convert(self, ctx: commands.Context, argument: str = '') -> dict:
+        """
+        Converts provided argument to dictionary of command args and their values.
+        Command args are gotten from ctx.command.docs.command_args.
+
+        This uses regex to parse args.
+
+        Parameters
+        ___________
+        ctx: :class:`discord.ext.commands.Context`
+            Context, will be used to command.
+        argument: :class:`str`
+            Argument passed that will be parsed for args.
+
+        Returns
+        -------
+        :class:`dict`
+            Dictionary of command args and their values.
+        """
         result = {}
         # replace short-form args with long-form args
         for arg, _ in ctx.command.docs.command_args:
@@ -44,15 +79,43 @@ class ParseArgs(commands.Converter, dict):
         return result
 
 
-def id_match(identifier, extra):
+def id_match(identifier: str, extra: str) -> re.Match:
+    """
+    Matches identifier to discord ID regex and matches given extra regex to identifier
+
+    Parameters
+    ___________
+    identifier: :class:`str`
+        The identifier that will be matched against discord ID regex and given extra regex
+    extra: :class:`str`
+        Extra regex to match identifier against
+
+    Returns
+    -------
+    :class:`re.Match`
+        Either discord ID match or extra regex match
+    """
     id_regex = re.compile(r'([0-9]{15,21})$')
     additional_regex = re.compile(extra)
-
-    # check if role_identifier is id
     return id_regex.match(identifier) or additional_regex.match(identifier)
 
 
-def get_custom_emote(ctx, emote):
+def get_custom_emote(ctx: commands.Context, emote: str) -> Optional[discord.Emoji]:
+    """
+    Look up custom emote by id or by name
+
+    Parameters
+    ___________
+    ctx: :class:`discord.ext.commands.Context`
+        Context, used to get emojis.
+    emote: :class:`str`
+        Either emote name or id.
+
+    Returns
+    -------
+    Optional[:class:`discord.Emoji`]
+        Emoji if one is found, otherwise `None`.
+    """
     match = id_match(emote, r'<a?:[a-zA-Z0-9\_]+:([0-9]+)>$')
     result = None
 
@@ -68,15 +131,30 @@ def get_custom_emote(ctx, emote):
 
         # Try to look up emoji by id.
         if ctx.guild:
-            result = discord.utils.get(ctx.guild.emojis, id=emoji_id)
+            result = discord.utils.get(ctx.guild.emojis, id=int(emoji_id))
 
         if result is None:
-            result = discord.utils.get(ctx.bot.emojis, id=emoji_id)
+            result = discord.utils.get(ctx.bot.emojis, id=int(emoji_id))
 
     return result
 
 
-async def get_guild_role(guild: discord.Guild, role_identifier: str):
+async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional[discord.Role]:
+    """
+    Get guild's role by its name or id.
+
+    Parameters
+    ___________
+    guild: :class:`discord.Guild`
+        Guild where to search the role from.
+    role_identifier: :class:`str`
+        Either role name or id.
+
+    Returns
+    -------
+    Optional[:class:`discord.Role`]
+        Role if one is found, otherwise `None`.
+    """
     match = id_match(role_identifier, r'<@&([0-9]+)>$')
     if match:
         role = guild.get_role(int(match.group(1)))
@@ -87,6 +165,19 @@ async def get_guild_role(guild: discord.Guild, role_identifier: str):
 
 
 def get_user_clearance(member: discord.Member) -> list:
+    """
+    Get member's clearance levels.
+
+    Parameters
+    ___________
+    member: :class:`discord.Member`
+        Member's whose clearance levels will be returned
+
+    Returns
+    -------
+    :class:`list`
+        List of member's clearance levels.
+    """
     member_clearance = []
 
     for clearance in config.CLEARANCE:
@@ -96,7 +187,22 @@ def get_user_clearance(member: discord.Member) -> list:
     return member_clearance
 
 
-async def get_member_from_string(ctx: commands.Context, string: str) -> Union[Tuple[Union[discord.Member, None], str], None]:
+async def get_member_from_string(ctx: commands.Context, string: str) -> Tuple[Optional[discord.Member], str]:
+    """
+    Get member from the first part of the string and return the remaining string.
+
+    Parameters
+    ___________
+    ctx: :class:`discord.ext.commands.Context`
+        Context.
+    string: :class:`str`
+        String where the member will be searched from.
+
+    Returns
+    -------
+    Tuple[Optional[:class:`discord.Member`], :class:`str`]
+        Member and remaining string if member is found or `None` and string.
+    """
     # check if source is member mention
     if ctx.message.mentions:
         return ctx.message.mentions[0], ' '.join(string.split()[1:])
@@ -122,12 +228,29 @@ async def get_member_from_string(ctx: commands.Context, string: str) -> Union[Tu
     return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
 
 
-async def get_member(ctx: commands.Context, source, *, multi: bool = True, return_message: bool = True) -> Union[discord.Member, discord.Message, list, None]:
+async def get_member(ctx: commands.Context, source, *, multi: bool = True, return_message: bool = True) -> Optional[Union[discord.Member, discord.Message, list]]:
     """
-    :param ctx: context
-    :param source: identifier to which members are matched, can be id, member mention or name
-    :param multi: If true, when multiple matches are found, user will presented the option and allowed to choose, if False, list of matched members will be returned
-    :param return_message: If true, when and error is encountered, a message about the error will be returned
+    Get member from given source. Source could be id or name.
+    Member could also be a mention, so ctx.message.mentions are checked.
+
+    Parameters
+    ___________
+    ctx: :class:`discord.ext.commands.Context`
+        Context.
+    source: :class:`str`
+        Identifier to which members are matched, can be id or name.
+    multi: :class:`bool`
+        If true, when multiple matches are found, user will presented with the option and allowed to choose between the members,
+        if False, list of matched members will be returned
+    return_message :class:`bool`
+        If true, when and error is encountered, a message about the error will be returned
+
+    Returns
+    -------
+    Optional[Union[:class:`discord.Member`, :class`discord.Message`, :class:`list`]]:
+        Member if member is found.
+        Message if error is encountered and return_message is True.
+        List if multiple members are found and multi is False.
     """
     # just in case source is empty
     if not source:

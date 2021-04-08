@@ -31,6 +31,8 @@ class Help:
     command_args: :class:`list`
         List of different arguments that will be used in :class:`modules.utils.ParseArgs`, which when used as a type
         on a command arg, will be called.
+        Examples: (("--longform", "-s", str), "Description of the argument")
+                  (("--longform", "-s", list), "Description of the argument. Since the type given is list, multiple of the same arg can be given.")
     """
     def __init__(self, **kwargs):
         self.help = kwargs.get('help', '')
