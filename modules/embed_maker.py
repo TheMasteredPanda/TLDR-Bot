@@ -6,7 +6,8 @@ from datetime import datetime
 from discord.ext.commands import Context
 
 
-def get_colour(colour):
+def get_colour(colour: str):
+    """Converts colour name to :class:`discord.Colour` colour"""
     return {
         'red': discord.Colour.red(),
         'orange': discord.Colour.orange(),
@@ -23,6 +24,31 @@ async def message(
         title: str = None,
         send: bool = False
 ):
+    """
+    A function to easily create embeds with a certain look.
+
+    Parameters
+    ___________
+    ctx: :class:`discord.ext.commands.Context`
+        discord context.
+    description: :class:`str`
+        Description for the embed
+    author: :class:`dict`
+        Dict with author name and icon_url. If icon_url isn't given, will default to ctx.guild.icon_url
+    footer: :class:`dict`
+        Dict with footer text and icon_url. If icon_url isn't given, will default to ctx.avatar.icon_url
+    colour: :class:`str`
+        Colour for the embed
+    title: :class:`str`
+        Title for the embed
+    send: :class:`Bool`
+        If true, will send the embed to ctx.channel instead of returning the created embed.
+
+    Returns
+    -------
+    Union[:class:`discord.Embed`, :class:`discord.Message`]
+        Will return either the created embed or message, depending if `send` is true
+    """
     embed_colour = config.EMBED_COLOUR if colour is None else get_colour(colour)
     embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
 
@@ -51,10 +77,44 @@ async def message(
 
 
 async def error(ctx: Context, description, **kwargs):
+    """
+    A simple function to easily create error embeds with a certain look.
+    Default colour is red and send is True.
+
+    Parameters
+    ___________
+    ctx: :class:`discord.ext.commands.Context`
+        discord context.
+    description: :class:`str`
+        Description for the error embed
+    **kwargs: :class:`dict`
+        kwargs that will be passed onto :func:`message`
+
+    Returns
+    -------
+    :class:`discord.Message`
+        Will return message
+    """
     return await message(ctx, description=description, colour='red', send=True, **kwargs)
 
 
-async def command_error(ctx, bad_arg=None):
+async def command_error(ctx, bad_arg: str = None):
+    """
+    A simple function to easily create command error embeds with a certain look and info about ctx.command.
+
+    Parameters
+    ___________
+    ctx: :class:`discord.ext.commands.Context`
+        discord context.
+    bad_arg: :class:`str`
+        Arg that can be given that will be displayed as "Invalid Argument: {bad_arg}"
+
+    Returns
+    -------
+    :class:`discord.Message`
+        Will return message
+    """
+
     examples_str = '\n'.join(ctx.command.docs.examples)
     if bad_arg is None:
         embed_colour = get_colour('orange')
