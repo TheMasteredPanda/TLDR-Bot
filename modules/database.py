@@ -2,6 +2,7 @@ import pymongo
 import config
 import time
 import discord
+import sys
 
 from bson import ObjectId
 

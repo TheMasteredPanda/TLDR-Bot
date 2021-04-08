@@ -246,14 +246,6 @@ class Events(commands.Cog):
             leveling_member.boosts.daily_debate.expires = round(time.time()) + (3600 * 6)
             leveling_member.boosts.daily_debate.multiplier = 0.15
 
-            db.leveling_users.update_one(
-                {'guild_id': int(guild_id), 'user_id': topic_author.id},
-                {'$set': {'boosts.dailydebate': {
-                    'expires': round(time.time()) + (3600 * 6),
-                    'multiplier': 0.15
-                }}}
-            )
-
         # start daily_debate timer over
         mod_cog = self.bot.get_cog('Mod')
         return await mod_cog.start_daily_debate_timer(guild.id, dd_time)

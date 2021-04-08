@@ -537,7 +537,7 @@ class Leveling(commands.Cog):
             leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, leveling_user['user_id'])
             addition = 0 if your_pos else 1
 
-            member = leveling_member.member
+            member = leveling_member.leveling_member
             if leveling_member.id == ctx.author.id:
                 lb_str += rf'**`#{index + i + addition}`**\* - {member.display_name}'
             else:

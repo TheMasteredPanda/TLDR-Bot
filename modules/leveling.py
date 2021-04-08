@@ -6,7 +6,7 @@ import time
 import config
 
 from pymongo.collection import Collection
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 from datetime import datetime
 from modules import database
 from modules.utils import get_guild_role
@@ -19,7 +19,20 @@ db = database.get_connection()
 
 
 class DatabaseList(list):
-    """Special list which co-opts the append and remove method, so the same values can be updated in the database."""
+    """
+    Special list which co-opts the append and remove method, so the same values can be updated in the database.
+
+    Attributes
+    __________
+    collection: :class:`pymongo.collection.Collection`
+        The collection that the list is tied to.
+    query_filter: :class:`dict`
+        Filter used in database queries.
+    key: :class:`str`
+        Key used in database queries when setting value.
+    *args:
+        Initial values that will be set in the list.
+    """
     def __init__(self, collection: Collection, query_filter: dict, key: str, *args):
         self.collection = collection
         self.query_filter = query_filter
@@ -29,9 +42,11 @@ class DatabaseList(list):
         self.extend(list(args))
 
     def __delitem__(self, index: int):
+        """Hard to implement, so it will raise exception."""
         raise Exception('Del operation not allowed on DatabaseList')
 
     def __setitem__(self, index: int, value):
+        """Set item by index."""
         self.collection.update_one(
             self.query_filter,
             {'$set': {f'{self.key}.{index}': value if type(value) != LevelingRole else value.values()}}
@@ -39,6 +54,7 @@ class DatabaseList(list):
         super()[index] = value
 
     def insert(self, index: int, value):
+        """Hard to implement, so it will raise exception."""
         raise Exception('Insert operation not allowed on DatabaseList')
 
     def append(self, item) -> None:
@@ -59,7 +75,20 @@ class DatabaseList(list):
 
 
 class Boost:
-    """Class for a boost"""
+    """
+    Represents a boosts.
+
+    Attributes
+    __________
+    leveling_member: :class:`LevelingMember`
+        The LevelingMember.
+    boost_type: :class:`str`
+        Type of the boost.
+    multiplier: :class:`int`
+        Multiplier of the boost.
+    expires: :class:`int`
+        Time when boost expires.
+    """
     def __init__(self, leveling_member: LevelingMember, boost_type: str, boost: dict):
         self.leveling_member = leveling_member
         self.boost_type = boost_type
@@ -68,8 +97,12 @@ class Boost:
 
     def has_expired(self):
         """
-        Check if boost has expired
-        :return: True if boost has expired
+        Check if boost has expired.
+
+        Returns
+        -------
+        :class:`bool`
+            True if boost has expires, False if it hasn't
         """
         return round(time.time()) > self.expires
 
@@ -81,7 +114,7 @@ class Boost:
         )
 
     def __setattr__(self, key, value):
-        """For some variables, changing their value will allo edit the entry in the database."""
+        """For some variables, changing their value will also edit the entry in the database."""
         if key in ['multiplier', 'expires'] and key in self.__dict__ and self.__dict__[key] != value:
             db.leveling_users.update_one(
                 {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
@@ -91,7 +124,18 @@ class Boost:
 
 
 class LevelingUserBoosts:
-    """Class for storing leveling user boosts"""
+    """
+    Represents LevelingUser's boosts.
+
+    Attributes
+    __________
+    leveling_member: :class:`LevelingMember`
+        The LevelingMember.
+    rep: :class:`Boost`
+        The rep boost a user can have.
+    daily_debate: :class:`Boost`
+        The daily debate boost a user can have.
+    """
     def __init__(self, leveling_member: LevelingMember, boosts: dict):
         self.leveling_member = leveling_member
         self.rep = Boost(leveling_member, 'rep', boosts.get('rep', {}))
@@ -99,18 +143,24 @@ class LevelingUserBoosts:
 
     def __iter__(self):
         """
-        Iter over list of boosts, where boost is included if it has an actual expires time.
-        If i a boost has an expires time of 0, it means it isn't set in the database
+        Iter over list of boosts, where boost is included if it has an actual expires time and multiplier.
+        If a boost has an expires time of 0, it means it isn't set in the database
         """
         yield from [*filter(lambda boost: boost.expires > 0 and boost.multiplier > 0 and not boost.has_expired(), [self.rep, self.daily_debate])]
 
     def __bool__(self):
-        """
-        :return: True if there are any active boosts
-        """
+        """Returns True if there are any active boosts"""
         return bool([*filter(lambda boost: boost.expires > 0, [self.rep, self.daily_debate])])
 
-    def get_multiplier(self):
+    def get_multiplier(self) -> int:
+        """
+        Get the sum of all the boosts multipliers
+
+        Returns
+        -------
+        :class:`int`
+            Multiplier sum of boosts.
+        """
         multiplier = 1
         for boost in self:
             if boost.has_expired():
@@ -121,7 +171,7 @@ class LevelingUserBoosts:
         return multiplier
 
     def __setattr__(self, key, value):
-        """For some variables, changing their value will allo edit the entry in the database."""
+        """For some variables, changing their value will also edit the entry in the database."""
         if key in ['rep', 'daily_debate'] and key in self.__dict__ and self.__dict__[key] != value:
             db.leveling_users.update_one(
                 {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
@@ -132,23 +182,47 @@ class LevelingUserBoosts:
 
 
 class LevelingUserSettings:
-    """Class for storing leveling user settings"""
+    """
+    Represents LevelingUser's settings.
+
+    Attributes
+    __________
+    leveling_member: :class:`LevelingMember`
+        The LevelingMember.
+    at_me: :class:`bool`
+        The @_me setting, if True, member will be @'d when they level up.
+    """
     def __init__(self, leveling_member: LevelingMember, settings: dict):
-        self.member = leveling_member
+        self.leveling_member = leveling_member
         self.at_me = settings.get('@_me', False)
 
     def toggle_at_me(self):
         """Toggle @_me setting"""
         self.at_me = not bool(self.at_me)
         db.leveling_users.update_one(
-            {'guild_id': self.member.guild.id, 'user_id': self.member.id},
+            {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
             {'$set': {'settings': {'@_me': self.at_me}}}
         )
 
 
 class LevelingUserBranch:
-    """Class for storing leveling user branch data"""
-    def __init__(self, leveling_member: LevelingMember, branch: str, points: int, level: int, role: str):
+    """
+    Represents the data a user has on a branch.
+
+    Attributes
+    __________
+    leveling_member: :class:`LevelingMember`
+        The LevelingMember.
+    branch: :class:`LevelingRoute`
+        The leveling route.
+    points: :class:`int`
+        The amount of points the user has on the branch.
+    level: :class:`int`
+        The level the user has on the branch.
+    role: :class:`str`
+        The role the user has on the branch.
+    """
+    def __init__(self, leveling_member: LevelingMember, branch: LevelingRoute, points: int, level: int, role: str):
         self.leveling_member = leveling_member
         self.branch = branch
         self.points = points
@@ -156,7 +230,7 @@ class LevelingUserBranch:
         self.role = role
 
     def __setattr__(self, key, value):
-        """For some variables, changing their value will allo edit the entry in the database."""
+        """For some variables, changing their value will also edit the entry in the database."""
         if key in ['points', 'level', 'role'] and key in self.__dict__ and self.__dict__[key] != value:
             key_switch = {
                 'points': f'{self.branch[0]}p',
@@ -172,7 +246,30 @@ class LevelingUserBranch:
 
 
 class LevelingUser:
-    """Class for storing leveling user data"""
+    """
+    Represents all the data in the database on a user.
+
+    Attributes
+    __________
+    leveling_member: :class:`LevelingMember`
+        The LevelingMember.
+    parliamentary: :class:`LevelingUserBranch`
+        The user branch with all the parliamentary data.
+    honours: :class:`LevelingUserBranch`
+        The user branch with all the honours data.
+    settings: :class:`LevelingUserSettings`
+        The user's settings.
+    reputation: :class:`LevelingUserBranch`
+        The user branch with reputation points, needed in some places.
+    rp: :class:`int`
+        The amount of reputation points the user has.
+    last_rep: :class:`int`
+        The ID of the user that LevelingUser gave a reputation point last.
+    rep_timer: :class:`int`
+        Time in seconds when the LevelingUser can give a reputation point again.
+    boosts: :class:`LevelingUserBoosts`
+        Represents all the boosts user can have.
+    """
     def __init__(self, leveling_member: LevelingMember, leveling_user_data: dict):
         self.leveling_member = leveling_member
 
@@ -211,16 +308,31 @@ class LevelingUser:
 
     @property
     def rep_timer_expired(self) -> bool:
-        """:return: True if rep timer has expired"""
+        """
+        See if :attr:`rep_timer` has expired.
+
+        Returns
+        -------
+        :class:`bool`
+            True if timer has expired, False if it hasn't.
+        """
         return round(time.time()) > self.rep_timer
 
     @property
-    def rep_time_left(self):
-        """:return: Seconds left until timer expires"""
+    def rep_time_left(self) -> int:
+        """
+        See how many seconds left until timer expires.
+
+        Returns
+        -------
+        :class:`int`
+            Seconds left until timer expires.
+
+        """
         return self.rep_timer - round(time.time())
 
     def __setattr__(self, key, value):
-        """For some variables, changing their value will allo edit the entry in the database."""
+        """For some variables, changing their value will also edit the entry in the database."""
         if key in ['rp', 'rep_timer', 'last_rep'] and key in self.__dict__ and self.__dict__[key] != value:
             db.leveling_users.update_one(
                 {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
@@ -231,8 +343,21 @@ class LevelingUser:
 
 
 class LevelingRole:
-    """Class for leveling roles"""
-    def __init__(self, guild: discord.Guild, branch: str, leveling_role: dict):
+    """
+    Represents a leveling role attached to a :class:`LevelingRoute`.
+
+    Attributes
+    __________
+    guild: :class:`discord.Guild`
+        The discord guild object.
+    branch: :class:`LevelingRoute`
+        The leveling route of the role.
+    name: :class:`str`
+        The name of the role.
+    name: :class:`list`
+        List of the perks the role has to offer.
+    """
+    def __init__(self, guild: discord.Guild, branch: LevelingRoute, leveling_role: dict):
         self.guild = guild
         self.branch = branch
         self.name = leveling_role.get('name', '')
@@ -244,6 +369,7 @@ class LevelingRole:
         )
 
     def values(self):
+        """Returns info in the form of a dictionary."""
         return {
             'name': self.name,
             'perks': self.perks
@@ -251,8 +377,12 @@ class LevelingRole:
 
     async def get_guild_role(self) -> discord.Role:
         """
-        Get guild's role
-        :return: discord.Role
+        Get a the guild role object. If a role by the LevelingRoles name doesn't exist, it will be crated.
+
+        Returns
+        -------
+        :class:`discord.Role`
+            The discord role.
         """
         # TODO: maybe cache this value?
         role = await get_guild_role(self.guild, self.name)
@@ -260,11 +390,10 @@ class LevelingRole:
         if role is None:
             role = await self.guild.create_role(name=self.name)
 
-
         return role
 
     def __setattr__(self, key, value):
-        """For some variables, changing their value will allo edit the entry in the database."""
+        """For some variables, changing their value will also edit the entry in the database."""
         if key in ['name', 'perks'] and key in self.__dict__ and self.__dict__[key] != value:
             db.leveling_data.update_one({
                 'guild_id': self.guild.id,
@@ -281,7 +410,18 @@ class LevelingRole:
 
 
 class LevelingRoute:
-    """Class for leveling route data."""
+    """
+    Represents a leveling route.
+
+    Attributes
+    __________
+    guild: :class:`discord.Guild`
+        The discord guild object.
+    name: :class:`str`
+        The name of the leveling route.
+    roles: :class:`DatabaseList`
+        List of roles in the route.
+    """
     def __init__(self, guild: discord.Guild, name: str, roles: list):
         self.guild = guild
         self.name = name
@@ -289,24 +429,45 @@ class LevelingRoute:
             db.leveling_data,
             {'guild_id': self.guild.id},
             f'leveling_routes.{self.name}',
-            *[LevelingRole(guild, name, role) for role in roles]
+            *[LevelingRole(guild, self, role) for role in roles]
         )
 
-    def find_role(self, role_name: str) -> Union[LevelingRole, None]:
+    def find_role(self, role_name: str) -> Optional[LevelingRole]:
         """
-        Find a role in the leveling route.
-        :param role_name: name of the needed role
-        :return: leveling role from this leveling route, if role by name exists
+        Get a role in the LevelingRoute.
+
+        Parameters
+        ___________
+        role_name: :class:`str`
+            The name of the role that will be searched for.
+
+        Returns
+        -------
+        Optional[:class:`LevelingRole`]
+            The LevelingRole or `None` if it isn't found.
         """
         return next(filter(lambda role: role.name.lower() == role_name.lower(), self.roles), None)
 
     def __iter__(self):
-        """Iterator magic method to loop over route's roles."""
+        """Iterator magic method to loop over the LevelingRoute's roles."""
         yield from self.roles
 
 
 class LevelingRoutes:
-    """Class for the leveling routes in a guild."""
+    """
+    Represents all the leveling routes attached to :class:`LevelingGuild`.
+
+    Attributes
+    __________
+    guild: :class:`discord.Guild`
+        The discord guild object.
+    parliamentary: :class:`LevelingRoute`
+        The parliamentary route.
+    honours: :class:`LevelingRoute`
+        The honours route.
+    reputation: :class:`LevelingRoute`
+        The reputation route.
+    """
     def __init__(self, guild: discord.Guild, leveling_routes: dict):
         self.guild = guild
         self.parliamentary = LevelingRoute(guild, 'parliamentary', leveling_routes.get('parliamentary', []))
@@ -315,9 +476,17 @@ class LevelingRoutes:
 
     def get_leveling_role(self, role_name: str) -> LevelingRole:
         """
-        Get leveling role of a branch
-        :param role_name: the role name of the needed role
-        :return: leveling role
+        Get :class:`LevelingRole` by it's name.
+
+        Parameters
+        ___________
+        role_name: :class:`str`
+            The name of the role that will be searched for.
+
+        Returns
+        -------
+        :class:`LevelingRole`
+            The LevelingRole or `None` if it isn't found.
         """
         for branch in self:
             role = branch.find_role(role_name)
@@ -325,12 +494,27 @@ class LevelingRoutes:
                 return role
 
     def __iter__(self):
-        """Iter magic method so when an instance of this class is looped over, it'll loop over the list of available branches"""
+        """Iter magic method so when an instance of this class is looped over, it'll loop over the list of available branches."""
         yield from [self.parliamentary, self.honours]
 
 
 class LevelingData:
-    """Class for storing leveling data for a guild."""
+    """
+    Represents all the data attached to :class:`LevelingGuild`.
+
+    Attributes
+    __________
+    guild: :class:`discord.Guild`
+        The discord guild object.
+    level_up_channel: :class:`int`
+        ID of the level up channel for the LevelingGuild, defaults to 0 if not set.
+    leveling_routes: :class:`LevelingRoutes`
+        The leveling routes of LevelingGuild.
+    honours_channels :class:`DatabaseList`
+        List of honours channels.
+    automember :class:`bool`
+        True if automember functionality is enabled, defaults to False if not set in the database.
+    """
     def __init__(self, guild: discord.Guild, leveling_data: dict):
         self.guild = guild
         self.level_up_channel = leveling_data.get('level_up_channel', 0)
@@ -344,7 +528,7 @@ class LevelingData:
         self.automember = leveling_data.get('automember', False)
 
     def toggle_automember(self):
-        """Toggle automember setting"""
+        """Toggle :attr:`automember` and in the database."""
         self.automember = not bool(self.automember)
         db.leveling_data.update_one(
             {'guild_id': self.guild.id},
@@ -352,7 +536,7 @@ class LevelingData:
         )
 
     def __setattr__(self, key, value):
-        """For some variables, changing their value will allo edit the entry in the database."""
+        """For some variables, changing their value will also edit the entry in the database."""
         if key in ['level_up_channel', 'honours_channels'] and key in self.__dict__ and self.__dict__[key] != value:
             db.leveling_data.update_one(
                 {'guild_id': self.guild.id},
@@ -368,7 +552,24 @@ class LevelingData:
 
 
 class LevelingGuild(LevelingData):
-    """The leveling class for guilds."""
+    """Represents a Leveling Guilds.
+
+    This implements the functionality of :class:`LevelingData`.
+
+    Attributes
+    __________
+    bot: :class:`TLDR`
+        The bot instance.
+    guild: :class:`discord.Guild`
+        The discord guild object.
+    id: :class:`int`
+        The discord id of the guild.
+    members :class:`List[:class:`LevelingMember`]`
+        List of LevelingMembers that belong to this guild.
+    """
+
+    __slots__ = ('bot', 'guild', 'id', 'members')
+
     # TODO: remove user function
     def __init__(self, bot, guild: discord.Guild):
         self.bot = bot
@@ -382,27 +583,52 @@ class LevelingGuild(LevelingData):
 
     def get_leveling_role(self, role_name: str) -> LevelingRole:
         """
-        :param role_name: the name that the role will be searched by
-        :return: Leveling role with the name role_name
+        Get :class:`LevelingRole` by it's name.
+
+        Parameters
+        ___________
+        role_name: :class:`str`
+            The name of the role that will be searched for.
+
+        Returns
+        -------
+        :class:`LevelingRole`
+            The LevelingRole or `None` if it isn't found.
         """
         return self.leveling_routes.get_leveling_role(role_name)
 
     def get_leveling_route(self, name: str) -> LevelingRoute:
         """
-        :param name: name of the branch
-        :return: either parliamentary or honours leveling route
+        Get :class:`LevelingRoute` by it's name.
+
+        Parameters
+        ___________
+        name: :class:`str`
+            The name of the route that will be searched for.
+
+        Returns
+        -------
+        :class:`LevelingRole`
+            The LevelingRoute or `None` if it isn't found.
         """
         for branch in self.leveling_routes:
+            # since all the branches have unique names, search only by their first character
             if branch.name[0] == name[0]:
                 return branch
 
-    async def get_member(self, member_id: int) -> Union[LevelingMember, None]:
+    async def get_member(self, member_id: int) -> Optional[LevelingMember]:
         """
-        Looks for member in self.members, if member isn't found, will look for member in guild and add it to self.members
-        if member isnt in guild, will return None
+        Looks for member in :attr:`members`, if member isn't found, will look for member in guild and add it to :attr:`members`.
 
-        :param member_id: id of the member that will be returned
-        :return: Leveling member if member is found, otherwise None
+        Parameters
+        ___________
+        member_id: :class:`int`
+            Id of the member that will be searched for.
+
+        Returns
+        -------
+        Optional[:class:`LevelingRole`]
+            The LevelingMember or `None` if member isn't in the guild.
         """
         # try to get member from list of members
         member = next(filter(lambda m: m.id == member_id, self.members), None)
@@ -423,18 +649,35 @@ class LevelingGuild(LevelingData):
 
     def add_member(self, member: discord.Member) -> LevelingMember:
         """
-        Converts member to leveling member a member to self.members
-        :param member: discord.Member that will be added
-        :return: converted leveling member
+        Converts :class:`discord.Member` to :class:`LevelingMember` and adds it to :attr:`members`.
+
+        Parameters
+        ___________
+        member: :class:`discord.Member`
+            The discord member.
+
+        Returns
+        -------
+        :class:`LevelingMember`
+            The LevelingMember.
         """
         leveling_member = LevelingMember(self.bot, self, member)
         self.members.append(leveling_member)
         return leveling_member
 
-    def get_level_up_channel(self, message: discord.Message):
+    def get_level_up_channel(self, message: discord.Message) -> discord.TextChannel:
         """
-        :param message: discord.Message that will be defaulted to if needed
-        :return: Level up channel if one is set, otherwise message.channel
+        Get level up channel for LevelingGuild.
+
+        Parameters
+        ___________
+        message: :class:`discord.Message`
+            The discord message that will be used as a backup if LevelingGuild doesn't have a level_up_channel set.
+
+        Returns
+        -------
+        :class:`discord.TextChannel`
+            The discord channel.
         """
         # get channel where to send level up message
         channel = self.bot.get_channel(self.level_up_channel)
@@ -446,26 +689,50 @@ class LevelingGuild(LevelingData):
 
 
 class LevelingMember(LevelingUser):
-    """The leveling class for members."""
+    """Represents a Leveling Member to a :class:`LevelingGuild`.
+
+    This implements the functionality of :class:`LevelingUser`.
+
+    Attributes
+    __________
+    bot: :class:`TLDR`
+        The bot instance.
+    guild: :class:`LevelingGuild`
+        The guild the LevelingMember belongs to.
+    id: :class:`int`
+        The discord id of the member.
+    member :class:`discord.Member`
+        The discord member object.
+    """
+
+    __slots__ = ('bot', 'guild', 'id', 'member')
+
     def __init__(self, bot, guild: LevelingGuild, member: discord.Member):
         self.bot = bot
         self.guild = guild
 
         self.id = member.id
-        self.roles = member.roles
         self.member = member
 
         # add leveling user data to this class
         leveling_user_data = db.get_leveling_user(member.guild.id, member.id)
         super().__init__(self, leveling_user_data)
 
-    async def add_points(self, branch_name: str, amount: int):
+    async def add_points(self, branch: Union[LevelingRoute, str], amount: int) -> None:
         """
-        Add points to a branch for member
-        :param branch_name: branch where to add points
-        :param amount: how many points to add
+        Add points to a branch for LevelingMember.
+
+        Parameters
+        -----------
+        branch: Union[:class:`str`, :class:`LevelingRoute`]
+            The branch that the points will be added to. Can be either :class:`str` or :class:`LevelingRoute`.
+            If :class:`str`, the branch will be converted to :class:`LevelingRoute`.
+        amount: :class:`int`
+            The amount of points to add.
         """
-        branch = self.guild.get_leveling_route(branch_name)
+        if type(branch) == str:
+            branch = self.guild.get_leveling_route(branch)
+
         user_branch = self.parliamentary if branch.name == 'parliamentary' else self.honours
         # if user is receiving their first points give them the first role
         if user_branch.points == 0:
@@ -478,6 +745,19 @@ class LevelingMember(LevelingUser):
         user_branch.points += amount
 
     async def add_role(self, role: LevelingRole) -> discord.Role:
+        """
+        Converts LevelingRole to guild role object and adds the role to the discord member.
+
+        Parameters
+        ___________
+        role: :class:`LevelingRole`
+            The role that will be added to the member.
+
+        Returns
+        -------
+        :class:`discord.Role`
+            The guild role object.
+        """
         # get discord.Role role
         guild_role = await role.get_guild_role()
         # give role to user
@@ -486,9 +766,17 @@ class LevelingMember(LevelingUser):
 
     async def level_up(self, branch: LevelingRoute) -> Tuple[discord.Role, int, int]:
         """
-        Level up and rank up member
-        :param branch: branch which will be used
-        :return: current_role, levels_up (how many levels user went up), roles_up (how many roles user went up)
+        Levels up and ranks up LevelingMember.
+
+        Parameters
+        __________
+        branch :class:`LevelingRoute`
+            The branch the LevelingMember will be leveled up on.
+
+        Returns
+        -------
+        Tuple[:class:`discord.Role`, :class:`int`, :class:`int`]
+            The new or current discord role of the member, how many levels LevelingMember went up, how many roles/ranks LevelingMember went up.
         """
         user_branch = self.parliamentary if branch.name == 'parliamentary' else self.honours
         levels_up = self.calculate_levels_up(user_branch)
@@ -519,11 +807,18 @@ class LevelingMember(LevelingUser):
 
     async def level_up_message(self, message: discord.Message, user_branch: LevelingUserBranch, current_role: discord.Role, roles_up: int):
         """
-        Send message about user leveling up
-        :param message: message which caused the level up, needed for get_level_up_channel()
-        :param user_branch: branch which will be used
-        :param current_role: the role the member has / ranked up to
-        :param roles_up: how many roles user went up
+        Send LevelingMember message about their level up.
+
+        Parameters
+        __________
+        message: :class:`discord.Message`
+            The message which caused the level up, needed for :func:`get_level_up_channel`.
+        user_branch: :class:`LevelingUserBranch`
+            The branch which the user leveled up on.
+        current_role: :class:`discord.Role`
+            The current/new role of LevelingMember which will be used in the reward_text
+        roles_up: :class:`int`
+            The number of roles/ranks LevelingMember went up.
         """
         role_level = self.user_role_level(user_branch)
         if roles_up:
@@ -548,9 +843,18 @@ class LevelingMember(LevelingUser):
 
     def user_role_level(self, user_branch: LevelingUserBranch) -> int:
         """
-        Get users role level
-        :param user_branch: branch which will be used
-        :return: negative number if user needs to go up role(s) otherwise returns positive number of users role level
+        Get the role level of LevelingMembers current rank.
+
+        Parameters
+        -----------
+        user_branch: :class:`LevelingUserBranch`
+            The user branch that will be used.
+
+        Returns
+        -------
+        :class:`int`
+            Negative number if LevelingMember needs to go up a rank/role, otheriwise, positive number from 0-5 indicating
+            LevelingMember's role level for user_branch
         """
         branch = self.guild.get_leveling_route(user_branch.branch)
 
@@ -594,9 +898,17 @@ class LevelingMember(LevelingUser):
     @staticmethod
     def calculate_levels_up(user_branch: LevelingUserBranch) -> int:
         """
-        Calculate how many levels user needs to go up from current standing.
-        :param user_branch: branch which will be used
-        :return: how many levels user needs to go up by
+        Calculate how many levels user needs to go up from current standing for given user branhc.
+
+        Parameters
+        -----------
+        user_branch: :class:`LevelingUserBranch`
+            The user branch that will be used.
+
+        Returns
+        -------
+        :class:`int`
+            The number of levels LevelingMember needs to go up.
         """
         user_levels = user_branch.level
         user_points = user_branch.points
@@ -614,8 +926,12 @@ class LevelingMember(LevelingUser):
 
     async def notify_perks(self, role: LevelingRole):
         """
-        Sends user info about perks if role has them
-        :param role: leveling role
+        Sends user info about role's perks if role has them.
+
+        Parameters
+        -----------
+        role: :class:`LevelingRole`
+            The role which's perks will be sent to user
         """
         if role.perks:
             perks_str = "\n • ".join(role.perks)
@@ -638,9 +954,17 @@ class LevelingMember(LevelingUser):
 
     def rank(self, user_branch: LevelingUserBranch) -> int:
         """
-        Get members rank in branch
-        :param user_branch: branch which will be used
-        :return: members rank
+        Get LevelingMember's rank in branch.
+
+        Parameters
+        -----------
+        user_branch: :class:`LevelingUserBranch`
+            The user branch that will be used.
+
+        Returns
+        -------
+        :class:`int`
+            The rank of LevelingMember in user branch.
         """
         key = f'{user_branch.branch[0]}p'
         sorted_users = [u for u in db.leveling_users.find({
@@ -653,8 +977,17 @@ class LevelingMember(LevelingUser):
     @staticmethod
     def percent_till_next_level(user_branch: LevelingUserBranch) -> float:
         """
-        :param user_branch: branch that will be used
-        :return: precent of how close user is to leveling up
+        Get the percent number of how close user is to leveling up.
+
+        Parameters
+        -----------
+        user_branch: :class:`LevelingUserBranch`
+            The user branch that will be used.
+
+        Returns
+        -------
+        :class:`float`
+            The percent number, with one decimal point of how close user is to leveling up
         """
         # points needed to gain next level from beginning of user level
         points_to_level_up = (5 * (user_branch.level ** 2) + 50 * user_branch.level + 100)
@@ -670,22 +1003,43 @@ class LevelingMember(LevelingUser):
 
 
 class LevelingSystem:
-    """Main handler of the leveling guilds."""
+    """
+    The handler of :class:`LevelingGuild`s.
+
+    This is used to get LevelingGuilds and LevelingMembers if needed.
+
+    Attributes
+    __________
+    bot: :class:`TLDR`
+        The bot instance.
+    guilds: :class:`List[:class:`LevelingGuild`]`
+        List of the LevelingGuilds attached to the bot.
+    """
     def __init__(self, bot):
         self.bot = bot
         # list of leveling guilds
         self.guilds = []
 
     def initialise_guilds(self):
-        """Function called in cogs.events.on_ready() to initialise all the guilds and cache them"""
+        """Function called in :func:`cogs.events.on_ready` to initialise all the guilds and cache them."""
         for guild in self.bot.guilds:
             self.add_guild(guild)
 
     async def get_member(self, guild_id: int, member_id: int) -> LevelingMember:
         """
-        :param guild_id: the id for the guild where to pull the member from
-        :param member_id: the id of the member that will be returned
-        :return: leveling member with all the leveling data attached
+        Get :class:`LevelingMember` from :class:`LevelingGuild`.
+
+        Parameters
+        -----------
+        guild_id: :class:`int`
+            The ID of the guild where the LevelingMember will be gotten from.
+        member_id: :class:`int`
+            The ID of the member that will be returned.
+
+        Returns
+        -------
+        :class:`LevelingMember`
+            The LevelingMember with all the leveling data attached or `None` if member isn't found.
         """
         guild = self.get_guild(guild_id)
         if guild:
@@ -693,15 +1047,33 @@ class LevelingSystem:
 
     def get_guild(self, guild_id: int) -> LevelingGuild:
         """
-        :param guild_id: id of the guild that will be returned
-        :return: a guild from self.guild if guild by the id exists, if it doesnt, will return None
+        Get :class:`LevelingGuild`.
+
+        Parameters
+        -----------
+        guild_id: :class:`int`
+            The ID of the needed guild.
+
+        Returns
+        -------
+        :class:`LevelingGuild`
+            The LevelingGuild or `None` if the LevelingGuild isn't found.
         """
         return next(filter(lambda guild: guild.id == guild_id, self.guilds), None)
 
     def add_guild(self, guild: discord.Guild) -> LevelingGuild:
         """
-        :param guild: type discord.Guild guild that will be added to the list of guilds
-        :return: Same guild, but converted to leveling guild
+        Converts :class:`discord.Guild` to :class:`LevelingGuild` and adds it to :attr:`guilds`.
+
+        Parameters
+        -----------
+        guild: :class:`discord.Guild`
+            The guild that will be added.
+
+        Returns
+        -------
+        :class:`LevelingGuild`
+            The converted guild.
         """
         leveling_guild = LevelingGuild(self.bot, guild)
         self.guilds.append(leveling_guild)
