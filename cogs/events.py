@@ -242,7 +242,7 @@ class Events(commands.Cog):
         # give topic author boost if there is a topic author
         if topic_author:
 
-            leveling_member = await self.bot.leveling_system.get_member(int(guild_id), topic_author_id.id)
+            leveling_member = await self.bot.leveling_system.get_member(int(guild_id), topic_author_id)
             leveling_member.boosts.daily_debate.expires = round(time.time()) + (3600 * 6)
             leveling_member.boosts.daily_debate.multiplier = 0.15
 

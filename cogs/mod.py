@@ -1119,9 +1119,11 @@ class Mod(commands.Cog):
     )
     async def command_access_give(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
                                   user_input: Union[discord.Role, str] = None):
-        access_type, user_input = await self.command_access_check(ctx, command, user_input, change='give')
-        if type(access_type) == discord.Message:
+        data = await self.command_access_check(ctx, command, user_input, change='give')
+        if type(data) == discord.Message:
             return
+
+        access_type, user_input = data
 
         db.commands.update_one(
             {'guild_id': ctx.guild.id, 'command_name': command.name},
@@ -1147,9 +1149,11 @@ class Mod(commands.Cog):
     )
     async def command_access_take(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
                                   user_input: Union[discord.Role, str] = None):
-        access_type, user_input = await self.command_access_check(ctx, command, user_input, change='take')
-        if type(access_type) == discord.Message:
+        data = await self.command_access_check(ctx, command, user_input, change='take')
+        if type(data) == discord.Message:
             return
+
+        access_type, user_input = data
 
         db.commands.update_one(
             {'guild_id': ctx.guild.id, 'command_name': command.name},
@@ -1175,9 +1179,11 @@ class Mod(commands.Cog):
     )
     async def command_access_default(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
                                      user_input: Union[discord.Role, str] = None):
-        access_type, user_input = await self.command_access_check(ctx, command, user_input, change='default')
-        if type(access_type) == discord.Message:
+        data = await self.command_access_check(ctx, command, user_input, change='default')
+        if type(data) == discord.Message:
             return
+
+        access_type, user_input = data
 
         db.commands.update_one(
             {'guild_id': ctx.guild.id, 'command_name': command.name},

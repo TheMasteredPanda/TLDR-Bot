@@ -162,7 +162,7 @@ class TLDR(commands.Bot):
     async def process_command(self, message: discord.Message):
         ctx = await self.get_context(message)
 
-        if not ctx.command:
+        if ctx.command is None:
             return
 
         # create copy of original so values of original aren't modified
@@ -182,6 +182,7 @@ class TLDR(commands.Bot):
             return await modules.embed_maker.error(ctx, f'Your access to this command has been taken away')
 
         await self.invoke(ctx)
+
 
 if __name__ == '__main__':
     TLDR().run(config.BOT_TOKEN)
