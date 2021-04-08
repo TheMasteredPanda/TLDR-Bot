@@ -13,8 +13,6 @@ from modules.utils import get_guild_role
 
 db = database.get_connection()
 
-# TODO: bring back __setattr__ system
-
 # TODO: do this sort of thing for commands too
 
 
@@ -233,9 +231,9 @@ class LevelingUserBranch:
         """For some variables, changing their value will also edit the entry in the database."""
         if key in ['points', 'level', 'role'] and key in self.__dict__ and self.__dict__[key] != value:
             key_switch = {
-                'points': f'{self.branch[0]}p',
-                'level': f'{self.branch[0]}_level',
-                'role': f'{self.branch[0]}_role'
+                'points': f'{self.branch.name[0]}p',
+                'level': f'{self.branch.name[0]}_level',
+                'role': f'{self.branch.name[0]}_role'
             }
             db.leveling_users.update_one(
                 {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
@@ -275,7 +273,7 @@ class LevelingUser:
 
         self.parliamentary = LevelingUserBranch(
             leveling_member,
-            'parliamentary',
+            self.leveling_member.guild.leveling_routes.parliamentary,
             leveling_user_data['pp'],
             leveling_user_data['p_level'],
             leveling_user_data['p_role']
@@ -283,7 +281,7 @@ class LevelingUser:
 
         self.honours = LevelingUserBranch(
             leveling_member,
-            'honours',
+            self.leveling_member.guild.leveling_routes.honours,
             leveling_user_data['hp'],
             leveling_user_data['h_level'],
             leveling_user_data['h_role']
@@ -294,7 +292,7 @@ class LevelingUser:
         # this is needed in some places like the leaderboard command
         self.reputation = LevelingUserBranch(
             leveling_member,
-            'reputation',
+            self.leveling_member.guild.leveling_routes.reputation,
             leveling_user_data.get('rp', 0),
             0,
             ''
@@ -568,8 +566,6 @@ class LevelingGuild(LevelingData):
         List of LevelingMembers that belong to this guild.
     """
 
-    __slots__ = ('bot', 'guild', 'id', 'members')
-
     # TODO: remove user function
     def __init__(self, bot, guild: discord.Guild):
         self.bot = bot
@@ -687,6 +683,9 @@ class LevelingGuild(LevelingData):
 
         return channel
 
+    def __setattr__(self, key, value):
+        self.__dict__[key] = value
+
 
 class LevelingMember(LevelingUser):
     """Represents a Leveling Member to a :class:`LevelingGuild`.
@@ -704,8 +703,6 @@ class LevelingMember(LevelingUser):
     member :class:`discord.Member`
         The discord member object.
     """
-
-    __slots__ = ('bot', 'guild', 'id', 'member')
 
     def __init__(self, bot, guild: LevelingGuild, member: discord.Member):
         self.bot = bot
@@ -841,7 +838,8 @@ class LevelingMember(LevelingUser):
         channel = self.guild.get_level_up_channel(message)
         await channel.send(embed=embed, content=content)
 
-    def user_role_level(self, user_branch: LevelingUserBranch) -> int:
+    @staticmethod
+    def user_role_level(user_branch: LevelingUserBranch) -> int:
         """
         Get the role level of LevelingMembers current rank.
 
@@ -856,7 +854,7 @@ class LevelingMember(LevelingUser):
             Negative number if LevelingMember needs to go up a rank/role, otheriwise, positive number from 0-5 indicating
             LevelingMember's role level for user_branch
         """
-        branch = self.guild.get_leveling_route(user_branch.branch)
+        branch = user_branch.branch
 
         user_role = branch.find_role(user_branch.role)
         if not user_role:
@@ -966,7 +964,7 @@ class LevelingMember(LevelingUser):
         :class:`int`
             The rank of LevelingMember in user branch.
         """
-        key = f'{user_branch.branch[0]}p'
+        key = f'{user_branch.branch.name[0]}p'
         sorted_users = [u for u in db.leveling_users.find({
             'guild_id': self.guild.id,
             key: {'$gt': user_branch.points - 0.1}  # 0.1 is subtracted so member will be included

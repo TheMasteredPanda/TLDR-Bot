@@ -23,7 +23,7 @@ async def message(
         colour: str = None,
         title: str = None,
         send: bool = False
-):
+) -> Union[discord.Message, discord.Embed]:
     """
     A function to easily create embeds with a certain look.
 

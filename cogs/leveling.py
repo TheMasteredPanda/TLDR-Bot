@@ -357,7 +357,7 @@ class Leveling(commands.Cog):
             if 'Mod' in get_user_clearance(ctx.author):
                 return await embed_maker.error(ctx, 'Invalid sub command')
 
-    async def modify_perks(self, ctx: commands.Context, command: str, args: dict, message: str) -> Optional[dict]:
+    async def modify_perks(self, ctx: commands.Context, command: str, args: dict, message: str) -> Optional[Union[dict, discord.Message]]:
         if args is None:
             return await embed_maker.command_error(ctx)
 
@@ -678,7 +678,7 @@ class Leveling(commands.Cog):
     @staticmethod
     async def rep_rank_str(leveling_member: leveling.LevelingMember, verbose: bool):
         # this is kind of scuffed, but it works
-        rank = leveling_member.rank(leveling.LevelingUserBranch(leveling_member, 'rep', leveling_member.rp, 0, ''))
+        rank = leveling_member.rank(leveling_member.guild.leveling_routes.reputation)
         if verbose:
             rep_time = int(leveling_member.rep_timer) - round(time.time())
             if rep_time < 0:
