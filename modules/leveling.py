@@ -21,6 +21,8 @@ class DatabaseList(list):
     Special list which co-opts the append, remove and other methods, so the same values can be updated in the database.
     since append and remove don't set the value of the list, the __setattr__ method couldn't be used and this had to be created.
 
+    To keep things simple, __delitem__ and insert methods automatically raise an exception.
+
     Attributes
     __________
     collection: :class:`pymongo.collection.Collection`
