@@ -678,7 +678,7 @@ class Leveling(commands.Cog):
     @staticmethod
     async def rep_rank_str(leveling_member: leveling.LevelingMember, verbose: bool):
         # this is kind of scuffed, but it works
-        rank = leveling_member.rank(leveling_member.guild.leveling_routes.reputation)
+        rank = leveling_member.rank(leveling_member.reputation)
         if verbose:
             rep_time = int(leveling_member.rep_timer) - round(time.time())
             if rep_time < 0:
