@@ -15,6 +15,8 @@ class User:
     """
     Class for holding user data.
 
+    This class is for custom command variables to grant limited access to certain user values.
+
     Attributes
     __________
     id: :class:`int`
@@ -49,6 +51,8 @@ class Guild:
     """
     Class for holding guild data.
 
+    This class is for custom command variables to grant limited access to certain guild values.
+
     Attributes
     __________
     id: :class:`int`
@@ -73,6 +77,8 @@ class Guild:
 class Channel:
     """
     Class for holding channel data.
+
+    This class is for custom command variables to grant limited access to certain channel values.
 
     Attributes
     __________
@@ -99,6 +105,8 @@ class Message:
     """
     Class for holding message data.
 
+    This class is for custom command variables to grant limited access to certain message values.
+
     Attributes
     __________
     id: :class:`int`
@@ -123,6 +131,8 @@ class Message:
 class Role:
     """
     Class for holding role data.
+
+    This class is for custom command variables to grant limited access to certain role values.
 
     Attributes
     __________

@@ -55,7 +55,7 @@ def seconds(sec: int, *, accuracy: int = 2):
 
 def parse(string: str = None, return_string: bool = False):
     """
-    Converts time from human readable format to seconds.
+    Converts time from human readable format from the beginning of given string to seconds.
 
     Parameters
     ___________

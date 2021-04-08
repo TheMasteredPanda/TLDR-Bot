@@ -6,6 +6,8 @@ from modules import database
 
 db = database.get_connection()
 
+# TODO: create separate class for timer.
+
 
 class Timers:
     """
@@ -32,7 +34,7 @@ class Timers:
 
     async def run(self, timer) -> None:
         """
-        Run a timer.
+        Runs a timer, by sleeping until the timer expires.
 
         Parameters
         ___________

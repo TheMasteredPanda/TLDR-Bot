@@ -93,7 +93,8 @@ class ReactionMenu:
 
 class BookMenu(ReactionMenu):
     """
-    Implements a special type of reaction menu with different pages.
+    Implements a special type of reaction menu which makes it easier to create a book style reaction menu.
+    It automatically adds buttons and their functions.
 
     Attributes
     __________

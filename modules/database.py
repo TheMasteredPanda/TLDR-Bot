@@ -22,52 +22,52 @@ class Connection:
 
     leveling_users: :class:`pymongo.collection.Collection`
         The leveling_users collection.
-        {
-            "guild_id" : :class:`int`,
-            "user_id" : :class:`int`,
-            "pp" : :class:`int`,
-            "p_level" : :class:`int`,
-            "hp" : :class:`int`,
-            "h_level" : :class:`int`,
-            "p_role" : :class:`str`,
-            "h_role" : :class:`str`,
-            "settings" : {
-                "@_me" : bool
-            },
-            "rep_timer" : :class:`int`,
-            "last_rep" : :class:`int`,
-            "rep" : :class:`int`,
-            "boosts" : {
-                :class:`str`: {
-                    "expires": :class:`int`,
-                    "multiplier": float
-                }
-            },
-            "rp" : :class:`int`
-        }
+            {
+                "guild_id" : :class:`int`,
+                "user_id" : :class:`int`,
+                "pp" : :class:`int`,
+                "p_level" : :class:`int`,
+                "hp" : :class:`int`,
+                "h_level" : :class:`int`,
+                "p_role" : :class:`str`,
+                "h_role" : :class:`str`,
+                "settings" : {
+                    "@_me" : bool
+                },
+                "rep_timer" : :class:`int`,
+                "last_rep" : :class:`int`,
+                "rep" : :class:`int`,
+                "boosts" : {
+                    :class:`str`: {
+                        "expires": :class:`int`,
+                        "multiplier": float
+                    }
+                },
+                "rp" : :class:`int`
+            }
 
     leveling_data: :class:`pymongo.collection.Collection`
         The leveling_data collection.
-        {
-            "guild_id" : :class:`int`,
-            "level_up_channel" : :class:`int`,
-            "leveling_routes" : {
-                "parliamentary" : [
-                    {
-                        "name" : :class:`str`,
-                        "perks" : List[:class:`str`]
-                    }
-                ],
-                "honours" : [
-                    {
-                        "name" : :class:`str`,
-                        "perks" : List[:class:`str`]
-                    }
-                ]
-            },
-            "honours_channels" : List[:class:`int`],
-            "automember" : bool
-        }
+            {
+                "guild_id" : :class:`int`,
+                "level_up_channel" : :class:`int`,
+                "leveling_routes" : {
+                    "parliamentary" : [
+                        {
+                            "name" : :class:`str`,
+                            "perks" : List[:class:`str`]
+                        }
+                    ],
+                    "honours" : [
+                        {
+                            "name" : :class:`str`,
+                            "perks" : List[:class:`str`]
+                        }
+                    ]
+                },
+                "honours_channels" : List[:class:`int`],
+                "automember" : bool
+            }
 
     left_leveling_users: :class:`pymongo.collection.Collection`
         The left_leveling_users collection for holding members who have left their guild.
@@ -75,87 +75,87 @@ class Connection:
 
     timers: :class:`pymongo.collection.Collection`
         The timers collection
-        {
-            "guild_id" : :class:`int`,
-            "expires" : :class:`int`,
-            "event" : :class:`str`,
-            "extras" : :class:`dict`
-        }
+            {
+                "guild_id" : :class:`int`,
+                "expires" : :class:`int`,
+                "event" : :class:`str`,
+                "extras" : :class:`dict`
+            }
 
     commands: :class:`pymongo.collection.Collection`
         The commands collection
-        {
-            "guild_id" : :class:`int`,
-            "command_name" : :class:`str`,
-            "disabled" : :class:`int`,
-            "user_access" : {
-                "user id" : "take" or "give"
-            },
-            "role_access" : {
-                "role id" : "take" or "give"
+            {
+                "guild_id" : :class:`int`,
+                "command_name" : :class:`str`,
+                "disabled" : :class:`int`,
+                "user_access" : {
+                    "user id" : "take" or "give"
+                },
+                "role_access" : {
+                    "role id" : "take" or "give"
+                }
             }
-        }
 
     daily_debates: :class:`pymongo.collection.Collection`
         The daily_debates collection
-        {
-            "guild_id" : :class:`int`,
-            "channel_id" : :class:`int`,
-            "poll_channel_id" : :class:`int`,
-            "role_id" : :class:`int`,
-            "time" : :class:`str`,
-            "topics" : [
-                {
-                    "topic" : :class:`str`
-                    "topic_author_id" : :class:`int`,
-                    "topic_options" : :class:`str`
-                },
-            ]
-        }
+            {
+                "guild_id" : :class:`int`,
+                "channel_id" : :class:`int`,
+                "poll_channel_id" : :class:`int`,
+                "role_id" : :class:`int`,
+                "time" : :class:`str`,
+                "topics" : [
+                    {
+                        "topic" : :class:`str`
+                        "topic_author_id" : :class:`int`,
+                        "topic_options" : :class:`str`
+                    },
+                ]
+            }
 
     tickets: :class:`pymongo.collection.Collection`
         The tickets collection
-        {
-            "guild_id" : :class:`int`,
-            "ticket_channel_id" : :class:`int`,
-            "ticket_author_id" : :class:`int`
-        }
+            {
+                "guild_id" : :class:`int`,
+                "ticket_channel_id" : :class:`int`,
+                "ticket_author_id" : :class:`int`
+            }
 
     custom_commands: :class:`pymongo.collection.Collection`
         The custom_commands collection
-        {
-            "name" : :class:`str`,
-            "response" : :class:`str`,
-            "clearance" : :class:`str`,
-            "role" : :class:`int`,
-            "response_channel" : :class:`int`,
-            "command_channels" : List[:class:`int`],
-            "reactions" : List[:class:`str`],
-            "python" : :class:`str`,
-            "pre" : :class:`str`,
-            "guild_id" : :class:`int`
-        }
+            {
+                "name" : :class:`str`,
+                "response" : :class:`str`,
+                "clearance" : :class:`str`,
+                "role" : :class:`int`,
+                "response_channel" : :class:`int`,
+                "command_channels" : List[:class:`int`],
+                "reactions" : List[:class:`str`],
+                "python" : :class:`str`,
+                "pre" : :class:`str`,
+                "guild_id" : :class:`int`
+            }
 
     watchlist: :class:`pymongo.collection.Collection`
         The watchlist collection
-        {
-            "guild_id" : :class:`int`,
-            "user_id" : :class:`int`,
-            "filters" : List[:class:`str`],
-            "channel_id" : :class:`int`
-        }
+            {
+                "guild_id" : :class:`int`,
+                "user_id" : :class:`int`,
+                "filters" : List[:class:`str`],
+                "channel_id" : :class:`int`
+            }
 
     cases: :class:`pymongo.collection.Collection`
         The cases collection
-        {
-            'guild_id': :class:`int`,
-            'user_id': :class:`int`,
-            'type': :class:`str`,
-            'reason': :class:`str`,
-            'created_at': :class:`int`,
-            'moderator': :class:`int`,
-            'case_number': :class:`int`
-        }
+            {
+                'guild_id': :class:`int`,
+                'user_id': :class:`int`,
+                'type': :class:`str`,
+                'reason': :class:`str`,
+                'created_at': :class:`int`,
+                'moderator': :class:`int`,
+                'case_number': :class:`int`
+            }
     """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -209,7 +209,7 @@ class Connection:
         ___________
         guild_id: :class:`int`
             ID of the guild.
-        member_id: Optional[:class:`dict`]
+        fields: Optional[:class:`dict`]
             what fields to return when querying the database, if not set, all the data will be returned.
 
         Returns
