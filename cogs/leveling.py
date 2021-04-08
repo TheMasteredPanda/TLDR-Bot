@@ -756,7 +756,7 @@ class Leveling(commands.Cog):
                 if boost.has_expired():
                     boost.remove()
 
-                percent = round((boost.multiplier - 1) * 100, 1)
+                percent = round(boost.multiplier * 100, 1)
                 boost_str += f'`#{i + 1}` - {percent}% boost | Expires: {format_time.seconds(boost.expires - round(time.time()), accuracy=5)}'
                 boost_str += f' | Type: {boost.boost_type}\n'
 
