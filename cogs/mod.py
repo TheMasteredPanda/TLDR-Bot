@@ -1442,13 +1442,6 @@ class Mod(commands.Cog):
     @staticmethod
     def embed_message_to_text(message: discord.Message):
         embed = message.embeds[0]
-        # convert fields to text
-        fields = ""
-        for field in embed.fields:
-            if fields:
-                fields += '\n'
-
-            fields += f'{field.name}\n{field.value}'
 
         # get either title or author
         title = ''
@@ -1457,7 +1450,15 @@ class Mod(commands.Cog):
         elif embed.author:
             title = embed.author.name if type(embed.author) != str else embed.author
         # format description
-        description = '\n' + embed.description if embed.description else ''
+        description = ('\n' if title else '') + embed.description if embed.description else ''
+
+        # convert fields to text
+        fields = ""
+        for field in embed.fields:
+            if fields or description:
+                fields += '\n'
+
+            fields += f'{field.name}\n{field.value}'
 
         # convert values to a multi line message
         text = f"{title}" \

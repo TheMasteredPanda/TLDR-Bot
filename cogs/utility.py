@@ -407,7 +407,7 @@ class Utility(commands.Cog):
         guild_id = timer['guild_id']
         guild = self.bot.get_guild(int(guild_id))
 
-        if not guild_id:
+        if guild:
             return
 
         member_id = timer['extras']['member_id']
