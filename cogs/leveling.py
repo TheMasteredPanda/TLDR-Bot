@@ -816,7 +816,7 @@ class Leveling(commands.Cog):
             current_role, levels_up, roles_up = await leveling_member.level_up(branch)
 
             if levels_up:
-                await leveling_member.level_up_message(message, leveling_member.parliamentary, current_role, roles_up)
+                await leveling_member.level_up_message(message, leveling_member.parliamentary, current_role.get_guild_role(), roles_up)
 
         # level honours route
         if message.channel.id in leveling_member.guild.honours_channels and not self.hp_cooldown.user_cooldown(guild.id, author.id):
@@ -827,7 +827,7 @@ class Leveling(commands.Cog):
             current_role, levels_up, roles_up = await leveling_member.level_up(branch)
 
             if levels_up:
-                await leveling_member.level_up_message(message, leveling_member.honours, current_role, roles_up)
+                await leveling_member.level_up_message(message, leveling_member.honours, current_role.get_guild_role(), roles_up)
 
 
 def setup(bot):

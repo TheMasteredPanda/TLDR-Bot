@@ -779,7 +779,7 @@ class LevelingMember(LevelingUser):
         await self.member.add_roles(guild_role)
         return guild_role
 
-    async def level_up(self, branch: LevelingRoute) -> Tuple[discord.Role, int, int]:
+    async def level_up(self, branch: LevelingRoute) -> Tuple[LevelingRole, int, int]:
         """
         Levels up and ranks up LevelingMember.
 
