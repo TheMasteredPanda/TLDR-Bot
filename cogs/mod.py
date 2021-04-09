@@ -1421,50 +1421,43 @@ class Mod(commands.Cog):
         channel_history = await ctx.channel.history(limit=None).flatten()
         channel_history = channel_history[::-1]
 
-        channel_history_string = ''
-        for i, message in enumerate(channel_history):
-            # fix for a weird error
-            if not message or type(message) == str:
-                continue
+        channel_history_string = await self.history_into_string(ctx.guild, channel_history)
 
-            channel_history_string += f"\n{message.author} - {message.created_at.strftime('%H:%M:%S | %Y-%m-%d')}"
+        if config.SERVICE_ACCOUNT_FILE:
+            try:
+                file_url = self.bot.google_drive.upload(channel_history_string, f'{ctx.channel.name} - archive.txt', 'channel archives')
+                error = not bool(file_url)
+            except Exception as e:
+                self.bot.logger.exception(str(e))
+                error = True
 
-            if message.content:
-                channel_history_string += f'\n"{message.content}"'
-
-            # if message has embed, convert the embed to text and add it to channel_history_string
-            if message.embeds:
-                channel_history_string += f'\n"{self.embed_message_to_text(message)}"'
-
-            # if message has attachments add them to channel_history_string
-            if message.attachments:
-                # if message has contents it needs to have \n at the end
-                if message.content:
-                    channel_history_string += '\n'
-
-                # gather urls
-                urls = "\n".join([a.url for a in message.attachments])
-                channel_history_string += f'Attachments: {urls}'
-
-            channel_history_string += '\n'
-
-        # convert mentions like "<@93824009823094832098>" into names
-        channel_history_string = self.replace_mentions(ctx.guild, channel_history_string)
+            if error:
+                await embed_maker.error(ctx, 'Error uploading archive file to google drive')
+            else:
+                return await embed_maker.message(ctx, description=f'File has been been uploaded to google drive: {file_url}', send=True)
 
         # send file containing archive
         return await ctx.send(file=discord.File(StringIO(channel_history_string), filename='archive.txt'))
 
-    def embed_message_to_text(self, message: discord.Message):
+    @staticmethod
+    def embed_message_to_text(message: discord.Message):
+        embed = message.embeds[0]
         # convert fields to text
         fields = ""
-        for field in message.embeds[0].fields:
-            fields += f'\n{field.name}\n{field.value}'
+        for field in embed.fields:
+            if fields:
+                fields += '\n'
+
+            fields += f'{field.name}\n{field.value}'
 
         # get either title or author
-        title = self.get_title(message.embeds[0])
-
+        title = ''
+        if embed.title:
+            title = embed.title.name if type(embed.title) != str else embed.title
+        elif embed.author:
+            title = embed.author.name if type(embed.author) != str else embed.author
         # format description
-        description = '\n' + message.embeds[0].description if message.embeds[0].description else ''
+        description = '\n' + embed.description if embed.description else ''
 
         # convert values to a multi line message
         text = f"{title}" \
@@ -1472,16 +1465,6 @@ class Mod(commands.Cog):
                f"{fields}"
 
         return text
-
-    @staticmethod
-    def get_title(embed: discord.Embed):
-        title = ''
-        if embed.title:
-            title = embed.title.name if type(embed.title) != str else embed.title
-        elif embed.author:
-            title = embed.author.name if type(embed.author) != str else embed.author
-
-        return title
 
     @staticmethod
     def replace_mentions(guild: discord.Guild, string):
@@ -1534,6 +1517,38 @@ class Mod(commands.Cog):
         leveling_guild.toggle_automember()
 
         return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
+
+    async def history_into_string(self, guild: discord.Guild, history: list):
+        history_string = ''
+        for i, message in enumerate(history):
+            # fix for a weird error
+            if not message or type(message) == str:
+                continue
+
+            history_string += f"{message.created_at.strftime('%H:%M:%S | %Y-%m-%d')}"
+
+            if message.content:
+                history_string += f'\n"{message.content}"\n'
+
+            # if message has embed, convert the embed to text and add it to channel_history_string
+            if message.embeds:
+                history_string += f'\n"{self.embed_message_to_text(message)}"\n'
+
+            # if message has attachments add them to channel_history_string
+            if message.attachments:
+                # if message has contents it needs to have \n at the end
+                if message.content:
+                    history_string += '\n'
+
+                # gather urls
+                urls = "\n".join([a.url for a in message.attachments])
+                history_string += f'Attachments: {urls}'
+
+            history_string += '\n'
+
+        # convert mentions like "<@93824009823094832098>" into names
+        history_string = self.replace_mentions(guild, history_string)
+        return history_string
 
 
 def setup(bot):
