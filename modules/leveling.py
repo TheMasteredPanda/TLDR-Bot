@@ -79,16 +79,18 @@ class Boost:
     """
     Holds boost data and implements some functionality for the boost.
 
+    A boost gives a user (multiplier * 100)% more parliamentary points.
+
     Attributes
     __________
     leveling_member: :class:`LevelingMember`
-        The LevelingMember.
+        The LevelingMember who has the boost.
     boost_type: :class:`str`
-        Type of the boost.
+        Type of the boost, rep, daily_debate, etc etc.
     multiplier: :class:`int`
-        Multiplier of the boost.
+        Multiplier of the boost, a multiplier is a floating point number. Example: 0.15 -> 15% more parliamentary points.
     expires: :class:`int`
-        Time when boost expires.
+        Time when boost expires - unix epoch.
     """
     def __init__(self, leveling_member: LevelingMember, boost_type: str, boost: dict):
         self.leveling_member = leveling_member
@@ -155,7 +157,7 @@ class LevelingUserBoosts:
 
     def get_multiplier(self) -> int:
         """
-        Get the sum of all the boosts multipliers
+        Get the sum of all the boosts multipliers + 1
 
         Returns
         -------
@@ -186,6 +188,8 @@ class LevelingUserSettings:
     """
     Represents LevelingUser's settings.
 
+    Also implements some functionality for the settings.
+
     Attributes
     __________
     leveling_member: :class:`LevelingMember`
@@ -208,7 +212,7 @@ class LevelingUserSettings:
 
 class LevelingUserBranch:
     """
-    Represents the data a user has on a branch.
+    Represents the data a user has on a branch, points, level, role etc etc.
 
     Attributes
     __________
@@ -1020,9 +1024,11 @@ class LevelingSystem:
         self.bot = bot
         # list of leveling guilds
         self.guilds = []
+        self.bot.logger.info('LevelingSystem module has been initiated')
 
     def initialise_guilds(self):
         """Function called in :func:`cogs.events.on_ready` to initialise all the guilds and cache them."""
+        self.bot.logger.info(f'Initialising {len(self.bot.guilds)} guilds as LevelingGuilds.')
         for guild in self.bot.guilds:
             self.add_guild(guild)
 
@@ -1076,6 +1082,7 @@ class LevelingSystem:
         :class:`LevelingGuild`
             The converted guild.
         """
+        self.bot.logger.debug(f'Adding guild {guild.name} [{guild.id}] to LevelingSystem.')
         leveling_guild = LevelingGuild(self.bot, guild)
         self.guilds.append(leveling_guild)
         return leveling_guild

@@ -169,6 +169,7 @@ class CustomCommands:
     """
     def __init__(self, bot):
         self.bot = bot
+        self.bot.logger.info('CustomCommands module has been initiated')
 
     @staticmethod
     def match_message(message: discord.Message) -> Optional[dict]:
@@ -304,6 +305,6 @@ class CustomCommands:
                 # replace variable in response with new value
                 response = response.replace(variable, variable.format(**values))
             except Exception as e:
-                print(e)
+                self.bot.logger.exception(str(e))
 
         return response

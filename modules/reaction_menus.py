@@ -28,6 +28,7 @@ class ReactionMenus:
 
         five_minutes = 5 * 60
         self.menus = TTLOrderedDict(default_ttl=five_minutes)
+        self.bot.logger.info('ReactionMenus module has been initiated')
 
     def add(self, menu: Union[ReactionMenu, BookMenu]):
         """

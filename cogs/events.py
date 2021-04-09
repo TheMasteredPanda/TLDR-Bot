@@ -25,23 +25,33 @@ class Events(commands.Cog):
         bot_game = discord.Game(f'@me')
         await self.bot.change_presence(activity=bot_game)
 
-        print(f'{self.bot.user} is ready')
+        await self.check_left_members()
+        await self.bot.timers.run_old()
+        self.bot.leveling_system.initialise_guilds()
 
+        self.bot.logger.info(f'{self.bot.user} is ready')
+
+    async def check_left_members(self):
+        self.bot.logger.info(f'Checking Guilds for left members.')
+        left_member_count = 0
         # check if any users have left while the bot was offline
         for guild in self.bot.guilds:
+            initial_left_members = left_member_count
             guild_members = [m.id for m in await guild.fetch_members(limit=None).flatten()]
             leveling_users = db.leveling_users.find({'guild_id': guild.id})
+
+            self.bot.logger.debug(
+                f'Checking {guild.name} [{guild.id}] for left members. Guild members: {len(guild_members)} Leveling Users: {leveling_users.count()}')
 
             for user in leveling_users:
                 # if true, user has left the server while the bot was offline
                 if int(user['user_id']) not in guild_members:
+                    left_member_count += 1
                     self.transfer_leveling_data(user)
 
+            self.bot.logger.debug(f'{left_member_count - initial_left_members} members left guild.')
         self.bot.left_check.set()
-
-        self.bot.leveling_system.initialise_guilds()
-        await self.bot.timers.run_old()
-        print('Left members checked')
+        self.bot.logger.info(f'Left members have been checked - Total {left_member_count} members left guilds.')
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):

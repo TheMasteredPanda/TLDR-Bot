@@ -22,13 +22,15 @@ class Timers:
 
     def __init__(self, bot):
         self.bot = bot
+        self.bot.logger.info('Timers module has been initiated')
 
     async def run_old(self) -> None:
         """Runs all the timers that were cut short, that are still in the database."""
         await self.bot.left_check.wait()
 
-        print(f'running old timers')
         timers = db.timers.find({})
+        self.bot.logger.info(f'Running {timers.count()} old timers.')
+
         for timer in timers:
             asyncio.create_task(self.run(timer))
 

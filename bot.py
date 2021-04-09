@@ -13,10 +13,11 @@ import modules.reaction_menus
 import modules.timers
 import modules.custom_commands
 import modules.leveling
+import modules.logger
 
 from datetime import datetime
 from discord.ext import commands
-from typing import Union
+from typing import Union, Optional
 
 intents = discord.Intents.all()
 db = modules.database.get_connection()
@@ -33,12 +34,13 @@ class TLDR(commands.Bot):
             intents=intents, chunk_guilds_at_startup=True
         )
         self.left_check = asyncio.Event()
+        self.logger = modules.logger.get_logger()
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py') and filename[:-3] != 'template_cog':
                 self.load_extension(f'cogs.{filename[:-3]}')
-                print(f'{filename[:-3]} is now loaded')
+                self.logger.info(f'Cog {filename[:-3]} is now loaded.')
 
         # self.google_drive = modules.google_drive.Drive()
         self.timers = modules.timers.Timers(self)
@@ -47,6 +49,8 @@ class TLDR(commands.Bot):
         self.leveling_system = modules.leveling.LevelingSystem(self)
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
+        """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead
+        of just event_name, args and kwargs."""
         try:
             await coroutine(*args, **kwargs)
         except asyncio.CancelledError:
@@ -58,22 +62,23 @@ class TLDR(commands.Bot):
                 pass
 
     async def on_event_error(self, exception: Exception, event_method, *args, **kwarg):
+        """Reports all event errors to server and channel given in config."""
         trace = exception.__traceback__
         verbosity = 10
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
         traceback_text = ''.join(lines)
 
-        print(traceback_text)
-        print(exception)
+        self.logger.exception(traceback_text)
+        self.logger.exception(exception)
 
         # send error message to certain channel in a guild if error happens during bot runtime
         guild = self.get_guild(config.ERROR_SERVER)
         if guild is None:
-            return print('Invalid error server id')
+            return self.logger.exception('Invalid error server ID')
 
         channel = self.get_channel(config.ERROR_CHANNEL)
         if channel is None:
-            return print('Invalid error channel id')
+            return self.logger.exception('Invalid error channel ID')
 
         embed = discord.Embed(
             colour=config.EMBED_COLOUR,
@@ -86,7 +91,8 @@ class TLDR(commands.Bot):
 
         return await channel.send(embed=embed)
 
-    def get_command(self, name: str, *, member: discord.Member = None) -> Union[modules.cls.Command, modules.cls.Group, None]:
+    def get_command(self, name: str, *, member: discord.Member = None) -> Optional[Union[modules.cls.Command, modules.cls.Group]]:
+        """Overwrites internal method to attach help object to command."""
         if ' ' not in name:
             command = self.all_commands.get(name)
         else:
@@ -185,4 +191,6 @@ class TLDR(commands.Bot):
 
 
 if __name__ == '__main__':
+    logger = modules.logger.get_logger()
+    logger.info('Starting TLDR Bot.')
     TLDR().run(config.BOT_TOKEN)

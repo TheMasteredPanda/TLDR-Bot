@@ -75,9 +75,9 @@ class Leveling(commands.Cog):
             return await embed_maker.error(ctx, f'You need to be on this server for at least 7 days to give rep points')
 
         # check if user can give rep point
-        leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
-        if not leveling_member.rep_timer_expired:
-            time_left = leveling_member.rep_time_left
+        giving_leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
+        if not giving_leveling_member.rep_timer_expired:
+            time_left = giving_leveling_member.rep_time_left
             return await embed_maker.message(
                 ctx,
                 description=f'You can give someone a reputation point again in:\n'
@@ -88,35 +88,35 @@ class Leveling(commands.Cog):
         if member_reason is None:
             return await embed_maker.command_error(ctx)
 
-        member, reason = await get_member_from_string(ctx, member_reason)
+        receiving_member, reason = await get_member_from_string(ctx, member_reason)
 
-        if member is None:
+        if receiving_member is None:
             return await embed_maker.error(ctx, 'Invalid member')
 
         if reason is None:
             return await embed_maker.command_error(ctx, '[reason for the rep]')
 
-        if member.id == ctx.author.id:
+        if receiving_member.id == ctx.author.id:
             return await embed_maker.error(ctx, f'You can\'t give rep points to yourself')
 
-        if member.bot:
+        if receiving_member.bot:
             return await embed_maker.error(ctx, f'You can\'t give rep points to bots')
 
         # check last rep
-        if leveling_member.last_rep == member.id:
+        if giving_leveling_member.last_rep == receiving_member.id:
             return await embed_maker.error(ctx, f'You can\'t give rep to the same person twice in a row')
 
-        member_leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, member.id)
+        receiving_leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, receiving_member.id)
 
         # set rep_time to 24h so user cant spam rep points
         expire = round(time.time()) + 86400  # 24 hours
-        leveling_member.rep_timer = expire
-        leveling_member.last_rep = member.id
+        giving_leveling_member.rep_timer = expire
+        giving_leveling_member.last_rep = receiving_member.id
 
         # give member rep point
-        member_leveling_member.rp += 1
+        receiving_leveling_member.rp += 1
 
-        await embed_maker.message(ctx, description=f'Gave +1 rep to <@{member.id}>', send=True)
+        await embed_maker.message(ctx, description=f'Gave +1 rep to <@{receiving_member.id}>', send=True)
 
         # send member rep reason
         msg = f'<@{ctx.author.id}> gave you a reputation point:\n**"{reason}"**'
@@ -126,21 +126,21 @@ class Leveling(commands.Cog):
             author={'name': 'Rep'}
         )
 
-        # except because bot might not be able to dm member
+        # try except because bot might not be able to dm member
         try:
-            await member.send(embed=embed)
-        except:
+            await receiving_member.send(embed=embed)
+        except Exception:
             pass
 
         # check if user already has rep boost, if they do, extend it by 30 minutes, otherwise add 10% boost for 6h
-        if member_leveling_member.boosts.rep:
-            boost = member_leveling_member.boosts.rep
+        if receiving_leveling_member.boosts.rep:
+            boost = receiving_leveling_member.boosts.rep
             # if boost is expired or boost + 30min is bigger than 6 hours set expire to 6 hours
             if boost.expires < round(time.time()) or (boost.expires + 1800) - round(time.time()) > (3600 * 6):
-                member_leveling_member.boosts.rep.expires = round(time.time()) + (3600 * 6)
+                receiving_leveling_member.boosts.rep.expires = round(time.time()) + (3600 * 6)
             # otherwise just expand expire by 30 minutes
             else:
-                member_leveling_member.boosts.rep.expires = boost.expires + 1800  # 30 min
+                receiving_leveling_member.boosts.rep.expires = boost.expires + 1800  # 30 min
 
             return
 
@@ -148,7 +148,7 @@ class Leveling(commands.Cog):
             'expires': round(time.time()) + (3600 * 6),
             'multiplier': 0.1,
         }
-        member_leveling_member.boosts.rep = leveling.Boost(member_leveling_member, 'rep', boost_dict)
+        receiving_leveling_member.boosts.rep = leveling.Boost(receiving_leveling_member, 'rep', boost_dict)
 
     @commands.command(
         name='@_me',

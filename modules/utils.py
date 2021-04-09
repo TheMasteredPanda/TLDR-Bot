@@ -12,7 +12,7 @@ db = database.get_connection()
 
 class Command(commands.Converter):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
-    async def convert(self, ctx: commands.Context, argument: str = '') -> Optional[cls.Command, cls.Group]:
+    async def convert(self, ctx: commands.Context, argument: str = '') -> Optional[Union[cls.Command, cls.Group]]:
         """
         Converts provided argument to command
 
@@ -25,7 +25,7 @@ class Command(commands.Converter):
 
         Returns
         -------
-        Optional[:class:`modules.cls.Command`, :class:`modules.cls.Group`]
+        Optional[Union[:class:`modules.cls.Command`, :class:`modules.cls.Group`]]
             Returns command or group command or `None` if nothing is found.
         """
         return ctx.bot.get_command(argument, member=ctx.author)
