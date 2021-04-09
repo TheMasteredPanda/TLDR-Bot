@@ -541,6 +541,30 @@ class Events(commands.Cog):
         if ticket:
             db.tickets.delete_one({'_id': ObjectId(ticket['_id'])})
 
+    @commands.Cog.listener()
+    async def on_rep_at_timer_over(self, timer: dict):
+        guild: discord.Guild = self.bot.get_guild(timer['guild_id'])
+        if not guild:
+            return
+
+        member: discord.Member = guild.get_member(timer['extras']['member_id'])
+        if member is None:
+            try:
+                member: discord.Member = await guild.fetch_member(timer['extras']['member_id'])
+            except Exception:
+                return
+
+        description = 'Your rep timer has expired, you can give someone a reputation point again.'
+
+        embed = discord.Embed(colour=config.EMBED_COLOUR, description=description, timestamp=datetime.datetime.now())
+        embed.set_author(name='Rep timer', icon_url=guild.icon_url)
+        try:
+            await member.send(embed=embed)
+        except Exception:
+            # wasnt able to send dm to user, so will send the message in the bot channel
+            channel: discord.TextChannel = self.bot.get_channel(config.BOT_CHANNEL_ID)
+            await channel.send(embed=embed, content=f'<@{member.id}>, I wasn\'t able to dm you')
+
 
 def setup(bot):
     bot.add_cog(Events(bot))

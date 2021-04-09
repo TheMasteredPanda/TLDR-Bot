@@ -133,7 +133,7 @@ class LevelingUserBoosts:
     Attributes
     __________
     leveling_member: :class:`LevelingMember`
-        The LevelingMember.
+        The LevelingMember to whom these boosts belong to.
     rep: :class:`Boost`
         The rep boost a user can have.
     daily_debate: :class:`Boost`
@@ -195,18 +195,29 @@ class LevelingUserSettings:
     leveling_member: :class:`LevelingMember`
         The LevelingMember.
     at_me: :class:`bool`
-        The @_me setting, if True, member will be @'d when they level up.
+        The @me setting, if True, member will be @'d when they level up.
+    rep_at: :class:`bool`
+        The rep@ setting, if True, after a user gives a rep to someone, a timer will be started to @ them when the timer is over.
     """
     def __init__(self, leveling_member: LevelingMember, settings: dict):
         self.leveling_member = leveling_member
         self.at_me = settings.get('@_me', False)
+        self.rep_at = settings.get('rep@', False)
 
     def toggle_at_me(self):
-        """Toggle @_me setting"""
+        """Toggle @me setting."""
         self.at_me = not bool(self.at_me)
         db.leveling_users.update_one(
             {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
             {'$set': {'settings': {'@_me': self.at_me}}}
+        )
+
+    def toggle_rep_at(self):
+        """Toggle rep@ setting."""
+        self.rep_at = not bool(self.rep_at)
+        db.leveling_users.update_one(
+            {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
+            {'$set': {'settings': {'rep@': self.rep_at}}}
         )
 
 
@@ -838,7 +849,7 @@ class LevelingMember(LevelingUser):
         embed.set_author(name='Level Up!', icon_url=self.guild.guild.icon_url)
         embed.set_footer(text=str(self.member), icon_url=self.member.avatar_url)
 
-        # @ user if they have @_me enabled
+        # @ user if they have @me enabled
         content = f'<@{self.id}>' if self.settings.at_me else ''
 
         # get channel where to send level up message

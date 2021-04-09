@@ -93,7 +93,7 @@ class Leveling(commands.Cog):
         if receiving_member is None:
             return await embed_maker.error(ctx, 'Invalid member')
 
-        if reason is None:
+        if not reason:
             return await embed_maker.command_error(ctx, '[reason for the rep]')
 
         if receiving_member.id == ctx.author.id:
@@ -132,6 +132,17 @@ class Leveling(commands.Cog):
         except Exception:
             pass
 
+        # start rep timer if giving leveling_member has rep@ enabled
+        if giving_leveling_member.settings.rep_at:
+            self.bot.timers.create(
+                guild_id=ctx.guild.id,
+                expires=round(time.time()) + 86400,  # 24 hours
+                event='rep_at',
+                extras={
+                    'member_id': giving_leveling_member.id
+                }
+            )
+
         # check if user already has rep boost, if they do, extend it by 30 minutes, otherwise add 10% boost for 6h
         if receiving_leveling_member.boosts.rep:
             boost = receiving_leveling_member.boosts.rep
@@ -144,33 +155,12 @@ class Leveling(commands.Cog):
 
             return
 
+        # give boost to to receiving leveling member
         boost_dict = {
             'expires': round(time.time()) + (3600 * 6),
             'multiplier': 0.1,
         }
         receiving_leveling_member.boosts.rep = leveling.Boost(receiving_leveling_member, 'rep', boost_dict)
-
-    @commands.command(
-        name='@_me',
-        help='Makes the bot @ you when you level up',
-        usage='@_me',
-        examples=['@_me', '@_me'],
-        clearance='User',
-        cls=cls.Command
-    )
-    async def at_me(self, ctx):
-        leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
-
-        if leveling_member.settings.at_me:
-            msg = 'Disabling @ when you level up'
-            colour = 'orange'
-        else:
-            msg = 'Enabling @ when you level up'
-            colour = 'green'
-
-        leveling_member.settings.toggle_at_me()
-
-        return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
 
     @commands.group(
         invoke_without_command=True,
@@ -764,9 +754,52 @@ class Leveling(commands.Cog):
             rank_embed.add_field(name='>Boosts', value=boost_str)
 
         if verbose:
-            rank_embed.add_field(name='>Settings', value=f'**@_me:** {leveling_member.settings.at_me}', inline=False)
+            rank_embed.add_field(name='>Settings', value=f'**@me:** {leveling_member.settings.at_me}', inline=False)
 
         return await ctx.send(embed=rank_embed)
+
+    @commands.command(
+        help='Toggle the different leveling settings.',
+        usage='settings (setting)',
+        examples=["settings @me", "settings rep@"],
+        clearance='User',
+        cls=cls.Command
+    )
+    async def settings(self, ctx: commands.Context, *, setting: str = None):
+        embed = await embed_maker.message(ctx, description=f"To toggle settings type `{ctx.prefix}settings [setting]`", author={'name': 'Settings'})
+
+        leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
+        if setting is None:
+            at_me_value = f'You will {"not" * leveling_member.settings.at_me} be @\' when you level up.'
+            embed.add_field(name='>@me', value=f'**{leveling_member.settings.at_me}**\n{at_me_value}', inline=False)
+
+            rep_at_value = f'You will {"not" * leveling_member.settings.at_me} be messaged when your rep timer expires and you can give someone a rep point again.'
+            embed.add_field(name='>rep@', value=f'**{leveling_member.settings.rep_at}**\n{rep_at_value}', inline=False)
+
+            return await ctx.send(embed=embed)
+        elif setting not in ['@me', 'rep@']:
+            return await embed_maker.error(ctx, f'{setting} is not a valid setting\nValid Settings: `@me` | `rep@`')
+        else:
+            if setting == '@me':
+                leveling_member.settings.toggle_at_me()
+                if leveling_member.settings.at_me:
+                    msg = 'You will now be @\'d when you level up.'
+                    colour = 'green'
+                else:
+                    msg = 'You will no longer be @\'d when you level up'
+                    colour = 'orange'
+
+                return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
+            if setting == 'rep@':
+                leveling_member.settings.toggle_rep_at()
+                if leveling_member.settings.rep_at:
+                    msg = 'I will now message you when your rep timer expires.'
+                    colour = 'green'
+                else:
+                    msg = 'I will no longer message you when your rep timer expires.'
+                    colour = 'orange'
+
+                return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
 
     async def process_message(self, message: discord.Message):
         author = message.author
