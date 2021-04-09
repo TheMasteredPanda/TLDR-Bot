@@ -493,7 +493,7 @@ class Events(commands.Cog):
             leveling_member = await self.bot.leveling_system.get_member(member.guild.id, member.id)
 
             for branch in leveling_member.guild.leveling_routes:
-                user_role = next((role for role in branch.roles if role.name == left_user[f'{branch[0]}_role']), None)
+                user_role = next((role for role in branch.roles if role.name == left_user[f'{branch.name[0]}_role']), None)
                 if user_role:
                     user_role_index = branch.roles.index(user_role)
                     up_to_role = branch.roles[:user_role_index + 1]
