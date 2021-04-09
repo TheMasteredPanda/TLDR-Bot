@@ -1526,7 +1526,7 @@ class Mod(commands.Cog):
             if not message or type(message) == str:
                 continue
 
-            history_string += f"{message.created_at.strftime('%H:%M:%S | %Y-%m-%d')}"
+            history_string += f"{message.created_at.strftime('%H:%M:%S | %Y-%m-%d')} - {message.author}"
 
             if message.content:
                 history_string += f'\n"{message.content}"\n'
