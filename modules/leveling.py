@@ -6,7 +6,7 @@ import time
 import config
 
 from pymongo.collection import Collection
-from typing import Tuple, Union, Optional
+from typing import Tuple, Union, Optional, List
 from datetime import datetime
 from modules import database
 from modules.utils import get_guild_role
@@ -116,6 +116,13 @@ class Boost:
             {'$unset': {f'boosts.{self.boost_type}': 1}}
         )
 
+    def values(self):
+        """Returns info in the form of a dictionary."""
+        return {
+            'multiplier': self.multiplier,
+            'expires': self.expires
+        }
+
     def __setattr__(self, key, value):
         """For some variables, changing their value will also edit the entry in the database."""
         if key in ['multiplier', 'expires'] and key in self.__dict__ and self.__dict__[key] != value:
@@ -176,6 +183,9 @@ class LevelingUserBoosts:
     def __setattr__(self, key, value):
         """For some variables, changing their value will also edit the entry in the database."""
         if key in ['rep', 'daily_debate'] and key in self.__dict__ and self.__dict__[key] != value:
+            if type(value) == Boost:
+                value = value.values()
+
             db.leveling_users.update_one(
                 {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
                 {'$set': {f'boosts.{key}': value}}
@@ -509,7 +519,7 @@ class LevelingRoutes:
             if role:
                 return role
 
-    def __iter__(self):
+    def __iter__(self) -> List[LevelingRoute]:
         """Iter magic method so when an instance of this class is looped over, it'll loop over the list of available branches."""
         yield from [self.parliamentary, self.honours]
 
@@ -705,6 +715,7 @@ class LevelingGuild(LevelingData):
         self.__dict__[key] = value
 
 
+# TODO: add ability to create LevelingMember with leveling data instead of pulling it in __init__
 class LevelingMember(LevelingUser):
     """Represents a Leveling Member to a :class:`LevelingGuild`.
 
