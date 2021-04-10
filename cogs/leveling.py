@@ -20,7 +20,7 @@ db = database.get_connection()
 
 
 class Cooldown:
-    def __init__(self, cooldown_in_seconds: int = 0):
+    def __init__(self, cooldown_in_seconds: int = 60):
         self.cooldown_in_seconds = cooldown_in_seconds
         self.cooldown_users = {}
 
@@ -809,7 +809,7 @@ class Leveling(commands.Cog):
 
         # level parliamentary route
         if not self.pp_cooldown.user_cooldown(guild.id, author.id):
-            pp_add = randint(150, 250)
+            pp_add = randint(15, 25)
             await leveling_member.add_points('parliamentary', pp_add)
 
             branch = leveling_member.guild.get_leveling_route('parliamentary')
