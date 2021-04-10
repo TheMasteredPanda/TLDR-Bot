@@ -198,12 +198,13 @@ class Leveling(commands.Cog):
             value = ''
             for i, role in enumerate(branch.roles):
                 guild_role = await role.get_guild_role()
-                value += f'\n**#{i + 1}:** <@&{guild_role.id}> - {count[guild_role.name]} People'
+                value += f'\n**#{i + 1}:** <@&{guild_role.id}> - {count[guild_role.name]} ' + ('People' if count[guild_role.name] != 1 else 'Person')
 
             if not value:
                 value = 'This branch currently has no roles'
 
-            value += f'\n\nTotal: **{sum(count.values())} People**'
+            amount_of_people = sum(count.values())
+            value += f'\n\nTotal: **{amount_of_people} ' + ('People**' if amount_of_people != 1 else 'Person**')
             embed.add_field(name=f'>{branch.name.title()} - Every 5 levels you advance a role', value=value, inline=False)
 
             return await ctx.send(embed=embed)
