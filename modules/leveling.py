@@ -182,13 +182,11 @@ class LevelingUserBoosts:
 
     def __setattr__(self, key, value):
         """For some variables, changing their value will also edit the entry in the database."""
-        if key in ['rep', 'daily_debate'] and key in self.__dict__ and self.__dict__[key] != value:
-            if type(value) == Boost:
-                value = value.values()
-
+        if key in ['rep', 'daily_debate'] and key in self.__dict__ and self.__dict__[key] != value and type(value) == Boost:
+            db_value = value.values()
             db.leveling_users.update_one(
                 {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
-                {'$set': {f'boosts.{key}': value}}
+                {'$set': {f'boosts.{key}': db_value}}
             )
 
         self.__dict__[key] = value

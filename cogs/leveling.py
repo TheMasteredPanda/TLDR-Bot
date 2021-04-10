@@ -144,23 +144,23 @@ class Leveling(commands.Cog):
             )
 
         # check if user already has rep boost, if they do, extend it by 30 minutes, otherwise add 10% boost for 6h
-        if receiving_leveling_member.boosts.rep:
+        if not receiving_leveling_member.boosts.rep.has_expired():
             boost = receiving_leveling_member.boosts.rep
             # if boost is expired or boost + 30min is bigger than 6 hours set expire to 6 hours
             if boost.expires < round(time.time()) or (boost.expires + 1800) - round(time.time()) > (3600 * 6):
-                receiving_leveling_member.boosts.rep.expires = round(time.time()) + (3600 * 6)
+                expires = round(time.time()) + (3600 * 6)
             # otherwise just expand expire by 30 minutes
             else:
-                receiving_leveling_member.boosts.rep.expires = boost.expires + 1800  # 30 min
-
-            return
+                expires = boost.expires + 1800  # 30 min
+        else:
+            expires = round(time.time()) + (3600 * 6)
 
         # give boost to to receiving leveling member
         boost_dict = {
-            'expires': round(time.time()) + (3600 * 6),
+            'expires': expires,
             'multiplier': 0.1,
         }
-        receiving_leveling_member.boosts.rep = leveling.Boost(receiving_leveling_member, 'rep', boost_dict)
+        giving_leveling_member.boosts.rep = leveling.Boost(receiving_leveling_member, 'rep', boost_dict)
 
     @commands.group(
         invoke_without_command=True,
