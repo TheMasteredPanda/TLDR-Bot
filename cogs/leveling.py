@@ -204,7 +204,7 @@ class Leveling(commands.Cog):
                 value = 'This branch currently has no roles'
 
             value += f'\n\nTotal: **{sum(count.values())} People**'
-            embed.add_field(name=f'>{branch.title()} - Every 5 levels you advance a role', value=value, inline=False)
+            embed.add_field(name=f'>{branch.name.title()} - Every 5 levels you advance a role', value=value, inline=False)
 
             return await ctx.send(embed=embed)
 
