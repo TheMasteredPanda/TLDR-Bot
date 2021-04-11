@@ -217,7 +217,7 @@ class LevelingUserSettings:
         self.at_me = not bool(self.at_me)
         db.leveling_users.update_one(
             {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
-            {'$set': {'settings': {'@_me': self.at_me}}}
+            {'$set': {'settings.@_me': self.at_me}}
         )
 
     def toggle_rep_at(self):
@@ -225,7 +225,7 @@ class LevelingUserSettings:
         self.rep_at = not bool(self.rep_at)
         db.leveling_users.update_one(
             {'guild_id': self.leveling_member.guild.id, 'user_id': self.leveling_member.id},
-            {'$set': {'settings': {'rep@': self.rep_at}}}
+            {'$set': {'settings.rep@': self.rep_at}}
         )
 
 
