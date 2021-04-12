@@ -4,11 +4,9 @@ import time
 import config
 import emoji
 import os
-import requests
 import inspect
 import copy
 
-from bs4 import BeautifulSoup
 from typing import Union
 from bson import ObjectId
 from modules import cls, database, embed_maker, format_time
@@ -27,31 +25,6 @@ db = database.get_connection()
 class Utility(commands.Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
-
-    @commands.command(
-        name='time',
-        help='See time in any location in the world',
-        usage='time [location]',
-        examples=['time london'],
-        clearance='User',
-        cls=cls.Command
-    )
-    async def time_in(self, ctx: commands.Context, *, location: str = None):
-        if location is None:
-            return await embed_maker.command_error(ctx)
-
-        headers = {
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36'
-        }
-        response = requests.get(f'https://www.time.is/{location}', headers=headers)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        error = soup.find('h1', attrs={'class': 'error'})
-        location_time = soup.find('div', attrs={'id': 'clock0_bg'}).text
-        msg = soup.find('div', attrs={'id': 'msgdiv'}).text
-        if error:
-            return await embed_maker.error(ctx, 'Invalid loaction')
-        else:
-            return await embed_maker.message(ctx, description=f'{msg}is: `{location_time}`', send=True)
 
     @commands.command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'
