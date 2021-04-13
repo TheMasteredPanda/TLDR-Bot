@@ -132,6 +132,15 @@ class TLDR(commands.Bot):
             return await pm_cog.process_pm(ctx)
 
         # check if message matches any custom commands
+        custom_command = await self.check_custom_command(message)
+        if custom_command:
+            return
+
+        # invoke command if message starts with prefix
+        if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, '').strip():
+            return await self.process_command(message)
+
+    async def check_custom_command(self, message: discord.Message):
         custom_command = self.custom_commands.match_message(message)
         if custom_command:
             # get ctx
@@ -159,11 +168,7 @@ class TLDR(commands.Bot):
                     dev_cog = self.get_cog('Dev')
                     await dev_cog.eval(ctx, cmd=custom_command['python'])
 
-                return
-
-        # invoke command if message starts with prefix
-        if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, '').strip():
-            return await self.process_command(message)
+                return custom_command
 
     async def process_command(self, message: discord.Message):
         ctx = await self.get_context(message)
