@@ -13,7 +13,6 @@ import modules.reaction_menus
 import modules.timers
 import modules.custom_commands
 import modules.leveling
-import modules.logger
 
 from datetime import datetime
 from discord.ext import commands
@@ -34,7 +33,7 @@ class TLDR(commands.Bot):
             intents=intents, chunk_guilds_at_startup=True
         )
         self.left_check = asyncio.Event()
-        self.logger = modules.logger.get_logger()
+        self.logger = modules.utils.get_logger()
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
@@ -196,6 +195,6 @@ class TLDR(commands.Bot):
 
 
 if __name__ == '__main__':
-    logger = modules.logger.get_logger()
+    logger = modules.utils.get_logger()
     logger.info('Starting TLDR Bot.')
     TLDR().run(config.BOT_TOKEN)

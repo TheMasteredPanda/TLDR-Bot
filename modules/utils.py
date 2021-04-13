@@ -2,12 +2,17 @@ import discord
 import re
 import asyncio
 import config
+import logging
+import os
+import sys
 
+from logging import handlers
 from typing import Tuple, Union, Optional
 from modules import embed_maker, database, cls
 from discord.ext import commands
 
 db = database.get_connection()
+log_session = None
 
 
 class Command(commands.Converter):
@@ -359,3 +364,43 @@ async def get_member(ctx: commands.Context, source, *, multi: bool = True, retur
     except asyncio.TimeoutError:
         await users_embed_message.delete()
         return await embed_maker.error(ctx, 'Timeout')
+
+
+def get_logger(name: str = 'TLDR-Bot-log'):
+    """
+    Get logging session, or create it if needed.
+
+    Parameters
+    -----------
+    name: :class:`str`
+        Name of the file where logs will be put.
+
+    Returns
+    -------
+    :class:`logging.LoggerAdapter`
+        The logging adapter.
+    """
+    global log_session
+
+    logger = logging.getLogger('TLDR')
+    logger.setLevel(logging.DEBUG)
+    if not logger.handlers:
+        log_path = os.path.join('logs/', f'{name}.log')
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
+        formatter = logging.Formatter('{asctime} {levelname:<8} {message}', style='{')
+
+        # sys
+        sysh = logging.StreamHandler(sys.stdout)
+        sysh.setLevel(logging.DEBUG)
+        sysh.setFormatter(formatter)
+        logger.addHandler(sysh)
+
+        # Log file
+        fh = logging.handlers.RotatingFileHandler(log_path, backupCount=2)
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(formatter)
+        logger.addHandler(fh)
+
+    adapter = logging.LoggerAdapter(logger, extra={'session': 2})
+    return adapter
