@@ -37,11 +37,11 @@ class TLDR(commands.Bot):
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
-            if filename.endswith('.py' and (filename[:-3] != 'template_cog' and != filename.endswith('.ignore'):
+            if filename.endswith('.py') and (filename[:-3] != 'template_cog'):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 self.logger.info(f'Cog {filename[:-3]} is now loaded.')
 
-        self.google_drive = modules.google_drive.Drive()
+#        self.google_drive = modules.google_drive.Drive()
         self.timers = modules.timers.Timers(self)
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
