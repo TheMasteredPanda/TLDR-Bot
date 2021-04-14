@@ -41,21 +41,19 @@ class Drive:
         """
         # search for folder name
         query = f'name="{folder_name}" and trashed!=true and mimeType="application/vnd.google-apps.folder"'
-        try:
-            folders = self.service.files().list(q=query).execute()
-            items = folders.get('files', [])
-            if items:
-                folder_id = items[0]['id']
-            else:
-                body = {
-                    "name": folder_name,
-                    "parents": [config.DRIVE_PARENT_FOLDER_ID],
-                    "mimeType": "application/vnd.google-apps.folder"
-                }
-                request = self.service.files().create(body=body).execute()
-                folder_id = request['id']
-        except Exception:
-            return None
+
+        folders = self.service.files().list(q=query).execute()
+        items = folders.get('files', [])
+        if items:
+            folder_id = items[0]['id']
+        else:
+            body = {
+                "name": folder_name,
+                "parents": [config.DRIVE_PARENT_FOLDER_ID],
+                "mimeType": "application/vnd.google-apps.folder"
+            }
+            request = self.service.files().create(body=body).execute()
+            folder_id = request['id']
 
         return folder_id
 
