@@ -13,10 +13,11 @@ import modules.reaction_menus
 import modules.timers
 import modules.custom_commands
 import modules.leveling
-
 from datetime import datetime
 from discord.ext import commands
 from typing import Union, Optional
+from ukparliament.ukparliament import UKParliament
+
 
 intents = discord.Intents.all()
 db = modules.database.get_connection()
@@ -24,7 +25,6 @@ db = modules.database.get_connection()
 
 async def get_prefix(bot, message):
     return commands.when_mentioned_or(config.PREFIX)(bot, message)
-
 
 class TLDR(commands.Bot):
     def __init__(self):
@@ -46,6 +46,8 @@ class TLDR(commands.Bot):
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
         self.leveling_system = modules.leveling.LevelingSystem(self)
+        self.ukparliament = UKParliament()
+        asyncio.run(self.ukparliament.load())
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead
