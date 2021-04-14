@@ -7,7 +7,9 @@ import os
 import inspect
 import copy
 import requests
+import pytz
 
+from timezonefinder import TimezoneFinder
 from typing import Union
 from bson import ObjectId
 from modules import cls, database, embed_maker, format_time
@@ -35,21 +37,28 @@ class Utility(commands.Cog):
         clearance='User',
         cls=cls.Command
     )
-    async def time_in(self, ctx: commands.Context, *, location: str = None):
-        if location is None:
+    async def time_in(self, ctx: commands.Context, *, location_str: str = None):
+        if location_str is None:
             return await embed_maker.command_error(ctx)
 
-        location = requests.get(f'https://www.time.is/{location}', headers=headers)
+        if not config.GEONAMES_USERNAME:
+            return await embed_maker.error(ctx, 'GEONAMES_USERNAME has not been set in the config file.')
 
-        response = requests.get(f'https://www.time.is/{location}', headers=headers)
-        soup = BeautifulSoup(response.content, 'html.parser')
-        error = soup.find('h1', attrs={'class': 'error'})
-        location_time = soup.find('div', attrs={'id': 'clock0_bg'}).text
-        msg = soup.find('div', attrs={'id': 'msgdiv'}).text
-        if error:
-            return await embed_maker.error(ctx, 'Invalid loaction')
-        else:
-            return await embed_maker.message(ctx, description=f'{msg}is: `{location_time}`', send=True)
+        response = requests.get(f'http://api.geonames.org/searchJSON?q={location_str}&maxRows=1&username={config.GEONAMES_USERNAME}')
+        location_json = response.json()
+        if 'geonames' not in location_json:
+            return await embed_maker.error(ctx, f'Geonames error: {location_json["status"]["message"]}')
+
+        location = location_json['geonames'][0]
+
+        timezone_finder = TimezoneFinder()
+        location_timezone_str = timezone_finder.timezone_at(lng=float(location['lng']), lat=float(location['lat']))
+        location_timezone = pytz.timezone(location_timezone_str)
+
+        time_at = datetime.datetime.now(location_timezone)
+        time_at_str = time_at.strftime('%H:%M:%S')
+
+        return await embed_maker.message(ctx, description=f'Time at {location["name"]}, {location["countryName"]} is: `{time_at_str}`', send=True)
 
     @commands.command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'

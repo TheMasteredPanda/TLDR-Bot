@@ -28,3 +28,9 @@ CLEARANCE = collections.OrderedDict({
     'Admin': lambda member: member.guild_permissions.administrator,
     'Dev': lambda member: member.id in DEV_IDS,
 })
+
+# for when the bot cant dm the user
+BOT_CHANNEL_ID = 0
+
+# For the time command https://www.geonames.org/
+GEONAMES_USERNAME = ''
