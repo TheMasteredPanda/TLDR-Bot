@@ -69,7 +69,9 @@ class ParseArgs(commands.Converter, dict):
 
                 args[long[2:]] = data_type
 
-                argument = re.sub(rf'(?:\s|^)({short})(?:\s|$)', long, argument)
+                if type(short) == str:
+                    argument = re.sub(rf'(?:\s|^)({short})(?:\s|$)', long, argument)
+
                 result[long[2:]] = None
 
             # create regex to match command args

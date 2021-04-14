@@ -6,6 +6,7 @@ import emoji
 import os
 import inspect
 import copy
+import requests
 
 from typing import Union
 from bson import ObjectId
@@ -25,6 +26,30 @@ db = database.get_connection()
 class Utility(commands.Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+
+    @commands.command(
+        name='time',
+        help='See time in any location in the world',
+        usage='time [location]',
+        examples=['time london'],
+        clearance='User',
+        cls=cls.Command
+    )
+    async def time_in(self, ctx: commands.Context, *, location: str = None):
+        if location is None:
+            return await embed_maker.command_error(ctx)
+
+        location = requests.get(f'https://www.time.is/{location}', headers=headers)
+
+        response = requests.get(f'https://www.time.is/{location}', headers=headers)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        error = soup.find('h1', attrs={'class': 'error'})
+        location_time = soup.find('div', attrs={'id': 'clock0_bg'}).text
+        msg = soup.find('div', attrs={'id': 'msgdiv'}).text
+        if error:
+            return await embed_maker.error(ctx, 'Invalid loaction')
+        else:
+            return await embed_maker.message(ctx, description=f'{msg}is: `{location_time}`', send=True)
 
     @commands.command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'
@@ -274,7 +299,7 @@ class Utility(commands.Cog):
             'poll -q Where are you from? -o 🇩🇪: Germany -o 🇬🇧: UK'
         ],
         command_args=[
-            (('--question', '-q', str), 'The question for the poll'),
+            (('--question', None, str), 'The question for the poll'),
             (('--option', '-o', list), 'Option for the poll'),
         ],
         clearance='Mod',
@@ -549,7 +574,8 @@ class Utility(commands.Cog):
                 cmd_help += sub_commands_str
 
             if command.docs.command_args:
-                command_args_str = '**\nCommand Args:**\n```' + '\n\n'.join(f'({arg[0]}, {arg[1]}) - {description}' for arg, description in command.docs.command_args) + '```'
+                command_args_str = '**\nCommand Args:**\n```' + \
+                                   '\n\n'.join(f'{f"{arg[0]}" + (f", {arg[1]}" if type(arg[1]) == str else "")} - {description}' for arg, description in command.docs.command_args) + '```'
                 cmd_help += command_args_str
 
             author_name = f'Help: {command}'

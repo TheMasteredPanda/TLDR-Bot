@@ -22,8 +22,9 @@ class Template(commands.Cog):
             command_args=[
                 # the third value in the arg tuple is the type the arg value will be converted to, if the type is a list, multiple of the same arg will be pushed to a list
                 # the type can also be a command, like modules.format_time.parse
+                # If the shorter arg is set to None, the user will only be presented with the long option
                 (('--arg1', '-a1', str), 'Description of arg1'),  # These need to be defined when using ParseArgs, otherwise it won't know what to look for
-                (('--arg2', '-a2', list), 'Description of arg2')
+                (('--arg2', None, list), 'Description of arg2')
             ]
         ),
         cls=cls.Command  # here so we can actually use all the custom kwargs\
