@@ -20,7 +20,7 @@ class Template(commands.Cog):
             usage='template_command [args]',
             examples=['template_command --arg1'],
             command_args=[
-                # the third arg is the type the arg value will be converted to, if the type is a list, multiple of the same arg can exist in the arg
+                # the third value in the arg tuple is the type the arg value will be converted to, if the type is a list, multiple of the same arg will be pushed to a list
                 # the type can also be a command, like modules.format_time.parse
                 (('--arg1', '-a1', str), 'Description of arg1'),  # These need to be defined when using ParseArgs, otherwise it won't know what to look for
                 (('--arg2', '-a2', list), 'Description of arg2')
