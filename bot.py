@@ -37,7 +37,7 @@ class TLDR(commands.Bot):
 
         # Load Cogs
         for filename in os.listdir('./cogs'):
-            if filename.endswith('.py') and filename[:-3] != 'template_cog':
+            if filename.endswith('.py' and (filename[:-3] != 'template_cog' and != filename.endswith('.ignore'):
                 self.load_extension(f'cogs.{filename[:-3]}')
                 self.logger.info(f'Cog {filename[:-3]} is now loaded.')
 
