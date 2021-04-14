@@ -40,8 +40,7 @@ class Events(commands.Cog):
             guild_members = [m.id for m in await guild.fetch_members(limit=None).flatten()]
             leveling_users = db.leveling_users.find({'guild_id': guild.id})
 
-            self.bot.logger.debug(
-                f'Checking {guild.name} [{guild.id}] for left members. Guild members: {len(guild_members)} Leveling Users: {leveling_users.count()}')
+            self.bot.logger.debug(f'Checking {guild.name} [{guild.id}] for left members. Guild members: {len(guild_members)} Leveling Users: {leveling_users.count()}')
 
             for user in leveling_users:
                 # if true, user has left the server while the bot was offline
@@ -50,6 +49,7 @@ class Events(commands.Cog):
                     self.transfer_leveling_data(user)
 
             self.bot.logger.debug(f'{left_member_count - initial_left_members} members left guild.')
+
         self.bot.left_check.set()
         self.bot.logger.info(f'Left members have been checked - Total {left_member_count} members left guilds.')
 
@@ -103,6 +103,9 @@ class Events(commands.Cog):
         verbosity = 4
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
         traceback_text = ''.join(lines)
+
+        if ctx.command is None:
+            return
 
         # send error to channel where eval was called
         if ctx.command.name == 'eval':
@@ -251,7 +254,6 @@ class Events(commands.Cog):
 
         # give topic author boost if there is a topic author
         if topic_author:
-
             leveling_member = await self.bot.leveling_system.get_member(int(guild_id), topic_author_id)
             leveling_member.boosts.daily_debate.expires = round(time.time()) + (3600 * 6)
             leveling_member.boosts.daily_debate.multiplier = 0.15

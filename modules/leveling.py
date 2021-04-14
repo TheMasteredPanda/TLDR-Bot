@@ -9,7 +9,7 @@ from pymongo.collection import Collection
 from typing import Tuple, Union, Optional, List
 from datetime import datetime
 from modules import database
-from modules.utils import get_guild_role
+from modules.utils import get_guild_role, get_member_by_id
 
 db = database.get_connection()
 
@@ -470,7 +470,9 @@ class LevelingRoute:
         Optional[:class:`LevelingRole`]
             The LevelingRole or `None` if it isn't found.
         """
-        return next(filter(lambda role: role.name.lower() == role_name.lower(), self.roles), None)
+        for role in self.roles:
+            if role.name.lower() == role_name.lower():
+                return role
 
     def __iter__(self):
         """Iterator magic method to loop over the LevelingRoute's roles."""
@@ -653,23 +655,20 @@ class LevelingGuild(LevelingData):
             The LevelingMember or `None` if member isn't in the guild.
         """
         # try to get member from list of members
-        member = next(filter(lambda m: m.id == member_id, self.members), None)
+        member = None
+        for _member in self.members:
+            if _member.id == member_id:
+                member = _member
+
         if member is None:
             # try to get member from cache
-            member = self.guild.get_member(member_id)
-            if member is None:
-                # Try to fetch member with an api request
-                try:
-                    member = await self.guild.fetch_member(member_id)
-                except Exception:
-                    # TODO: remove user
-                    return None
-
-            member = self.add_member(member)
+            member = await get_member_by_id(self.guild, member_id)
+            if member:
+                member = self.add_member(member)
 
         return member
 
-    def add_member(self, member: discord.Member) -> LevelingMember:
+    def add_member(self, member: discord.Member, *, leveling_user_data: dict = None) -> LevelingMember:
         """
         Converts :class:`discord.Member` to :class:`LevelingMember` and adds it to :attr:`members`.
 
@@ -683,7 +682,7 @@ class LevelingGuild(LevelingData):
         :class:`LevelingMember`
             The LevelingMember.
         """
-        leveling_member = LevelingMember(self.bot, self, member)
+        leveling_member = LevelingMember(self.bot, self, member, leveling_user_data=leveling_user_data)
         self.members.append(leveling_member)
         return leveling_member
 
@@ -731,7 +730,7 @@ class LevelingMember(LevelingUser):
         The discord member object.
     """
 
-    def __init__(self, bot, guild: LevelingGuild, member: discord.Member):
+    def __init__(self, bot, guild: LevelingGuild, member: discord.Member, *, leveling_user_data: dict = None):
         self.bot = bot
         self.guild = guild
 
@@ -739,7 +738,9 @@ class LevelingMember(LevelingUser):
         self.member = member
 
         # add leveling user data to this class
-        leveling_user_data = db.get_leveling_user(member.guild.id, member.id)
+        if not leveling_user_data:
+            leveling_user_data = db.get_leveling_user(member.guild.id, member.id)
+
         super().__init__(self, leveling_user_data)
 
     async def add_points(self, branch: Union[LevelingRoute, str], amount: int) -> None:
@@ -1086,7 +1087,9 @@ class LevelingSystem:
         :class:`LevelingGuild`
             The LevelingGuild or `None` if the LevelingGuild isn't found.
         """
-        return next(filter(lambda guild: guild.id == guild_id, self.guilds), None)
+        for guild in self.guilds:
+            if guild.id == guild_id:
+                return guild
 
     def add_guild(self, guild: discord.Guild) -> LevelingGuild:
         """

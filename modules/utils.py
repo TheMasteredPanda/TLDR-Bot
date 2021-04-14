@@ -57,31 +57,45 @@ class ParseArgs(commands.Converter, dict):
         :class:`dict`
             Dictionary of command args and their values.
         """
-        result = {}
-        # replace short-form args with long-form args
-        for arg, _ in ctx.command.docs.command_args:
-            argument = re.sub(rf'(?:\s|^)({arg[1]})(?:\s|$)', arg[0], argument)
-            result[arg[0][2:]] = None
+        try:
+            result = {}
+            args = {}
 
-        # create regex to match command args
-        regex = rf'--({"|".join(arg[0][2:] for arg, _, in ctx.command.docs.command_args)})'
-        split_argument = re.split(regex, argument)
-        result['pre'] = split_argument.pop(0)
+            # replace short-form args with long-form args
+            for arg, description in ctx.command.docs.command_args:
+                long = arg[0]
+                short = arg[1]
+                data_type = arg[2]
 
-        for arg, data in zip(split_argument[::2], split_argument[1::2]):
-            data_type = next(filter(lambda x: x[0][0] == f'--{arg}', ctx.command.docs.command_args))[0][2]
-            if not result[arg]:
-                try:
-                    if data_type == list:
-                        result[arg] = [data.strip()]
-                    else:
-                        result[arg] = data_type(data.strip())
-                except ValueError:
-                    pass
-            elif type(result[arg]) == list:
-                result[arg].append(data.strip())
+                args[long[2:]] = data_type
 
-        return result
+                argument = re.sub(rf'(?:\s|^)({short})(?:\s|$)', long, argument)
+                result[long[2:]] = None
+
+            # create regex to match command args
+            regex = rf'--({"|".join(long for long in args.keys())})'
+            # split argument with regex
+            split_argument = re.split(regex, argument)
+            # anything before the first arg is put into result['pre']
+            result['pre'] = split_argument.pop(0)
+
+            for arg, data in zip(split_argument[::2], split_argument[1::2]):
+                data_type = args[arg]
+                if not result[arg]:
+                    try:
+                        if data_type == list:
+                            result[arg] = [data.strip()]
+                        else:
+                            result[arg] = data_type(data.strip())
+                    except ValueError:
+                        pass
+                elif type(result[arg]) == list:
+                    result[arg].append(data.strip())
+
+            return result
+        except Exception as e:
+            logger = get_logger()
+            logger.exception(f'Error in ParseArgs. Argument: {argument} | Error: {e}')
 
 
 def id_match(identifier: str, extra: str) -> re.Match:
@@ -231,6 +245,33 @@ async def get_member_from_string(ctx: commands.Context, string: str) -> Tuple[Op
             member_name = f'{member_name} {part}'
 
     return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
+
+
+async def get_member_by_id(guild: discord.Guild, member_id: int) -> Optional[discord.Member]:
+    """
+    Simple function to get or fetch member in guild by member's id.
+
+    Parameters
+    ___________
+    guild: :class:`discord.guild`
+        Guild from which to get member.
+    member_id: :class:`id`
+        ID of the member.
+
+    Returns
+    -------
+    Optional[:class:`discord.Member`]:
+        Member if they are in the guild, `None` if not.
+    """
+    member = guild.get_member(member_id)
+    if member is None:
+        # Try to fetch member with an api request
+        try:
+            member = await guild.fetch_member(member_id)
+        except Exception:
+            pass
+
+    return member
 
 
 async def get_member(ctx: commands.Context, source, *, multi: bool = True, return_message: bool = True) -> Optional[Union[discord.Member, discord.Message, list]]:

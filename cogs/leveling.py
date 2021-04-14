@@ -111,6 +111,7 @@ class Leveling(commands.Cog):
         # set rep_time to 24h so user cant spam rep points
         expire = round(time.time()) + 86400  # 24 hours
         giving_leveling_member.rep_timer = expire
+        # log who user gave the rep_point to, so that a person can't rep the same person twice in a row
         giving_leveling_member.last_rep = receiving_member.id
 
         # give member rep point
@@ -156,11 +157,8 @@ class Leveling(commands.Cog):
             expires = round(time.time()) + (3600 * 6)
 
         # give boost to to receiving leveling member
-        boost_dict = {
-            'expires': expires,
-            'multiplier': 0.1,
-        }
-        giving_leveling_member.boosts.rep = leveling.Boost(receiving_leveling_member, 'rep', boost_dict)
+        giving_leveling_member.boosts.rep.expires = expires
+        giving_leveling_member.boosts.rep.multiplier = 0.1
 
     @commands.group(
         invoke_without_command=True,
@@ -644,6 +642,9 @@ class Leveling(commands.Cog):
         rank = leveling_member.rank(user_branch)
 
         leveling_role = leveling_member.guild.get_leveling_role(user_branch.role)
+        if leveling_role is None:
+            return
+
         guild_role = await leveling_role.get_guild_role()
 
         progress = leveling_member.percent_till_next_level(user_branch)
