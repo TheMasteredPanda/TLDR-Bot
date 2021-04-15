@@ -8,7 +8,7 @@ import modules.utils
 import modules.cls
 import modules.database
 import modules.embed_maker
-import modules.google_drive
+#import modules.google_drive
 import modules.reaction_menus
 import modules.timers
 import modules.custom_commands
@@ -35,9 +35,14 @@ class TLDR(commands.Bot):
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
 
+        self.logger.info('Starting UKParliament instance...')
+        self.ukparliament = UKParliament()
+        asyncio.run(self.ukparliament.load())
+        self.logger.info('Started UK Parliament instance.')
+
         # Load Cogs
         for filename in os.listdir('./cogs'):
-            if filename.endswith('.py') and (filename[:-3] != 'template_cog'):
+            if filename.endswith('.py') and filename[:-3] != 'template_cog':
                 self.load_extension(f'cogs.{filename[:-3]}')
                 self.logger.info(f'Cog {filename[:-3]} is now loaded.')
 
@@ -46,8 +51,9 @@ class TLDR(commands.Bot):
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
         self.leveling_system = modules.leveling.LevelingSystem(self)
-        self.ukparliament = UKParliament()
-        asyncio.run(self.ukparliament.load())
+
+    def get_parliament(self):
+        return self.ukparliament
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead
@@ -195,8 +201,8 @@ class TLDR(commands.Bot):
 
         await self.invoke(ctx)
 
-
 if __name__ == '__main__':
     logger = modules.utils.get_logger()
     logger.info('Starting TLDR Bot.')
     TLDR().run(config.BOT_TOKEN)
+
