@@ -544,6 +544,7 @@ class LevelingData:
     def __init__(self, guild: discord.Guild, leveling_data: dict):
         self.guild = guild
         self.level_up_channel = leveling_data.get('level_up_channel', 0)
+        self.invite_logger_channel = leveling_data.get('invite_logger_channel', 0)
         self.leveling_routes = LevelingRoutes(guild, leveling_data.get('leveling_routes', {}))
         self.honours_channels = DatabaseList(
             db.leveling_data,
@@ -563,7 +564,7 @@ class LevelingData:
 
     def __setattr__(self, key, value):
         """For some variables, changing their value will also edit the entry in the database."""
-        if key in ['level_up_channel', 'honours_channels'] and key in self.__dict__ and self.__dict__[key] != value:
+        if key in ['level_up_channel', 'invite_logger_channel'] and key in self.__dict__ and self.__dict__[key] != value:
             db.leveling_data.update_one(
                 {'guild_id': self.guild.id},
                 {'$set': {key: value}}

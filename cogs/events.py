@@ -27,6 +27,7 @@ class Events(commands.Cog):
 
         await self.check_left_members()
         await self.bot.timers.run_old()
+        await self.bot.invite_logger.initialize_invites()
         self.bot.leveling_system.initialise_guilds()
 
         self.bot.logger.info(f'{self.bot.user} is ready')
