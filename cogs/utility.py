@@ -58,7 +58,8 @@ class Utility(commands.Cog):
         time_at = datetime.datetime.now(location_timezone)
         time_at_str = time_at.strftime('%H:%M:%S')
 
-        return await embed_maker.message(ctx, description=f'Time at {location["name"]}, {location["countryName"]} is: `{time_at_str}`', send=True)
+        google_maps_link = f'https://www.google.com/maps/search/?api=1&query={location["lat"]},{location["lng"]}'
+        return await embed_maker.message(ctx, description=f'Time at [{location["name"]}, {location["countryName"]}]({google_maps_link}) is: `{time_at_str}`', send=True)
 
     @commands.command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'
