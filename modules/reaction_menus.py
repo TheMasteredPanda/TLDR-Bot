@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import bot
 import discord
-import time
 import functools
 import asyncio
 
@@ -133,7 +132,10 @@ class BookMenu(ReactionMenu):
 
         self.buttons = OrderedDict(self.buttons)
 
-        super().__init__(message, self.buttons)
+        if max_page_num > 1:
+            super().__init__(message, self.buttons)
+        else:
+            self.message = message
 
         self.author = author
         self.page = page
