@@ -76,7 +76,7 @@ class UKCommand(commands.Cog):
             bits = []
             for i, division in enumerate(l_divisions):
                 did_pass = division.get_aye_count() > division.get_no_count()
-                bits.append(f"**{i}. [{division.get_division_title()}](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**{next_line}" + f"**ID:** {division.get_id()}{next_line}" + (f"**Summary:** {division.get_amendment_motion_notes()[0:150].replace('<p>', '').replace('</p>', '')}..." if division.get_amendment_motion_notes() is not None and division.get_amendment_motion_notes() != '' else '') + f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_aye_count() if did_pass is False else division.get_no_count()} {'Noes' if did_pass else 'Ayes'}" + f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}") 
+                bits.append(f"**{i + 1}. [{division.get_division_title()}](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**{next_line}" + f"**ID:** {division.get_id()}{next_line}" + (f"**Summary:** {division.get_amendment_motion_notes()[0:150].replace('<p>', '').replace('</p>', '')}..." if division.get_amendment_motion_notes() is not None and division.get_amendment_motion_notes() != '' else '') + f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_aye_count() if did_pass is False else division.get_no_count()} {'Noes' if did_pass else 'Ayes'}" + f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}") 
                 if i == (page_limit - 1) or i == (len(l_divisions) - 1):
                     pages.append(await template(title='Lords Divisions', description='\n'.join(bits)))
                     bits.clear()
@@ -87,7 +87,7 @@ class UKCommand(commands.Cog):
             bits = []
             for i, division in enumerate(c_divisions):
                 did_pass = division.get_aye_count() > division.get_no_count()
-                bits.append(f"**{i}. [{division.get_division_title()}](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**{next_line}" + f"**ID:** {division.get_id()}" + f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_aye_count() if did_pass is False else division.get_no_count()} {'Noes' if did_pass else 'Ayes'}" + f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}")
+                bits.append(f"**{i + 1}. [{division.get_division_title()}](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**{next_line}" + f"**ID:** {division.get_id()}" + f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_aye_count() if did_pass is False else division.get_no_count()} {'Noes' if did_pass else 'Ayes'}" + f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}")
                 if i == (page_limit - 1) or i == (len(l_divisions) - 1):
                     pages.append(await template(title='Commons Divisions', description='\n'.join(bits)))
                     bits.clear()
@@ -97,13 +97,39 @@ class UKCommand(commands.Cog):
         pages.insert(0, first_page)
         return (pages[(page - 1)], len(pages))
 
+    @staticmethod
+    async def construct_divisions_lords_embed(ctx: commands.Context, divisions: list[LordsDivision], page_limit: int, *, page:int):
+        max_pages = math.ceil(len(divisions) / page_limit)
+
+        bits = []
+        next_line = '\n'
+        for i, division in enumerate(divisions[page_limit * (page - 1):page_limit * page]):
+            did_pass = division.get_aye_count() > division.get_no_count()
+            bits.append(f"**{(page_limit * (page -1)) + i + 1}. {division.get_division_title()}**{next_line}**ID:** {division.get_id()}{next_line}**Summary:** {division.get_amendment_motion_notes()[0:150]}{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Notes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%s %H:%M:%S')}")
+
+        embed = await embed_maker.message(ctx, description=next_line.join(bits), author={'name': 'UKParliament Division'}, footer={'text': f'Page  {page}/{max_pages}'})
+        return (embed, max_pages)
+
+    @staticmethod
+    async def construct_divisions_commons_embed(ctx: commands.Context, divisions: list[CommonsDivision], page_limit: int, *, page: int):
+        max_pages = math.ceil(len(divisions) / page_limit)
+        next_line = '\n'
+        bits = []
+        for i, division in enumerate(divisions[page_limit * (page - 1):page_limit * page]):
+            did_pass = division.get_aye_count() > division.get_no_count()
+            bits.append(f"**{(page_limit * (page -1)) + i + 1}. [{division.get_division_title()[0:100]}](https://votes.parliament.uk/Votes/Commons/Division/{division.get_id()})**{next_line}**ID:** {division.get_id()}{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Notes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}")
+
+        embed: embeds.Embed = await embed_maker.message(ctx, description=next_line.join(bits), author={'name': 'UKParliament Division'}, footer={'text': f'Page {page}/{max_pages}'}) # type: ignore
+        return (embed, max_pages)
 
     @commands.group(
                 help='To access the commands interfacing the UK Parliament Site.',
                 invoke_without_command=True,
                 clearance='User',
                 sub_commands=[
-                        'bills'
+                        'bills',
+                        'divisions',
+                        'mps'
                     ],
                 cls=cls.Group
             )
@@ -122,6 +148,67 @@ class UKCommand(commands.Cog):
     async def bills(self, ctx: commands.Context):
         pass
 
+    @uk.group(
+            help='For commands relating to divisions',
+            invoke_without_command=True,
+            clearance='User',
+            sub_commands=[
+                'lsearch',
+                'csearch',
+                'linfo',
+                'cinfo'
+                ],
+            cls=cls.Group
+            )
+    async def divisions(self, ctx: commands.Context):
+        pass
+
+    @divisions.command(
+            name='csearch',
+            help='Search for commons divisions',
+            clearence='User'
+            )
+    async def division_commons_search(self, ctx: commands.Context, *, search_term = ""):
+        divisions = await self.parliament.search_for_commons_divisions(search_term)
+        if len(divisions) == 0:
+            await embed_maker.message(ctx, description=f"Couldn't find any Commons divisions under search term '{search_term}'.")
+
+        page_constructor = functools.partial(self.construct_divisions_commons_embed, ctx=ctx, divisions=divisions, page_limit=5)
+        pair = await page_constructor(page=1)
+        message = await ctx.send(embed=pair[0])
+
+        async def temp_page_constructor(page: int):
+            pair = await page_constructor(page=page)
+            return pair[0]
+        
+        menu = BookMenu(message=message, author=ctx.author, max_page_num=pair[1], page_constructor=temp_page_constructor, page=1) # type: ignore
+        self.bot.reaction_menus.add(menu)
+
+
+    @divisions.command(
+                name='lsearch',
+                help='Search for lords divisions',
+                clearence='User'
+            )
+    async def division_lords_search(self, ctx: commands.Context, *, search_term = ""):
+        divisions = await self.parliament.search_for_lords_division(search_term)
+        if len(divisions) == 0: 
+            await embed_maker.message(ctx, description=f"Couldn't find any Lords divisions under the search term '{search_term}'.")
+            return
+
+
+        page_constructor = functools.partial(self.construct_divisions_lords_embed, ctx=ctx, divisions=divisions, page_limit=10)
+        pair = await page_constructor(page=1)
+        embed = pair[0]
+        max_pages = pair[1]
+
+        async def temp_page_constructor(page: int):
+            pair = await page_constructor(page=page)
+            return pair[0]
+
+        message = await ctx.send(embed=embed)
+        menu = BookMenu(message=message, author=ctx.author, max_page_num=max_pages, page_constructor=temp_page_constructor, page=1) # type: ignore
+        self.bot.reaction_menus.add(menu)
 
     @bills.command(
             name='info',
