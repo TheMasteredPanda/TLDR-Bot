@@ -1,6 +1,5 @@
 import functools
 import math
-from modules.custom_commands import Message
 
 from ukparliament.structures.members import PartyMember
 from modules.reaction_menus import BookMenu
@@ -63,39 +62,46 @@ class UKCommand(commands.Cog):
                 f"**Current House:** {bill.get_current_house()}"
                 ])
 
-        total_length = len(l_divisions) + len(c_divisions) + len(formatted_bill_information)
+        total_length = len(l_divisions) + len(c_divisions) + len(formatted_bill_information) + len(bill.get_sponsors())
+        max_page_num = math.ceil(total_length / page_limit)
+        first_page: embeds.Embed = await embed_maker.message(ctx, description='\n'.join(formatted_bill_information)) #type: ignore 
+        
         max_pages = math.ceil(total_length / page_limit)
-        pages: list[embeds.Embed] = []
+        pages: list[embeds.Embed] = [first_page]
 
-        async def template(description: str, title: str) -> embeds.Embed:
-            return await embed_maker.message(ctx, title=title, description=description, author= {'name': 'UKParliament Bill'}, footer={'text': f'Page: {page}/{max_pages}'}) # type: ignore
-               
-        next_line = '\n'
+        print(f"Lords Divisions: {len(l_divisions)}")
         if len(l_divisions) > 0:
             l_d_pages = math.ceil(len(l_divisions) / page_limit)
+            c_embed: embeds.Embed = await embed_maker.message(ctx) # type: ignore
             bits = []
-            for i, division in enumerate(l_divisions):
-                did_pass = division.get_aye_count() > division.get_no_count()
-                bits.append(f"**{i}. [{division.get_division_title()}](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**{next_line}" + f"**ID:** {division.get_id()}{next_line}" + (f"**Summary:** {division.get_amendment_motion_notes()[0:150].replace('<p>', '').replace('</p>', '')}..." if division.get_amendment_motion_notes() is not None and division.get_amendment_motion_notes() != '' else '') + f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_aye_count() if did_pass is False else division.get_no_count()} {'Noes' if did_pass else 'Ayes'}" + f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}") 
-                if i == (page_limit - 1) or i == (len(l_divisions) - 1):
-                    pages.append(await template(title='Lords Divisions', description='\n'.join(bits)))
+            for i, division in enumerate(l_divisions[page_limit * (page - 1):page_limit * page]):
+                bits.append(f"**{(page_limit * (page - 1)) + i} [{bill.get_title()}](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**") #TODO: Add Id. Add voting record for this division
+                print(i)
+                if i == page_limit or i == (len(l_divisions) - 1):
+                    print('Adding to lords embed')
+                    c_embed.add_field(name='Lords Divisions', value='\n'.join(bits))
                     bits.clear()
+                    pages.append(c_embed)
+                    c_embed = await embed_maker.message(ctx) # type: ignore
 
+        print(f"Commons Divisions: {len(c_divisions)}")
         if len(c_divisions) > 0:
             c_d_pages = math.ceil(len(l_divisions) / page_limit)
 
             bits = []
-            for i, division in enumerate(c_divisions):
-                did_pass = division.get_aye_count() > division.get_no_count()
-                bits.append(f"**{i}. [{division.get_division_title()}](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**{next_line}" + f"**ID:** {division.get_id()}" + f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_aye_count() if did_pass is False else division.get_no_count()} {'Noes' if did_pass else 'Ayes'}" + f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}")
-                if i == (page_limit - 1) or i == (len(l_divisions) - 1):
-                    pages.append(await template(title='Commons Divisions', description='\n'.join(bits)))
+            c_embed: embeds.Embed = await embed_maker.message(ctx) #type: ignore
+            for i, division in enumerate(c_divisions[page_limit * (page - 1):page_limit * page]):
+                bits.append(f"**{(page_limit * (page - 1) + 1)} [{bill.get_title()}](https://votes.parliament.uk/Votes/Commons/Division/{bill.get_bill_id()})**") #TODO: Add id. Add voting record for this division
+                if i == page_limit:
+                    c_embed.add_field(name='Commons Divisions', value='\n'.join(bits))
                     bits.clear()
+                    pages.append(c_embed)
+                    c_embed = await embed_maker.message(ctx) #type: ignore
         
+        print(f"Pages: {len(pages)}")
 
-        first_page: embeds.Embed = await embed_maker.message(ctx, description='\n'.join(formatted_bill_information), author={'name': 'UKParliament Bill'}, footer={'text': f'Page: {page}/{max_pages}'}) #type: ignore 
-        pages.insert(0, first_page)
-        return (pages[(page - 1)], len(pages))
+        return (pages[(page - 1) if len(pages) > 1 else 0], len(pages))
+
 
 
     @commands.group(
@@ -136,11 +142,7 @@ class UKCommand(commands.Cog):
             page_constructor = functools.partial(self.construct_bill_info_embed, ctx=ctx, bill=bill, l_divisions=l_divisions, c_divisions=c_divisions, page_limit=10)
             pair: tuple[embeds.Embed, int] = await page_constructor(page=1)
             message = await ctx.send(embed=pair[0])
-            async def temp_page_constructor(page: int): #Due to the unique nature of ther result, this is needed ot return only the embed.
-                pair = await page_constructor(page=page)
-                return pair[0]
-
-            menu = BookMenu(message, author=ctx.author, page=1, max_page_num=pair[1], page_constructor=temp_page_constructor) # type: ignore
+            menu = BookMenu(message, author=ctx.author, page=1, max_page_num=pair[1], page_constructor=page_constructor) # type: ignore
             self.bot.reaction_menus.add(menu)
 
         except Exception as ignore:
