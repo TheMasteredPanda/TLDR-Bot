@@ -709,9 +709,6 @@ class LevelingGuild(LevelingData):
 
         return channel
 
-    def __setattr__(self, key, value):
-        self.__dict__[key] = value
-
 
 # TODO: add ability to create LevelingMember with leveling data instead of pulling it in __init__
 class LevelingMember(LevelingUser):
@@ -786,6 +783,15 @@ class LevelingMember(LevelingUser):
         """
         # get discord.Role role
         guild_role = await role.get_guild_role()
+
+        automember = db.get_automember(role.guild.id)
+        patreon_role_id = 644182117051400220
+        citizen_role_id = 697184342614474785
+        member_role_id = 662036345526419486
+        if automember and guild_role.id == citizen_role_id and patreon_role_id not in [r.id for r in self.member.roles]:
+            member_role = discord.utils.find(lambda r: r.id == member_role_id, self.guild.guild.roles)
+            await self.member.add_roles(member_role)
+
         # give role to user
         await self.member.add_roles(guild_role)
         return guild_role
