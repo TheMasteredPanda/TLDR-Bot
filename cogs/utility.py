@@ -309,7 +309,7 @@ class Utility(commands.Cog):
             'poll -q Where are you from? -o 🇩🇪: Germany -o 🇬🇧: UK'
         ],
         command_args=[
-            (('--question', None, str), 'The question for the poll'),
+            (('--question', '-q', str), 'The question for the poll'),
             (('--option', '-o', list), 'Option for the poll'),
         ],
         clearance='Mod',
