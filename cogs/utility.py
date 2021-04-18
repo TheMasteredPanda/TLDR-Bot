@@ -98,7 +98,12 @@ class Utility(commands.Cog):
             return string
 
         text = await get_cg_string("", guideline.split('.'), rules, '')
-        return await embed_maker.message(ctx, description=text, send=True)
+        return await embed_maker.message(
+            ctx,
+            description=text,
+            author={'name': "Community Guidelines"},
+            send=True
+        )
 
     @commands.command(
         name='time',
