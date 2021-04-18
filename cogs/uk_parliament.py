@@ -1,5 +1,7 @@
 import functools
 import math
+
+from discord.file import File
 from modules.custom_commands import Message
 
 from ukparliament.structures.members import PartyMember
@@ -107,6 +109,7 @@ class UKCommand(commands.Cog):
             did_pass = division.get_aye_count() > division.get_no_count()
             bits.append(f"**{(page_limit * (page -1)) + i + 1}. {division.get_division_title()}**{next_line}**ID:** {division.get_id()}{next_line}**Summary:** {division.get_amendment_motion_notes()[0:150]}{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Notes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%s %H:%M:%S')}")
 
+
         embed = await embed_maker.message(ctx, description=next_line.join(bits), author={'name': 'UKParliament Division'}, footer={'text': f'Page  {page}/{max_pages}'})
         return (embed, max_pages)
 
@@ -164,14 +167,55 @@ class UKCommand(commands.Cog):
         pass
 
     @divisions.command(
+                name='linfo',
+                help='Get House of Lords Division information',
+                usage="uk divisions linfo <division id>",
+                clearence='User',
+                cls=cls.Command
+            )
+    async def division_lord_info(self, ctx: commands.Context, division_id: int):
+        division = await self.parliament.get_lords_division(division_id)
+        if division is None:
+            await embed_maker.message(ctx, description=f"Couldn't find division under id {division_id}", send=True)
+
+
+        image_file = self.bot.get_parliament_module().generate_division_image(self.parliament, division)
+        next_line = '\n'
+        did_pass = division.get_aye_count() > division.get_no_count()
+        embed: embeds.Embed = await embed_maker.message(ctx, description=f"**Title:** {division.get_division_title()}{next_line}**Division Outcome:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}{next_line}**Summary:** {division.get_amendment_motion_notes()[0:250]}") #type: ignore
+        embed.set_image(url=f'attachment://{image_file.filename}')
+        await ctx.send(file=image_file, embed=embed)
+
+    @divisions.command(
+            name='cinfo',
+            help='Get House of Commons Division information',
+            usage="uk divisions cinfo <division id>",
+            clearence='User',
+            cls=cls.Command
+            )
+    async def division_common_info(self, ctx: commands.Context, division_id: int):
+        division = await self.parliament.get_commons_division(division_id)
+        if division is None:
+            await embed_maker.message(ctx, description=f"Couldn't find division under id {division_id}", send=True)
+
+        image_file = self.bot.get_parliament_module().generate_division_image(self.parliament, division)
+        next_line = '\n'
+        did_pass = division.get_aye_count() > division.get_no_count()
+        embed: embeds.Embed = await embed_maker.message(ctx, description=f"**Title:** {division.get_division_title()}{next_line}**Division Outcome:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}") #type: ignore
+        embed.set_image(url=f'attachment://{image_file.filename}')
+        await ctx.send(file=image_file, embed=embed)
+
+    @divisions.command(
             name='csearch',
             help='Search for commons divisions',
-            clearence='User'
+            usage="uk divisions csearch <search term>",
+            clearence='User',
+            cls=cls.Command
             )
     async def division_commons_search(self, ctx: commands.Context, *, search_term = ""):
         divisions = await self.parliament.search_for_commons_divisions(search_term)
         if len(divisions) == 0:
-            await embed_maker.message(ctx, description=f"Couldn't find any Commons divisions under search term '{search_term}'.")
+            await embed_maker.message(ctx, description=f"Couldn't find any Commons divisions under search term '{search_term}'.", send=True)
 
         page_constructor = functools.partial(self.construct_divisions_commons_embed, ctx=ctx, divisions=divisions, page_limit=5)
         pair = await page_constructor(page=1)
@@ -188,16 +232,17 @@ class UKCommand(commands.Cog):
     @divisions.command(
                 name='lsearch',
                 help='Search for lords divisions',
+                usage="uk divisions lsearch <search term>",
                 clearence='User'
             )
     async def division_lords_search(self, ctx: commands.Context, *, search_term = ""):
         divisions = await self.parliament.search_for_lords_division(search_term)
         if len(divisions) == 0: 
-            await embed_maker.message(ctx, description=f"Couldn't find any Lords divisions under the search term '{search_term}'.")
+            await embed_maker.message(ctx, description=f"Couldn't find any Lords divisions under the search term '{search_term}'.", send=True)
             return
 
 
-        page_constructor = functools.partial(self.construct_divisions_lords_embed, ctx=ctx, divisions=divisions, page_limit=10)
+        page_constructor = functools.partial(self.construct_divisions_lords_embed, ctx=ctx, divisions=divisions, page_limit=5)
         pair = await page_constructor(page=1)
         embed = pair[0]
         max_pages = pair[1]
@@ -213,6 +258,8 @@ class UKCommand(commands.Cog):
     @bills.command(
             name='info',
             help='To display in more detail information about a bill.',
+            clearence='User',
+            usage="uk bills info <bill id>",
             cls=cls.Command
             )
     async def bill_info(self, ctx: commands.Context, bill_id: int):

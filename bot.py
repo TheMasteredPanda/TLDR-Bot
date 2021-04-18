@@ -8,6 +8,7 @@ import modules.utils
 import modules.cls
 import modules.database
 import modules.embed_maker
+import modules.ukparliament
 #import modules.google_drive
 import modules.reaction_menus
 import modules.timers
@@ -51,9 +52,13 @@ class TLDR(commands.Bot):
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
         self.leveling_system = modules.leveling.LevelingSystem(self)
+        self.ukparl_module = modules.ukparliament.UKParliamentModule(self.ukparliament)
 
     def get_parliament(self):
         return self.ukparliament
+
+    def get_parliament_module(self):
+        return self.ukparl_module
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead
