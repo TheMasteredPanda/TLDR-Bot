@@ -8,6 +8,7 @@ import inspect
 import copy
 import requests
 import pytz
+import json
 
 from timezonefinder import TimezoneFinder
 from typing import Union
@@ -28,6 +29,76 @@ db = database.get_connection()
 class Utility(commands.Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+
+    @commands.command(
+        help='command to get any community guideline',
+        usage='cg [cg]',
+        examples=['cg 1', 'cg 1.5.1'],
+        clearance='User',
+        cls=cls.Command
+    )
+    async def cg(self, ctx: commands.Context, guideline: str = None):
+        cg_link = "https://tldrnews.co.uk/discord-community-guidelines/"
+        if guideline is None:
+            return await embed_maker.message(
+                ctx,
+                description=f'You can find the full list of the community guidelines here: [{cg_link}]({cg_link})',
+                send=True
+            )
+
+        cg_file = open('static/community-guidelines.json').read()
+        rules = json.loads(cg_file)
+
+        async def get_cg_string(string: str, cg_number_sequence: list, cg_dict: dict, parent_cg: str) -> Union[str, discord.Message]:
+            if cg_number_sequence[0] not in cg_dict:
+                valid = "community guideline" if not parent_cg else f'sub community guideline of {parent_cg}'
+                return await embed_maker.error(ctx, f'`{cg_number_sequence[0]}` is not a valid {valid}, you can find the full list of the community guidelines here: [{cg_link}]({cg_link})')
+
+            # This piece of code is probably the single worst thing i've ever created, but eh, it works so who cares
+
+            community_guideline = cg_dict[cg_number_sequence[0]]
+            empty_space = '-'
+
+            index = f'{parent_cg + ("." if parent_cg else "")}{cg_number_sequence[0]}'
+            if type(community_guideline) == str:
+                if string:
+                    string += f'\n|{empty_space * 4}'
+
+                string += f'`{index}.` "{community_guideline}"'
+                return string
+            elif not cg_number_sequence[1:] and type(community_guideline) == dict:
+                if string:
+                    string += f'\n|{empty_space * 4}'
+
+                string += f'`{index}.` "{community_guideline["text"]}"'
+                for sub_rule in community_guideline:
+                    if sub_rule == 'text':
+                        continue
+
+                    if type(community_guideline[sub_rule]) == dict:
+                        for sub_rule_nested in community_guideline[sub_rule]:
+                            if sub_rule_nested == 'text':
+                                string += f'\n|{empty_space * 4}`{index}.{sub_rule}.` "{community_guideline[sub_rule]["text"]}"'
+                                continue
+
+                            string += f'\n|{empty_space * 4}|{empty_space * 4}`{index}.{sub_rule}.{sub_rule_nested}` "{community_guideline[sub_rule][sub_rule_nested]}"'
+
+                        continue
+
+                    string += f'\n|{empty_space * 4}`{index}.{sub_rule}.` "{community_guideline[sub_rule]}"'
+
+            elif cg_number_sequence[1:] and type(community_guideline) == dict:
+                if string:
+                    string += f'\n|{empty_space * 4}'
+
+                string += f'`{index}.` "{community_guideline["text"]}"'
+
+                return await get_cg_string(string, cg_number_sequence[1:], community_guideline, f'{parent_cg + ("." if parent_cg else "")}{cg_number_sequence[0]}')
+
+            return string
+
+        text = await get_cg_string("", guideline.split('.'), rules, '')
+        return await embed_maker.message(ctx, description=text, send=True)
 
     @commands.command(
         name='time',
