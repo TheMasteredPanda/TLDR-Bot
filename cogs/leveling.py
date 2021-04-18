@@ -773,10 +773,10 @@ class Leveling(commands.Cog):
         leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
         if setting is None:
             at_me_value = f'You will {"not" * (not leveling_member.settings.at_me)} be @\' when you level up.'
-            embed.add_field(name='>@me', value=f'**{leveling_member.settings.at_me}**\n{at_me_value}', inline=False)
+            embed.add_field(name='| @me', value=f'**{leveling_member.settings.at_me}**\n{at_me_value}', inline=False)
 
             rep_at_value = f'You will {"not" * (not leveling_member.settings.rep_at)} be messaged when your rep timer expires and you can give someone a rep point again.'
-            embed.add_field(name='>rep@', value=f'**{leveling_member.settings.rep_at}**\n{rep_at_value}', inline=False)
+            embed.add_field(name='| rep@', value=f'**{leveling_member.settings.rep_at}**\n{rep_at_value}', inline=False)
 
             return await ctx.send(embed=embed)
         elif setting not in ['@me', 'rep@']:
