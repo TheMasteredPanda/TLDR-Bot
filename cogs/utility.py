@@ -57,18 +57,19 @@ class Utility(commands.Cog):
             # This piece of code is probably the single worst thing i've ever created, but eh, it works so who cares
 
             community_guideline = cg_dict[cg_number_sequence[0]]
-            empty_space = '-'
+            space = '-'
+            spacing = f'|{space * 4}' * len(parent_cg.split("."))
 
             index = f'{parent_cg + ("." if parent_cg else "")}{cg_number_sequence[0]}'
             if type(community_guideline) == str:
                 if string:
-                    string += f'\n|{empty_space * 4}'
+                    string += f'\n{spacing}'
 
                 string += f'`{index}.` "{community_guideline}"'
                 return string
             elif not cg_number_sequence[1:] and type(community_guideline) == dict:
                 if string:
-                    string += f'\n|{empty_space * 4}'
+                    string += f'\n{spacing}'
 
                 string += f'`{index}.` "{community_guideline["text"]}"'
                 for sub_rule in community_guideline:
@@ -78,18 +79,18 @@ class Utility(commands.Cog):
                     if type(community_guideline[sub_rule]) == dict:
                         for sub_rule_nested in community_guideline[sub_rule]:
                             if sub_rule_nested == 'text':
-                                string += f'\n|{empty_space * 4}`{index}.{sub_rule}.` "{community_guideline[sub_rule]["text"]}"'
+                                string += f'\n{spacing}`{index}.{sub_rule}.` "{community_guideline[sub_rule]["text"]}"'
                                 continue
 
-                            string += f'\n|{empty_space * 4}|{empty_space * 4}`{index}.{sub_rule}.{sub_rule_nested}` "{community_guideline[sub_rule][sub_rule_nested]}"'
+                            string += f'\n{spacing * 2}`{index}.{sub_rule}.{sub_rule_nested}` "{community_guideline[sub_rule][sub_rule_nested]}"'
 
                         continue
 
-                    string += f'\n|{empty_space * 4}`{index}.{sub_rule}.` "{community_guideline[sub_rule]}"'
+                    string += f'\n{spacing}`{index}.{sub_rule}.` "{community_guideline[sub_rule]}"'
 
             elif cg_number_sequence[1:] and type(community_guideline) == dict:
                 if string:
-                    string += f'\n|{empty_space * 4}'
+                    string += f'\n{spacing}'
 
                 string += f'`{index}.` "{community_guideline["text"]}"'
 
