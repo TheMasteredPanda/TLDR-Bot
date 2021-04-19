@@ -1,3 +1,6 @@
+import time
+import aiofiles
+import aiohttp
 import random
 from discord import File
 import string
@@ -46,6 +49,22 @@ class UKParliamentModule:
 
         if os.path.exists('tmpimages') is False:
             os.mkdir('tmpimages')
+
+
+    async def get_mp_portrait(self, url: str):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    return None
+                file_id = "".join(random.choice(string.ascii_letters) for i in range(21))
+                f = await aiofiles.open(f'tmpimages/{file_id}.png', mode='wb')
+                await f.write(await resp.read())
+                await f.close()
+
+                while not os.path.exists(f"tmpimages/{file_id}.png"):
+                    time.sleep(.5)
+
+                return File(f'tmpimages/{file_id}.png', filename=f'{file_id}.png')
 
 
     def generate_division_image(self, parliament: UKParliament, division: Union[LordsDivision, CommonsDivision]):

@@ -12,7 +12,7 @@ from discord import embeds
 from ukparliament.structures.bills import Bill, BillType, CommonsDivision, LordsDivision
 from bot import TLDR
 from modules import cls, embed_maker
-from modules.utils import ParseArgs
+from modules.utils import ParseArgs, get_member_from_string
 from discord.ext import commands
 from discord.ext.commands import Context
 from ukparliament.bills import SearchBillsBuilder, SearchBillsSortOrder
@@ -132,7 +132,9 @@ class UKCommand(commands.Cog):
                 sub_commands=[
                         'bills',
                         'divisions',
-                        'mps'
+                        'mpinfo', #DOING
+                        "lordinfo", #TODO
+                        "elections", #TODO
                     ],
                 cls=cls.Group
             )
@@ -166,10 +168,49 @@ class UKCommand(commands.Cog):
     async def divisions(self, ctx: commands.Context):
         pass
 
+    @uk.command(
+                name='mpinfo',
+                help='Get information on a currently serving MP',
+                usage="uk mps info [mp name]",
+                command_args=[
+                    (('--borough', None, str), 'Get mp info by borough name'),
+                    ],
+                clearence='User',
+                cls=cls.Command
+            )
+    async def mps_info(self, ctx: commands.Context, *, args: ParseArgs):
+        member = None
+    
+        if args['pre'] is not None:
+            for m in self.parliament.get_commons_members():
+                name = m.get_titled_name()
+                if name is None: name = m.get_addressed_name()
+                if name is None: name = m.get_display_name()
+                if args['pre'].lower() in name.lower():
+                    member = m
+        else:
+            if args['borough'] is not None:
+                members = list(filter(lambda m: m.get_membership_from().lower() == args['borough'].lower(), self.parliament.get_commons_members()))
+                if len(members) != 0:
+                    member = members[0]
+
+        if member is None:
+            await embed_maker.message(ctx, description=f"Couldn't find MP {args['pre'] if args['pre'] is not None else 'of borough' + args['borough']}.", send=True)
+            return
+        
+        url= member.get_thumbnail_url().replace('Thumbnail', 'Portrait') 
+        portrait_image = await self.bot.get_parliament_module().get_mp_portrait(url)
+        next_line = '\n'
+        embed: embeds.Embed = await embed_maker.message(ctx, description=f"**Name:** {member.get_display_name()}{next_line}**Representing:** {member.get_membership_from()}{next_line}**Gender:** {member.get_gender()}") # type: ignore
+        if portrait_image is not None: 
+            embed.set_image(url=f'attachment://{portrait_image.filename}')
+            await ctx.send(file=portrait_image, embed=embed)
+        else:
+            await ctx.send(embed=embed)
     @divisions.command(
                 name='linfo',
                 help='Get House of Lords Division information',
-                usage="uk divisions linfo <division id>",
+                usage="uk divisions linfo [division id]",
                 clearence='User',
                 cls=cls.Command
             )
@@ -189,7 +230,7 @@ class UKCommand(commands.Cog):
     @divisions.command(
             name='cinfo',
             help='Get House of Commons Division information',
-            usage="uk divisions cinfo <division id>",
+            usage="uk divisions cinfo [division id]",
             clearence='User',
             cls=cls.Command
             )
@@ -208,7 +249,7 @@ class UKCommand(commands.Cog):
     @divisions.command(
             name='csearch',
             help='Search for commons divisions',
-            usage="uk divisions csearch <search term>",
+            usage="uk divisions csearch [search term]",
             clearence='User',
             cls=cls.Command
             )
@@ -232,7 +273,7 @@ class UKCommand(commands.Cog):
     @divisions.command(
                 name='lsearch',
                 help='Search for lords divisions',
-                usage="uk divisions lsearch <search term>",
+                usage="uk divisions lsearch [search term]",
                 clearence='User'
             )
     async def division_lords_search(self, ctx: commands.Context, *, search_term = ""):
@@ -259,7 +300,7 @@ class UKCommand(commands.Cog):
             name='info',
             help='To display in more detail information about a bill.',
             clearence='User',
-            usage="uk bills info <bill id>",
+            usage="uk bills info [bill id]",
             cls=cls.Command
             )
     async def bill_info(self, ctx: commands.Context, bill_id: int):
@@ -283,7 +324,7 @@ class UKCommand(commands.Cog):
 
     @bills.command(
             help='Seach for bills using certain values and search terms',
-            usage='uk bills search <search terms>',
+            usage='uk bills search [search terms]',
             name='search',
             clearence='User',
             command_args=[
