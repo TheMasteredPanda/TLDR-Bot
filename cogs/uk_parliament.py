@@ -1,10 +1,12 @@
+import numpy as np
+from matplotlib import pyplot
 import functools
 import math
 
 from discord.file import File
 from modules.custom_commands import Message
 
-from ukparliament.structures.members import PartyMember
+from ukparliament.structures.members import ElectionResult, PartyMember
 from modules.reaction_menus import BookMenu
 from typing import Union
 from discord import embeds
@@ -12,7 +14,7 @@ from discord import embeds
 from ukparliament.structures.bills import Bill, BillType, CommonsDivision, LordsDivision
 from bot import TLDR
 from modules import cls, embed_maker
-from modules.utils import ParseArgs, get_member_from_string
+from modules.utils import ParseArgs, get_custom_emote, get_member_from_string
 from discord.ext import commands
 from discord.ext.commands import Context
 from ukparliament.bills import SearchBillsBuilder, SearchBillsSortOrder
@@ -132,9 +134,8 @@ class UKCommand(commands.Cog):
                 sub_commands=[
                         'bills',
                         'divisions',
-                        'mpinfo', #DOING
-                        "lordinfo", #TODO
-                        "elections", #TODO
+                        'minfo', #DOING
+                        "mpelection", #TODO
                     ],
                 cls=cls.Group
             )
@@ -168,25 +169,102 @@ class UKCommand(commands.Cog):
     async def divisions(self, ctx: commands.Context):
         pass
 
+
     @uk.command(
-                name='mpinfo',
-                help='Get information on a currently serving MP',
-                usage="uk mps info [mp name]",
+                name='mpelection',
+                help='View latest election results of an MP by name or constituency name',
+                clearence=True,
+                cls=cls.Command,
                 command_args=[
-                    (('--borough', None, str), 'Get mp info by borough name'),
-                    ],
-                clearence='User',
-                cls=cls.Command
+                        (('--borough', None, str), 'Name of a borough'),
+                        (('--nonvoters', None, bool), 'Include non-voters in the charts'),
+                        (('--table', None, bool), 'Whether or not the chart should be a pie or a table'),
+                        (('--name', None, str), "The name of the MP (used only if you're using the other arguments"),
+                        (('--historical', '--h', str), "Get list of recorded election results")
+                    ]
             )
-    async def mps_info(self, ctx: commands.Context, *, args: ParseArgs):
+    async def mp_elections(self, ctx: commands.Context, *, args: ParseArgs):
         member = None
-    
-        if args['pre'] is not None:
+
+        name_arg = args['pre'] if args['pre'] != '' else args['name']
+        if name_arg != '' and name_arg is not None:
             for m in self.parliament.get_commons_members():
                 name = m.get_titled_name()
                 if name is None: name = m.get_addressed_name()
                 if name is None: name = m.get_display_name()
-                if args['pre'].lower() in name.lower():
+
+                if name_arg.lower() in name.lower():
+                    member = m
+                    break
+
+        elif args['borough'] != '':
+            for m in self.parliament.get_commons_members():
+                if args['borough'].lower() in m.get_membership_from().lower():
+                    member = m
+                    break
+
+        if member is None:
+            await embed_maker.message(ctx, description=f"Couldn't find latest elections results for {'Borough' if args['borough'] != '' and args['borough'] is not None else 'MP'} {args['borough'] if args['borough'] != '' and args['borough'] is not None else args['pre']}", send=True)
+            return
+
+    
+
+        next_line = '\n'
+        results = await self.parliament.get_election_results(member)
+        result = results[0]
+
+        if args['historical'] is '':
+            historical_bits = [f"- {er.get_election_date().strftime('%Y')}" for er in results]
+            await embed_maker.message(ctx, title=f'Recorded Eletion Results of the Borough {member.get_membership_from()}', description=f'**Elections:** {next_line}{next_line.join(historical_bits)}', send=True)
+            return
+        else:
+            for h_result in results:
+                if h_result.get_election_date().strftime('%Y') == args['historical']:
+                    result = h_result
+
+        #print(result.get_result())
+        #print(result.get_candidates())
+        others_formatted = []
+        the_rest_formatted = []
+
+        for candidate in result.get_candidates():
+            if candidate['votes'] > 1000:
+                the_rest_formatted.append(f"- {candidate['name']}: {candidate['party_name']}")
+            else:
+                others_formatted.append(f"- {candidate['name']}: {candidate['party_name']}")
+
+        embed = embeds.Embed = await embed_maker.message(ctx, title=f'{result.get_election_date().strftime("%Y")} Election Results of {member.get_membership_from()}', description=f'**Electorate Size:** {result.get_electorate_size():,}{next_line}**Turnout:** {result.get_turnout():,}{next_line}**Main Candidates:**{next_line}{next_line.join(the_rest_formatted)}' + (f"{next_line}**Other Candidates (Under 1k):**{next_line}{next_line.join(others_formatted)}" if len(others_formatted) > 0 else '')) #type: ignore
+        if result is not None:
+            image_file = self.bot.get_parliament_module().generate_election_graphic(result, args['nonvoters'] is not None, args['table'] is not None)
+            embed.set_image(url=f'attachment://{image_file.filename}') #type: ignore
+            await ctx.send(file=image_file, embed=embed)
+        else: 
+            await ctx.send(embed=embed)
+
+    @uk.command(
+                name='minfo',
+                help='Get information on a currently serving MP or Lord',
+                usage="uk minfo [mp name / lord name]",
+                command_args=[
+                    (('--borough', None, str), 'Get mp info by borough name'),
+                    (('--portrait', None, bool), 'Fetch the portrait of the member'),
+                    (('--name', None, str), "The name of the mp (used only if you're using the other args")
+                    ],
+                clearence='User',
+                cls=cls.Command
+            )
+    async def member_info(self, ctx: commands.Context, *, args: ParseArgs):
+        member = None
+        members = self.parliament.get_commons_members()
+        members.extend(self.parliament.get_lords_members())
+
+        arg_name = args['pre'] if args['pre'] != '' else args['name']
+        if arg_name is not None:
+            for m in members:
+                name = m.get_titled_name()
+                if name is None: name = m.get_addressed_name()
+                if name is None: name = m.get_display_name()
+                if arg_name.lower() in name.lower():
                     member = m
         else:
             if args['borough'] is not None:
@@ -195,18 +273,48 @@ class UKCommand(commands.Cog):
                     member = members[0]
 
         if member is None:
-            await embed_maker.message(ctx, description=f"Couldn't find MP {args['pre'] if args['pre'] is not None else 'of borough' + args['borough']}.", send=True)
+            await embed_maker.message(ctx, description=f"Couldn't find {arg_name if args['pre'] is not None or args['name'] is not None else 'of borough' + args['borough']}.", send=True)
             return
         
-        url= member.get_thumbnail_url().replace('Thumbnail', 'Portrait') 
-        portrait_image = await self.bot.get_parliament_module().get_mp_portrait(url)
+        biography = await self.parliament.get_biography(member)
         next_line = '\n'
-        embed: embeds.Embed = await embed_maker.message(ctx, description=f"**Name:** {member.get_display_name()}{next_line}**Representing:** {member.get_membership_from()}{next_line}**Gender:** {member.get_gender()}") # type: ignore
-        if portrait_image is not None: 
-            embed.set_image(url=f'attachment://{portrait_image.filename}')
-            await ctx.send(file=portrait_image, embed=embed)
+
+        representing_bits = []
+
+        for rep in biography.get_representations():
+            representing_bits.append(f"- MP for {rep['constituency_name']} from {rep['started'].strftime('%Y-%m-%d')}{' to ' if rep['ended'] is not None else ''}{rep['ended'].strftime('%Y-%m-%d') if rep['ended'] is not None else ''}")
+
+        gov_posts_bits = []
+
+        for post in biography.get_government_posts():
+            gov_posts_bits.append(f"- {post['office']} from {post['started'].strftime('%Y-%m-%d')}{' to ' if post['ended'] is not None else ''}{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}")
+        
+        opp_posts_bits = []
+
+        for post in biography.get_oppositions_posts():
+            opp_posts_bits.append(f" - {post['office']} from {post['started'].strftime('%Y-%m-%d')}{' to ' if post['ended'] is not None else ''}{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}")
+
+        other_posts_bits = []
+
+        for post in biography.get_other_posts():
+            other_posts_bits.append(f" - {post['office']} from {post['started'].strftime('%Y-%m-%d')}{' to ' if post['ended'] is not None else ''}{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}")
+
+        cmte_bits = []
+
+        for membership in biography.get_committee_memberships():
+            cmte_bits.append(f"- Member of {membership['committee']} from {membership['started'].strftime('%Y-%m-%d')}{' to ' if membership['ended'] is not None else ''}{membership['ended'].strftime('%Y-%m-%d') if membership['ended'] is not None else ''}")
+        
+        embed: embeds.Embed = await embed_maker.message(ctx, description=f"**Name:** {member.get_display_name()}{next_line}**{'Representing:' if member._get_house() == 1 else 'Peer Type'}** {member.get_membership_from()}{next_line}**Gender:** {'Male' if member.get_gender() == 'M' else 'Female'}" + (f"{next_line}**Represented/Representing:**{next_line}{next_line.join(representing_bits)}" if len(representing_bits) > 0 else '') + (f"{next_line}**Government Posts**{next_line}{next_line.join(gov_posts_bits)}" if len(gov_posts_bits) > 0 else '') + (f"{next_line}**Opposition Posts:**{next_line}{next_line.join(opp_posts_bits)}" if len(opp_posts_bits) > 0 else '') + (f"{next_line}**Other Posts:**{next_line}{next_line.join(other_posts_bits)}" if len(other_posts_bits) > 0 else '') + (f"{next_line}**Committee Posts:**{next_line}{next_line.join(cmte_bits)}" if len(cmte_bits) > 0 else '')) # type: ignore
+
+        if args['portrait'] is not None:
+            url= member.get_thumbnail_url().replace('Thumbnail', 'Portrait') + '?cropType=FullSize&webVersion=false'
+            portrait_image = await self.bot.get_parliament_module().get_mp_portrait(url)
+            if portrait_image is not None: 
+                embed.set_image(url=f'attachment://{portrait_image.filename}')
+                await ctx.send(file=portrait_image, embed=embed)
         else:
             await ctx.send(embed=embed)
+
     @divisions.command(
                 name='linfo',
                 help='Get House of Lords Division information',
