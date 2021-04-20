@@ -8,7 +8,7 @@ import inspect
 import copy
 import requests
 import pytz
-import json
+import bs4
 
 from timezonefinder import TimezoneFinder
 from typing import Union
@@ -30,6 +30,39 @@ class Utility(commands.Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
 
+    def cg_to_string(self, tags: bs4.element.Tag, asked_for: list[str], parent: str = ''):
+        spacer = f'|{"-" * 4}'
+        string = ""
+        parent_count = len(parent.split('.')) if parent else 0
+        asked_for_cg_number = asked_for[parent_count] if len(asked_for) > parent_count else None
+
+        for i, cg in enumerate(filter(lambda cg: type(cg) == bs4.element.Tag, tags)):
+            contents = cg.contents
+
+            cg_number = str(i + 1)
+            if asked_for_cg_number is None or asked_for_cg_number == cg_number:
+                new_parent = f'{parent + ("." if parent else "")}{cg_number}'
+                if len(contents) > 1:
+                    sub_cg = self.cg_to_string(contents[1], asked_for, new_parent)
+                    string += f'{spacer * parent_count}`{new_parent}.`: {contents[0]}'
+                    string += f'{sub_cg}'
+                else:
+                    string += f'{spacer * parent_count}`{new_parent}.`: {cg.contents[0]}\n'
+
+        return string
+
+    async def get_cg(self, asked_for: list[str]):
+        # This session needs to be gotten in this weird way cause it's a double underscore variable
+        aiohttp_session = getattr(self.bot.http, '_HTTPClient__session')
+        async with aiohttp_session.get('https://tldrnews.co.uk/discord-community-guidelines/') as resp:
+            content = await resp.text()
+
+            soup = bs4.BeautifulSoup(content, 'html.parser')
+            entry = soup.find('div', {'class': 'entry-content'})
+            cg_list = [*entry.children][15]
+
+            return self.cg_to_string(cg_list, asked_for)
+
     @commands.command(
         help='command to get any community guideline',
         usage='cg [cg]',
@@ -46,62 +79,14 @@ class Utility(commands.Cog):
                 send=True
             )
 
-        cg_file = open('static/community-guidelines.json').read()
-        rules = json.loads(cg_file)
+        cg_text = await self.get_cg(guideline.split('.'))
 
-        async def get_cg_string(string: str, cg_number_sequence: list, cg_dict: dict, parent_cg: str) -> Union[str, discord.Message]:
-            if cg_number_sequence[0] not in cg_dict:
-                valid = "community guideline" if not parent_cg else f'sub community guideline of {parent_cg}'
-                return await embed_maker.error(ctx, f'`{cg_number_sequence[0]}` is not a valid {valid}, you can find the full list of the community guidelines here: [{cg_link}]({cg_link})')
+        if not cg_text:
+            return await embed_maker.error(ctx, f'{guideline} is not a valid community guideline.')
 
-            # This piece of code is probably the single worst thing i've ever created, but eh, it works so who cares
-
-            community_guideline = cg_dict[cg_number_sequence[0]]
-            space = '-'
-            spacing = f'|{space * 4}' * len(parent_cg.split("."))
-
-            index = f'{parent_cg + ("." if parent_cg else "")}{cg_number_sequence[0]}'
-            if type(community_guideline) == str:
-                if string:
-                    string += f'\n{spacing}'
-
-                string += f'`{index}.` "{community_guideline}"'
-                return string
-            elif not cg_number_sequence[1:] and type(community_guideline) == dict:
-                if string:
-                    string += f'\n{spacing}'
-
-                string += f'`{index}.` "{community_guideline["text"]}"'
-                for sub_rule in community_guideline:
-                    if sub_rule == 'text':
-                        continue
-
-                    if type(community_guideline[sub_rule]) == dict:
-                        for sub_rule_nested in community_guideline[sub_rule]:
-                            if sub_rule_nested == 'text':
-                                string += f'\n{spacing}`{index}.{sub_rule}.` "{community_guideline[sub_rule]["text"]}"'
-                                continue
-
-                            string += f'\n{spacing * 2}`{index}.{sub_rule}.{sub_rule_nested}` "{community_guideline[sub_rule][sub_rule_nested]}"'
-
-                        continue
-
-                    string += f'\n{spacing}`{index}.{sub_rule}.` "{community_guideline[sub_rule]}"'
-
-            elif cg_number_sequence[1:] and type(community_guideline) == dict:
-                if string:
-                    string += f'\n{spacing}'
-
-                string += f'`{index}.` "{community_guideline["text"]}"'
-
-                return await get_cg_string(string, cg_number_sequence[1:], community_guideline, f'{parent_cg + ("." if parent_cg else "")}{cg_number_sequence[0]}')
-
-            return string
-
-        text = await get_cg_string("", guideline.split('.'), rules, '')
         return await embed_maker.message(
             ctx,
-            description=text,
+            description=cg_text,
             author={'name': "Community Guidelines"},
             send=True
         )
