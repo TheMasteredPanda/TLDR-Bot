@@ -106,22 +106,23 @@ class Utility(commands.Cog):
         if not config.GEONAMES_USERNAME:
             return await embed_maker.error(ctx, 'GEONAMES_USERNAME has not been set in the config file.')
 
-        response = requests.get(f'http://api.geonames.org/searchJSON?q={location_str}&maxRows=1&username={config.GEONAMES_USERNAME}')
-        location_json = response.json()
-        if 'geonames' not in location_json:
-            return await embed_maker.error(ctx, f'Geonames error: {location_json["status"]["message"]}')
+        aiohttp_session = getattr(self.bot.http, '_HTTPClient__session')
+        async with aiohttp_session.get(f'http://api.geonames.org/searchJSON?q={location_str}&maxRows=1&username={config.GEONAMES_USERNAME}') as resp:
+            location_json = await resp.json()
+            if 'geonames' not in location_json:
+                return await embed_maker.error(ctx, f'Geonames error: {location_json["status"]["message"]}')
 
-        location = location_json['geonames'][0]
+            location = location_json['geonames'][0]
 
-        timezone_finder = TimezoneFinder()
-        location_timezone_str = timezone_finder.timezone_at(lng=float(location['lng']), lat=float(location['lat']))
-        location_timezone = pytz.timezone(location_timezone_str)
+            timezone_finder = TimezoneFinder()
+            location_timezone_str = timezone_finder.timezone_at(lng=float(location['lng']), lat=float(location['lat']))
+            location_timezone = pytz.timezone(location_timezone_str)
 
-        time_at = datetime.datetime.now(location_timezone)
-        time_at_str = time_at.strftime('%H:%M:%S')
+            time_at = datetime.datetime.now(location_timezone)
+            time_at_str = time_at.strftime('%H:%M:%S')
 
-        google_maps_link = f'https://www.google.com/maps/search/?api=1&query={location["lat"]},{location["lng"]}'
-        return await embed_maker.message(ctx, description=f'Time at [{location["name"]}, {location["countryName"]}]({google_maps_link}) is: `{time_at_str}`', send=True)
+            google_maps_link = f'https://www.google.com/maps/search/?api=1&query={location["lat"]},{location["lng"]}'
+            return await embed_maker.message(ctx, description=f'Time at [{location["name"]}, {location["countryName"]}]({google_maps_link}) is: `{time_at_str}`', send=True)
 
     @commands.command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'
