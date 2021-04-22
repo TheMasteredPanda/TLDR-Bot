@@ -1117,8 +1117,14 @@ class Mod(commands.Cog):
         ],
         cls=cls.Command
     )
-    async def command_access_give(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
+    async def command_access_give(self, ctx: commands.Context, command: Union[Command, cls.Command, str] = None,
                                   user_input: Union[discord.Role, str] = None):
+        if command is None:
+            return await embed_maker.command_error(ctx)
+
+        if type(command) == str:
+            return await embed_maker.message(ctx, description=f'Unable to find a command by the name: `{command}`', send=True)
+
         data = await self.command_access_check(ctx, command, user_input, change='give')
         if type(data) == discord.Message:
             return
@@ -1149,6 +1155,12 @@ class Mod(commands.Cog):
     )
     async def command_access_take(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
                                   user_input: Union[discord.Role, str] = None):
+        if command is None:
+            return await embed_maker.command_error(ctx)
+
+        if type(command) == str:
+            return await embed_maker.message(ctx, description=f'Unable to find a command by the name: `{command}`', send=True)
+
         data = await self.command_access_check(ctx, command, user_input, change='take')
         if type(data) == discord.Message:
             return
@@ -1179,6 +1191,12 @@ class Mod(commands.Cog):
     )
     async def command_access_default(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
                                      user_input: Union[discord.Role, str] = None):
+        if command is None:
+            return await embed_maker.command_error(ctx)
+
+        if type(command) == str:
+            return await embed_maker.message(ctx, description=f'Unable to find a command by the name: `{command}`', send=True)
+
         data = await self.command_access_check(ctx, command, user_input, change='default')
         if type(data) == discord.Message:
             return
