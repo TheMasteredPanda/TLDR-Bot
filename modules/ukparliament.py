@@ -1,3 +1,8 @@
+from datetime import datetime
+import json
+import discord
+from discord.embeds import Embed
+from discord.guild import Guild
 from matplotlib.patches import ConnectionPatch
 import matplotlib.pyplot as plt
 import numpy as np
@@ -5,15 +10,21 @@ import time
 import aiofiles
 import aiohttp
 import random
-from discord import File
+from discord import File, colour
 import string
 from typing import Union
 import math
 from PIL import ImageDraw, Image, ImageFont
-from ukparliament.structures.bills import CommonsDivision, LordsDivision
+from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from ukparliament.structures.members import ElectionResult, Party, PartyMember
+from ukparliament.bills_tracker import Conditions, Feed, FeedUpdate, BillsStorage
+from ukparliament.divisions_tracker import DivisionStorage, DivisionsTracker
 from ukparliament.utils import BetterEnum
+from discord.ext import tasks
+from discord.abc import GuildChannel
 from ukparliament.ukparliament import UKParliament
+from modules import embed_maker
+import config
 import os
 
 class PartyColour(BetterEnum):
@@ -44,15 +55,165 @@ class PartyColour(BetterEnum):
                 return p_enum
         return cls.NONAFFILIATED
 
+class BillsJSONStorage(BillsStorage):
+    def __init__(self):
+        data = None
+        if os.path.exists('trackerdata.json'):
+            with open('trackerdata.json', 'r') as datafile:
+                print('Loading data')
+                data = json.load(datafile)
+        else:
+            data = {}
+        self.data = data
+
+    def save(self):
+        with open('trackerdata.json', 'w+') as datafile:
+            json.dump(self.data, datafile, indent=4)
+
+    async def add_feed_update(self, bill_id: int, update: FeedUpdate):
+        if str(bill_id) not in self.data:
+            self.data[str(bill_id)] = {"title": update.get_title(), "description": update.get_description(), "updates": []}
+        next_line = '\n'
+        print(f'Adding update to file:{next_line}Title: {update.get_title()}{next_line}Last Updated: {update.get_update_date()}{next_line}Stage: {update.get_stage()}')
+        self.data[str(bill_id)]['updates'].append({"guid": update.get_guid(), "stage": update.get_stage(), "categories": update.get_categories(), "timestamp": update.get_update_date().timestamp()})
+
+    async def has_update_stored(self, bill_id: int, update: FeedUpdate):
+        if str(bill_id) not in self.data: return False
+        update_entry = None
+        for entry in self.data[str(bill_id)]['updates']:
+            if update.get_update_date().timestamp() == entry['timestamp']:
+                update_entry = entry
+                break
+
+        return update_entry is not None and update_entry['stage'] == update.get_stage()
+
+    async def get_last_update(self, bill_id: int, update: FeedUpdate):
+        if str(bill_id) not in self.data: return None
+        updates = self.data[str(bill_id)]['updates']
+        if len(updates) == 0: return None
+        latest_update = None
+
+        for entry in updates:
+            if latest_update is None:
+                latest_update = entry
+
+            if entry['timestamp'] > latest_update['timestamp']:
+                latest_update = entry
+        if latest_update['guid'] == update.get_guid(): return None
+        return latest_update
+
+
+class DivisionJSONStorage(DivisionStorage):
+    def __init__(self):
+        self.data = {"divisions": [], "bill_divisions": {}}
+
+
+        if os.path.exists('tracker.json'):
+            with open('tracker.json', 'r') as json_file:
+                self.data = json.load(json_file)
+        
+
+    async def add_division(self, division: Union[LordsDivision, CommonsDivision]):
+        self.data['divisions'].append(division.get_id())
+
+    async def add_bill_division(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
+        if str(bill_id) not in self.data['bill_divisions']:
+            self.data['bill_divisions'][str(bill_id)] = []
+        self.data['bill_divisions'][str(bill_id)].append(division.get_id())
+
+    async def division_stored(self, division: Union[LordsDivision, CommonsDivision]):
+        return division.get_id() in self.data['divisions']
+
+    async def bill_division_stored(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
+        if str(bill_id) not in self.data['bill_divisions']: return False
+        return division.get_id() in self.data['bill_divisions'][str(bill_id)]
+
+    async def get_bill_divisions(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
+        if str(bill_id) not in self.data['bill_divisions']: return False
+        return self.data['bill_divisions'][str(bill_id)]
+
+    def save(self):
+        with open('tracker.json', 'w+') as json_file:
+            json.dump(self.data, json_file, indent=4)
+
+
 class UKParliamentModule:
     def __init__(self, parliament: UKParliament):
         self.parliament = parliament
         self.title_font = ImageFont.truetype('static/Metropolis-Bold.otf', 40)
         self.key_font = ImageFont.truetype('static/Metropolis-SemiBold.otf', 25)
-
+        self.bills_json_storage = BillsJSONStorage()
+        self.divisions_json_storage = DivisionJSONStorage()
+        parliament.start_bills_tracker(self.bills_json_storage)
+        parliament.get_bills_tracker().register(self.on_feed_update, [Conditions.ALL])
+        parliament.get_bills_tracker().register(self.on_royal_assent_update, [Conditions.ROYAL_ASSENT])
+        parliament.start_divisions_tracker(self.divisions_json_storage)
+        parliament.get_divisions_tracker().register(self.on_commons_division)
+        parliament.get_divisions_tracker().register(self.on_lords_division, False)
+        self.guild: Union[Guild, None] = None
         if os.path.exists('tmpimages') is False:
             os.mkdir('tmpimages')
 
+    def set_guild(self, guild):
+        self.guild = guild
+
+    @tasks.loop(seconds=60)
+    async def tracker_event_loop(self):
+        await self.parliament.get_bills_tracker()._poll()
+        self.bills_json_storage.save()
+        await self.parliament.get_divisions_tracker()._poll_commons()
+        await self.parliament.get_divisions_tracker()._poll_lords()
+        self.divisions_json_storage.save()
+ 
+    async def on_feed_update(self, feed: Feed, update: FeedUpdate):
+        channel = self.guild.get_channel(config.UKPARL_CHANNEL)
+        embed = Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
+        next_line = '\n'
+        last_update = await self.bills_json_storage.get_last_update(update.get_bill_id(), update)
+        embed.description = (f"**Last Stage:**: {last_update['stage']}{next_line}" if last_update is not None else '') + f"**Next Stage:** {update.get_stage()}{next_line} **Summary:** {update.get_description()}{next_line}**Categories:**{', '.join(update.get_categories())}"
+        embed.title = update.get_title() 
+        if self.guild is not None:
+            embed.set_author(name='TLDRBot', icon_url=self.guild.icon_url)
+
+        await channel.send(embed=embed) #type: ignore
+
+    async def on_royal_assent_update(self, feed: Feed, update: FeedUpdate):
+        channel = self.guild.get_channel(config.ROYAL_ASSENT_CHANNEL)
+        next_line = '\n'
+        embed = Embed(colour=discord.Colour.from_rgb(134, 72, 186), timestamp=datetime.now())
+        embed.title = f'**Royal Assent Given:** {update.get_title()}'
+        embed.description =  (f"**Signed At:** {update.get_update_date().strftime('%H:%M:%S on %Y:%m:%d')}{next_line}**Summary:** {update.get_description()}")
+        await channel.send(embed=embed)
+
+    
+    async def on_commons_division(self, division: CommonsDivision, bill: Bill):
+        channel = self.guild.get_channel(config.COMMONS_CHANNEL)
+        division_infographic = self.generate_division_image(self.parliament, division)
+        embed = Embed(color=discord.Colour.from_rgb(84, 174, 51), timestamp=datetime.now())
+        did_pass = division.get_aye_count() > division.get_no_count()
+        embed.title = f'**{division.get_division_title()}**'
+        next_line = '\n'
+        description = f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        if bill is not None:
+            description += f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/bills/{bill.get_bill_id()})**: {bill.get_long_title()}"
+
+        embed.description = description
+        embed.set_image(url=f'attachment://{division_infographic.filename}')
+        await channel.send(file=division_infographic, embed=embed)
+
+    async def on_lords_division(self, division: LordsDivision, bill: Bill):
+        channel = self.guild.get_channel(config.LORDS_CHANNEL)
+        division_infographic = self.generate_division_image(self.parliament, division)
+        embed = Embed(color=discord.Colour.from_rgb(166, 42, 22), timestamp=datetime.now())
+        did_pass = division.get_aye_count() > division.get_no_count()
+        embed.title = f'**{division.get_division_title()}**'
+        embed.set_image(url=f"attachment://{division_infographic.filename}")
+        next_line = '\n'
+        description = f"**ID:** {division.get_id()}{next_line}**Summary [(Link)](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()}):** {division.get_amendment_motion_notes()[0:250]}{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        if bill is not None:
+            description += f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/bills/{bill.get_bill_id()})**: {bill.get_long_title()}"
+        embed.description = description
+        await channel.send(file=division_infographic, embed=embed)
 
     async def get_mp_portrait(self, url: str):
         async with aiohttp.ClientSession() as session:

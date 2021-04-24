@@ -15,7 +15,7 @@ from ukparliament.structures.bills import Bill, BillType, CommonsDivision, Lords
 from bot import TLDR
 from modules import cls, embed_maker
 from modules.utils import ParseArgs, get_custom_emote, get_member_from_string
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord.ext.commands import Context
 from ukparliament.bills import SearchBillsBuilder, SearchBillsSortOrder
 from collections import namedtuple
@@ -29,6 +29,7 @@ class UKCommand(commands.Cog):
 
     async def load_parliament_data(self):
         await self.parliament.load()
+
 
     @staticmethod
     async def construct_bills_search_embed(ctx: Context, bills: list[Bill], max_page_num: int, page_limit: int, *, page: int):
@@ -385,7 +386,7 @@ class UKCommand(commands.Cog):
                 clearence='User'
             )
     async def division_lords_search(self, ctx: commands.Context, *, search_term = ""):
-        divisions = await self.parliament.search_for_lords_division(search_term)
+        divisions = await self.parliament.search_for_lords_divisions(search_term)
         if len(divisions) == 0: 
             await embed_maker.message(ctx, description=f"Couldn't find any Lords divisions under the search term '{search_term}'.", send=True)
             return
@@ -415,7 +416,7 @@ class UKCommand(commands.Cog):
         try:
             bill = await self.parliament.get_bill(bill_id)
             c_divisions = await self.parliament.search_for_commons_divisions(bill.get_title())
-            l_divisions = await self.parliament.search_for_lords_division(bill.get_title())
+            l_divisions = await self.parliament.search_for_lords_divisions(bill.get_title())
             page_constructor = functools.partial(self.construct_bill_info_embed, ctx=ctx, bill=bill, l_divisions=l_divisions, c_divisions=c_divisions, page_limit=10)
             pair: tuple[embeds.Embed, int] = await page_constructor(page=1)
             message = await ctx.send(embed=pair[0])

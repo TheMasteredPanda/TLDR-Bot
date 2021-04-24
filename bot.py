@@ -1,6 +1,8 @@
 import discord
 import os
 import copy
+
+from discord.guild import Guild
 import config
 import asyncio
 import traceback
@@ -53,6 +55,13 @@ class TLDR(commands.Bot):
         self.custom_commands = modules.custom_commands.CustomCommands(self)
         self.leveling_system = modules.leveling.LevelingSystem(self)
         self.ukparl_module = modules.ukparliament.UKParliamentModule(self.ukparliament)
+
+    async def on_ready(self):
+        guild: Guild = self.guilds[0]
+        channel = guild.get_channel(config.UKPARL_CHANNEL)
+        self.ukparl_module.set_guild(self.guilds[0])
+        if self.ukparl_module.tracker_event_loop.is_running() is False:
+            self.ukparl_module.tracker_event_loop.start()
 
     def get_parliament(self):
         return self.ukparliament
