@@ -478,9 +478,6 @@ class Utility(commands.Cog):
         guild_id = timer['guild_id']
         guild = self.bot.get_guild(int(guild_id))
 
-        if guild:
-            return
-
         member_id = timer['extras']['member_id']
         member = guild.get_member(int(member_id))
         if member is None:
@@ -495,7 +492,8 @@ class Utility(commands.Cog):
 
         try:
             return await member.send(embed=embed)
-        except Exception:
+        except Exception as e:
+            self.bot.logger.exception(e)
             bot_channel = self.bot.get_channel(config.BOT_CHANNEL_ID)
             return await bot_channel.send(f'I wasn\'t able to dm you, so here\'s the reminder <@{member.id}>', embed=embed)
 
