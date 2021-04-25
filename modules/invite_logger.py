@@ -33,7 +33,7 @@ class InviteLogger:
         embed.set_footer(text=str(member), icon_url=member.avatar_url)
 
         leveling_guild = self.bot.leveling_system.get_guild(member.guild.id)
-        print(leveling_guild.invite_logger_channel)
+
         if leveling_guild.invite_logger_channel:
             channel = self.bot.get_channel(leveling_guild.invite_logger_channel)
             return await channel.send(embed=embed)
