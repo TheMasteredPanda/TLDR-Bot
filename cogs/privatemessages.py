@@ -14,7 +14,7 @@ class PrivateMessages(commands.Cog):
         self.bot = bot
         # when get __getattribute__ is called, instead of people needing to call pm_help, they can call help
         self.help = self.pm_help
-        self.commands = ['help', 'report_issue']
+        self.commands = ['help', 'report_issue', 'open_ticket']
 
     async def process_pm(self, ctx):
         cmd, args = self.parse_msg(ctx)
