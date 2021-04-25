@@ -1365,42 +1365,6 @@ class Mod(commands.Cog):
         return await embed_maker.message(ctx, description=msg, colour='green', send=True)
 
     @commands.command(
-        help='Open a ticket for discussion',
-        usage='open_ticket [ticket]',
-        clearance='Mod',
-        examples=['open_ticket new mods'],
-        cls=cls.Command
-    )
-    async def open_ticket(self, ctx: commands.Context, *, ticket=None):
-        if ticket is None:
-            return await embed_maker.command_error(ctx)
-
-        main_guild = self.bot.get_guild(config.MAIN_SERVER)
-        embed_colour = config.EMBED_COLOUR
-        ticket_embed = discord.Embed(colour=embed_colour, timestamp=datetime.datetime.now())
-        ticket_embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
-        ticket_embed.set_author(name='New Ticket', icon_url=main_guild.icon_url)
-        ticket_embed.add_field(name='>Opened By', value=f'<@{ctx.author.id}>', inline=False)
-        ticket_embed.add_field(name='>Ticket', value=ticket, inline=False)
-
-        ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
-
-        if ticket_category is None:
-            # get all staff roles
-            staff_roles = filter(lambda r: r.permissions.manage_messages, ctx.guild.roles)
-
-            # staff roles can read channels in category, users cant
-            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True, read_message_history=True))
-            overwrites[ctx.guild.default_role] = discord.PermissionOverwrite(read_messages=False)
-
-            ticket_category = await ctx.guild.create_category(name='Open Tickets', overwrites=overwrites)
-
-        today = datetime.date.today()
-        date_str = today.strftime('%Y-%m-%d')
-        ticket_channel = await ctx.guild.create_text_channel(f'{date_str}-{ctx.author.name}', category=ticket_category)
-        await ticket_channel.send(embed=ticket_embed)
-
-    @commands.command(
         help='Archive a ticket channel. Every message will be recorded and put in a google doc',
         usage='archive_channel',
         clearance='Mod',
