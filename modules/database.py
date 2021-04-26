@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Union
 import pymongo
 import config
 import time
@@ -207,14 +208,40 @@ class Connection:
         entry = self.bills_tracker.find_one({'timestamp': {'$gte': datetime.now().isoformat(), '%lt': datetime.now().isoformat()}}).sort({'timestamp': 1}).limit(1)
         return entry
     
-    def division_stored(self, bill_id: int):
+    def is_division_stored(self, division: Union[LordsDivision, CommonsDivision]):
         """
-        Checks if a division has already been stored in the relevant collection
+        Checks if a division that is not related to a bill has already been stored in the relevant collection
         """
-        entry = 
+        entry = self.divisions_tracker.find_one({'divison_id': division.get_id()})
+        return entry is not None
 
-    def add_division(self, bill_id):
-        pass
+    def add_division(self, division: Union[LordsDivision, CommonsDivision]):
+        """
+        Stores a division that is not related to a bill.
+        """
+        if self.is_division_stored(division): return
+        self.divisions_tracker.insert_one({'bill_id': 0, 'division_id': division.get_id()})
+
+    def is_bill_division_stored(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
+        """
+        Check if a division that is also related has already been stored in the relevant collection.
+        """
+        entry = self.divisions_tracker.find_one({'bill_id': bill_id, 'division_id': division.get_id()})
+        return entry is not None
+
+    def add_bill_division(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
+        """
+        Store a divisin that is related to a bill.
+        """
+        if self.is_bill_division_stored(bill_id, division): return
+        self.divisions_tracker.insert_one({'bill_id': bill_id, 'division_id': division.get_id()})
+    
+    def get_bill_divisions(self, bill_id: int):
+        """
+        Fetch the division ids asscoatied with the provided bill id. 
+        """
+        divisions = self.divisions_tracker.find({'bill_id': bill_id}).distinct('division_id')
+        return divisions
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
         """

@@ -1,16 +1,13 @@
 from datetime import datetime
-import json
 import discord
 from discord.embeds import Embed
 from discord.guild import Guild
-from matplotlib.patches import ConnectionPatch
 import matplotlib.pyplot as plt
-import numpy as np
 import time
 import aiofiles
 import aiohttp
 import random
-from discord import File, colour
+from discord import File
 import string
 from typing import Union
 import math
@@ -18,14 +15,14 @@ from PIL import ImageDraw, Image, ImageFont
 from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from ukparliament.structures.members import ElectionResult, Party, PartyMember
 from ukparliament.bills_tracker import Conditions, Feed, FeedUpdate, BillsStorage, PublicationUpdate
-from ukparliament.divisions_tracker import DivisionStorage, DivisionsTracker
+from ukparliament.divisions_tracker import DivisionStorage
 from ukparliament.utils import BetterEnum
 from discord.ext import tasks
-from discord.abc import GuildChannel
 from ukparliament.ukparliament import UKParliament
-from modules import embed_maker
+from modules import database
 import config
 import os
+
 
 class PartyColour(BetterEnum):
     ALBA = {"id": 1034, "colour": '#73BFFA'}
@@ -55,96 +52,39 @@ class PartyColour(BetterEnum):
                 return p_enum
         return cls.NONAFFILIATED
 
-class BillsJSONStorage(BillsStorage):
-    def __init__(self):
-        self.data = {}
-        
-        if os.path.exists('billstracker.json'):
-            with open('billstracker.json', 'r') as json_file:
-                self.data = json.load(json_file)
 
-    def save(self):
-        with open('billstracker.json', 'w+') as json_file:
-            json.dump(self.data, json_file, indent=4)
-
-    def has_id(self, bill_id: int):
-        return str(bill_id) in self.data
-
+class BillsMongoStorage(BillsStorage):
     async def add_feed_update(self, bill_id: int, update: FeedUpdate):
-        if self.has_id(bill_id) is False: 
-            self.data[str(bill_id)] = {"feed_updates": [], "publication_updates": []}
-        self.data[str(bill_id)]['feed_updates'].append({"stage": update.get_stage(), "timestamp": update.get_update_date().timestamp()})
+        database.get_connection().add_bill_feed_update(bill_id, update)
 
     async def has_update_stored(self, bill_id: int, update: FeedUpdate):
-        if self.has_id(bill_id) is False: return False
-        updates = self.data[str(bill_id)]['feed_updates']
-
-        for entry in updates:
-            if entry['stage'] == update.get_stage():
-                return True
-
+        return database.get_connection().is_bill_update_stored(bill_id, update)
 
     async def get_last_update(self, bill_id: int):
-        if self.has_id(bill_id): return None
-        updates = self.data[str(bill_id)]['feed_updates']
-
-        latest_update = None
-
-        for entry in updates:
-            if latest_update is None:
-                latest_update = entry
-                continue
-            if latest_update['timestamp'] < entry['timestamp']:
-                latest_update = entry
-        return latest_update
+        return database.get_connection().get_bill_last_update(bill_id)
 
     async def add_publication_update(self, bill_id: int, update: PublicationUpdate):
-        if self.has_id(bill_id) is False: 
-            self.data[str(bill_id)] = {'feed_updates': [], 'publication_updates': []}
-        self.data[str(bill_id)]['publication_updates'].append({'guid': update.get_guid(), 'timestamp': update.get_publication().timestamp()})
-
+        pass
         
     async def has_publication_update(self, bill_id: int, update: PublicationUpdate):
-        if self.has_id(bill_id) is False: return False
-        updates = self.data[str(bill_id)]['publication_updates']
-
-        for entry in updates:
-            if entry['guid'] == update.get_guid():
-                if entry['timestamp'] == update.get_publication().timestamp():
-                    return True
-
-class DivisionJSONStorage(DivisionStorage):
-    def __init__(self):
-        self.data = {"divisions": [], "bill_divisions": {}}
+        pass
 
 
-        if os.path.exists('tracker.json'):
-            with open('tracker.json', 'r') as json_file:
-                self.data = json.load(json_file)
-        
-
+class DivisionMongoStorage(DivisionStorage):
     async def add_division(self, division: Union[LordsDivision, CommonsDivision]):
-        self.data['divisions'].append(division.get_id())
+        database.get_connection().add_division(division)
 
     async def add_bill_division(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
-        if str(bill_id) not in self.data['bill_divisions']:
-            self.data['bill_divisions'][str(bill_id)] = []
-        self.data['bill_divisions'][str(bill_id)].append(division.get_id())
+        database.get_connection().add_bill_division(bill_id, division)
 
     async def division_stored(self, division: Union[LordsDivision, CommonsDivision]):
-        return division.get_id() in self.data['divisions']
+        return database.get_connection().is_division_stored(division)
 
     async def bill_division_stored(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
-        if str(bill_id) not in self.data['bill_divisions']: return False
-        return division.get_id() in self.data['bill_divisions'][str(bill_id)]
+        return database.get_connection().is_bill_division_stored(bill_id, division)
 
-    async def get_bill_divisions(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
-        if str(bill_id) not in self.data['bill_divisions']: return False
-        return self.data['bill_divisions'][str(bill_id)]
-
-    def save(self):
-        with open('tracker.json', 'w+') as json_file:
-            json.dump(self.data, json_file, indent=4)
+    async def get_bill_divisions(self, bill_id: int):
+        return database.get_connection().get_bill_divisions(bill_id)
 
 
 class UKParliamentModule:
@@ -152,8 +92,8 @@ class UKParliamentModule:
         self.parliament = parliament
         self.title_font = ImageFont.truetype('static/Metropolis-Bold.otf', 40)
         self.key_font = ImageFont.truetype('static/Metropolis-SemiBold.otf', 25)
-        self.bills_json_storage = BillsJSONStorage()
-        self.divisions_json_storage = DivisionJSONStorage()
+        self.bills_json_storage = BillsMongoStorage()
+        self.divisions_json_storage = DivisionMongoStorage()
         parliament.start_bills_tracker(self.bills_json_storage)
         parliament.get_bills_tracker().register(self.on_feed_update, [Conditions.ALL])
         parliament.get_bills_tracker().register(self.on_royal_assent_update, [Conditions.ROYAL_ASSENT])
@@ -170,33 +110,36 @@ class UKParliamentModule:
     @tasks.loop(seconds=60)
     async def tracker_event_loop(self):
         await self.parliament.get_bills_tracker()._poll()
-        self.bills_json_storage.save()
         await self.parliament.get_divisions_tracker()._poll_commons()
         await self.parliament.get_divisions_tracker()._poll_lords()
-        self.divisions_json_storage.save()
-        print("Finished")
- 
+
     async def on_feed_update(self, feed: Feed, update: FeedUpdate):
         channel = self.guild.get_channel(config.UKPARL_CHANNEL)
         embed = Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
         next_line = '\n'
         last_update = await self.bills_json_storage.get_last_update(update.get_bill_id())
-        embed.description = (f"**Last Stage:**: {last_update['stage']}{next_line}" if last_update is not None else '') + f"**Next Stage:** {update.get_stage()}{next_line} **Summary:** {update.get_description()}{next_line}**Categories:**{', '.join(update.get_categories())}"
-        embed.title = update.get_title() 
+        embed.description = (
+                f"**Last Stage:**: {last_update['stage']}{next_line}" if last_update is not None else ''
+                f"**Next Stage:** {update.get_stage()}{next_line} **Summary:** {update.get_description()}"
+                f"{next_line}**Categories:**{', '.join(update.get_categories())}"
+                )
+        embed.title = update.get_title()
         if self.guild is not None:
             embed.set_author(name='TLDRBot', icon_url=self.guild.icon_url)
 
-        await channel.send(embed=embed) #type: ignore
+        await channel.send(embed=embed)  # type: ignore
 
     async def on_royal_assent_update(self, feed: Feed, update: FeedUpdate):
         channel = self.guild.get_channel(config.ROYAL_ASSENT_CHANNEL)
         next_line = '\n'
         embed = Embed(colour=discord.Colour.from_rgb(134, 72, 186), timestamp=datetime.now())
         embed.title = f'**Royal Assent Given:** {update.get_title()}'
-        embed.description =  (f"**Signed At:** {update.get_update_date().strftime('%H:%M:%S on %Y:%m:%d')}{next_line}**Summary:** {update.get_description()}")
+        embed.description = (
+                f"**Signed At:** {update.get_update_date().strftime('%H:%M:%S on %Y:%m:%d')}{next_line}"
+                f"**Summary:** {update.get_description()}"
+                )
         await channel.send(embed=embed)
 
-    
     async def on_commons_division(self, division: CommonsDivision, bill: Bill):
         channel = self.guild.get_channel(config.COMMONS_CHANNEL)
         division_infographic = self.generate_division_image(self.parliament, division)
@@ -204,9 +147,15 @@ class UKParliamentModule:
         did_pass = division.get_aye_count() > division.get_no_count()
         embed.title = f'**{division.get_division_title()}**'
         next_line = '\n'
-        description = f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        description = f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of"
+        f" {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'}"
+        f" to {division.get_no_count() if did_pass else division.get_aye_count()} "
+        f"{'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** "
+        f"{division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+
         if bill is not None:
-            description += f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/bills/{bill.get_bill_id()})**: {bill.get_long_title()}"
+            description += f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/"
+            f"bills/{bill.get_bill_id()})**: {bill.get_long_title()}"
 
         embed.description = description
         embed.set_image(url=f'attachment://{division_infographic.filename}')
@@ -220,9 +169,17 @@ class UKParliamentModule:
         embed.title = f'**{division.get_division_title()}**'
         embed.set_image(url=f"attachment://{division_infographic.filename}")
         next_line = '\n'
-        description = f"**ID:** {division.get_id()}{next_line}**Summary [(Link)](https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()}):** {division.get_amendment_motion_notes()[0:250]}{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        description = f"**ID:** {division.get_id()}{next_line}**Summary [(Link)](https://votes.parliament.uk/"
+        f"Votes/Lords/Division/{division.get_id()}):** {division.get_amendment_motion_notes()[0:250]}{next_line}"
+        f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of "
+        f"{division.get_aye_count() if did_pass else division.get_no_count()} "
+        f"{'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()}"
+        f" {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** "
+        f"{division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+
         if bill is not None:
-            description += f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/bills/{bill.get_bill_id()})**: {bill.get_long_title()}"
+            description += f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/bills/"
+            f"{bill.get_bill_id()})**: {bill.get_long_title()}"
         embed.description = description
         await channel.send(file=division_infographic, embed=embed)
 
@@ -241,7 +198,11 @@ class UKParliamentModule:
 
                 return File(f'tmpimages/{file_id}.jpeg', filename=f'{file_id}.jpeg')
 
-    def generate_election_graphic(self, result: ElectionResult, include_nonvoters: bool = False, generate_table: bool = False):
+    def generate_election_graphic(
+            self, 
+            result: ElectionResult,
+            include_nonvoters: bool = False,
+            generate_table: bool = False):
         under_1k = []
         the_rest = []
         candidates = result.get_candidates()
@@ -249,17 +210,25 @@ class UKParliamentModule:
         for candidate in candidates:
             if candidate['votes'] > 1000:
                 the_rest.append(candidate)
-            else: 
+            else:
                 under_1k.append(candidate)
 
         nonvoters = result.get_electorate_size() - result.get_turnout()
         under_1k_total = sum([c['votes'] for c in under_1k])
         parent_pie_values = [c['votes'] for c in the_rest]
-        parent_pie_labels = [f"{(self.parliament.get_party_by_id(c['party_id']).get_abber() if self.parliament.get_party_by_id(c['party_id']) is not None else c['party_name']) if c['party_name'] != 'UK Independence Party' else 'UKIP'}" + f" ({c['votes']:,} votes)" for c in the_rest]
-        if under_1k_total != 0: 
-            parent_pie_values.append(under_1k_total)
-            parent_pie_labels.append(f'Others ({under_1k_total:,} votes)')
-        if nonvoters != 0 and include_nonvoters: 
+        parent_pie_labels = []
+        for c in the_rest:
+            party = self.parliament.get_party_by_id(c['party_id'])
+            abbr = party.get_abber() if party is not None else ''
+            if abbr == 'UK Independent Party':
+                abbr = 'UKIP'
+            if abbr == 'Scottish National Party':
+                abbr = 'SNP'
+            parent_pie_labels.append(f"{abbr} ({c['votes']:,} votes)")
+
+        parent_pie_values.append(under_1k_total)
+        parent_pie_labels.append(f'Others ({under_1k_total:,} votes)')
+        if nonvoters != 0 and include_nonvoters:
             parent_pie_values.append(nonvoters)
             parent_pie_labels.append(f"Didn't Vote ({nonvoters:,} votes)")
 
@@ -268,15 +237,39 @@ class UKParliamentModule:
         fig, ax1 = plt.subplots()
 
         # large pie chart parameters
-        #explode = [0.1, 0, 0]
+        # explode = [0.1, 0, 0]
         # rotate so that first wedge is split by the x-axis
 
         if generate_table is False:
-            ax1.pie(parent_pie_values, radius=0.6,
-                    labels=parent_pie_labels) #, explode=explode)
+            ax1.pie(
+                    parent_pie_values,
+                    radius=0.6,
+                    labels=parent_pie_labels)
         else:
             ax1.set_axis_off()
-            table = ax1.table(cellText=[[c['name'], c['party_name'] if c['party_name'] != 'UK Independence Party' else 'UKIP', f"{c['votes']:,}" , "{:.1%}".format(c['vote_share']),c['vote_share_change']] for c in result.get_candidates()], loc='upper center', colLabels=['Candidate', 'Party', 'Votes', 'Vote Share', 'Vote Share Change'], cellLoc='center')
+            rows = []
+
+            for c in result.get_candidates():
+                party_name = c['party_name']
+                if party_name == 'UK Independence Party':
+                    party_name = 'UKIP'
+                if party_name == 'Sccotish National Party':
+                    party_name = 'SNP'
+                rows.append(
+                        [
+                            c['name'],
+                            party_name,
+                            f"{c['votes']:,}",
+                            "{:.1%}".format(c['vote_share']),
+                            c['vote_share_change']
+                            ]
+                        )
+
+            table = ax1.table(
+                    cellText=rows,
+                    loc='upper center',
+                    colLabels=['Candidate', 'Party', 'Votes', 'Vote Share', 'Vote Share Change'],
+                    cellLoc='center')
             table.auto_set_column_width(col=list(range(len(result.get_candidates()))))
             cells = table.get_celld()
 
@@ -285,33 +278,36 @@ class UKParliamentModule:
                     cells[(j, i)].set_height(.065)
 
             table.auto_set_font_size(False)
-        #TODO: List labels if label count > 4 to bottom right corner.
-        #TODO: Add pading to the entire image.
-        #TODO: See if you can set colours
         file_id = ''.join(random.choice(string.ascii_letters) for i in range(15))
         plt.savefig(f'tmpimages/{file_id}.png')
         image_file = File(f"tmpimages/{file_id}.png", filename=f"{file_id}.png")
         return image_file
 
-
-
     def generate_division_image(self, parliament: UKParliament, division: Union[LordsDivision, CommonsDivision]):
         def draw_ayes(draw: ImageDraw.ImageDraw, members: list[PartyMember]):
             columns = math.ceil(len(members) / 10)
-            draw.text((100, 420), "Ayes", font=self.title_font, fill=(0,0,0))
+            draw.text((100, 420), "Ayes", font=self.title_font, fill=(0, 0, 0))
 
             for column in range(columns + 1):
                 for j, member in enumerate(members[10 * (column - 1): 10 * column]):
-                    draw.ellipse([(80 + ((20 * column) + (2 * column)), 480 + (20 * j) + (2 * j)), (100 + ((20 * column) + (2 * column)), 500 + (20 * j) + (2 * j) - 2)], f"{PartyColour.from_id(member._get_party_id()).value['colour']}")
+                    draw.ellipse(
+                            [
+                                (80 + ((20 * column) + (2 * column)), 480 + (20 * j) + (2 * j)),
+                                (100 + ((20 * column) + (2 * column)), 500 + (20 * j) + (2 * j) - 2)
+                                ],
+                            f"{PartyColour.from_id(member._get_party_id()).value['colour']}")
 
         def draw_noes(draw: ImageDraw.ImageDraw, members: list[PartyMember]):
             columns = math.ceil(len(members) / 10)
-            draw.text((100, 120), "Noes", font=self.title_font, fill=(0,0,0))
+            draw.text((100, 120), "Noes", font=self.title_font, fill=(0, 0, 0))
             for column in range(columns + 1):
                 for j, member in enumerate(members[10 * (column - 1): 10 * column]):
-                    party = parliament.get_party_by_id(member._get_party_id())
-                    draw.ellipse([(80 + ((20 * column) + (2 * column)), 180 + (20 * j) + (2 * j)), (100 + ((20 * column) + ((2 * column) - 2)), 200 + (20 * j) + ((2 * j) - 2))], f"{PartyColour.from_id(member._get_party_id()).value['colour']}")
-
+                    draw.ellipse(
+                            [
+                                (80 + ((20 * column) + (2 * column)), 180 + (20 * j) + (2 * j)),
+                                (100 + ((20 * column) + ((2 * column) - 2)), 200 + (20 * j) + ((2 * j) - 2))
+                                ],
+                            f"{PartyColour.from_id(member._get_party_id()).value['colour']}")
 
         def get_parties(division: Union[CommonsDivision, LordsDivision]) -> list[Party]:
             party_ids = []
@@ -326,7 +322,11 @@ class UKParliamentModule:
                 if party_id not in party_ids:
                     party_ids.append(party_id)
 
-            return list(filter(lambda party: party is not None, map(lambda p_id: parliament.get_party_by_id(p_id), party_ids))) # type: ignore
+            return list(
+                    filter(
+                        lambda party: party is not None, map(lambda p_id: parliament.get_party_by_id(p_id), party_ids)
+                        )
+                    )  # type: ignore
 
         def draw_keys(draw: ImageDraw.ImageDraw, division: Union[CommonsDivision, LordsDivision]):
             parties = get_parties(division)
@@ -335,7 +335,12 @@ class UKParliamentModule:
                 name = party.get_name()
                 w, h = draw.textsize(name)
                 draw.text((1600, 120 + (60 * i)), f"{name}", font=self.key_font, fill='#ffffff', anchor='lt')
-                draw.ellipse([(1520, 110 + (60 * i)), (1570, 150 + (60 * i))], fill=f"{PartyColour.from_id(party.get_party_id()).value['colour']}")
+                draw.ellipse(
+                        [
+                            (1520, 110 + (60 * i)),
+                            (1570, 150 + (60 * i))
+                            ],
+                        fill=f"{PartyColour.from_id(party.get_party_id()).value['colour']}")
 
         def sort_members(members: list[PartyMember]) -> list[PartyMember]:
             parties = {}
@@ -349,9 +354,8 @@ class UKParliamentModule:
             results = []
 
             for key in sorted(parties.keys(), key=lambda k: len(parties[k])):
-                party = parliament.get_party_by_id(key)
                 results.extend(parties[key])
-            
+
             results.reverse()
             return results
 
