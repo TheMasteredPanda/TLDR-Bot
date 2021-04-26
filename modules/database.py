@@ -1,7 +1,10 @@
+from datetime import datetime
 import pymongo
 import config
 import time
 import discord
+from ukparliament.bills_tracker import FeedUpdate
+from ukparliament.divisions_tracker import LordsDivision, CommonsDivision
 
 from bson import ObjectId
 
@@ -170,6 +173,48 @@ class Connection:
         self.custom_commands = self.db['custom_commands']
         self.watchlist = self.db['watchlist']
         self.cases = self.db['cases']
+        self.bills_tracker = self.db['bills_tracker']
+        self.divisions_tracker = self.db['divisions_tracker']
+
+    def is_bill_update_stored(self, bill_id: int, update: FeedUpdate):
+        """
+        Check if a bill update from a feed is stored.
+        """
+        feed_update = self.bills_tracker.find_one({
+            'bill_id': bill_id,
+            'timestamp': update.get_update_date().isoformat(),
+            'stage': update.get_stage()
+            })
+
+        return feed_update is not None
+
+    def add_bill_feed_update(self, bill_id: int, update: FeedUpdate):
+        """
+        Adds a feed update to the collection under the bill's id.
+        """
+        if self.is_bill_update_stored(bill_id, update): return
+        self.bills_tracker.insert_one({
+            'bill_id': bill_id,
+            'timestamp': update.get_update_date().isoformat(),
+            'stage': update.get_stage()
+            })
+
+    def get_bill_last_update(self, bill_id):
+        """
+        Fetches the most recent update in a feed stored in the relevant
+        collection.
+        """
+        entry = self.bills_tracker.find_one({'timestamp': {'$gte': datetime.now().isoformat(), '%lt': datetime.now().isoformat()}}).sort({'timestamp': 1}).limit(1)
+        return entry
+    
+    def division_stored(self, bill_id: int):
+        """
+        Checks if a division has already been stored in the relevant collection
+        """
+        entry = 
+
+    def add_division(self, bill_id):
+        pass
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
         """

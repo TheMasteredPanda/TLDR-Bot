@@ -17,7 +17,7 @@ import math
 from PIL import ImageDraw, Image, ImageFont
 from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from ukparliament.structures.members import ElectionResult, Party, PartyMember
-from ukparliament.bills_tracker import Conditions, Feed, FeedUpdate, BillsStorage
+from ukparliament.bills_tracker import Conditions, Feed, FeedUpdate, BillsStorage, PublicationUpdate
 from ukparliament.divisions_tracker import DivisionStorage, DivisionsTracker
 from ukparliament.utils import BetterEnum
 from discord.ext import tasks
@@ -57,51 +57,61 @@ class PartyColour(BetterEnum):
 
 class BillsJSONStorage(BillsStorage):
     def __init__(self):
-        data = None
-        if os.path.exists('trackerdata.json'):
-            with open('trackerdata.json', 'r') as datafile:
-                print('Loading data')
-                data = json.load(datafile)
-        else:
-            data = {}
-        self.data = data
+        self.data = {}
+        
+        if os.path.exists('billstracker.json'):
+            with open('billstracker.json', 'r') as json_file:
+                self.data = json.load(json_file)
 
     def save(self):
-        with open('trackerdata.json', 'w+') as datafile:
-            json.dump(self.data, datafile, indent=4)
+        with open('billstracker.json', 'w+') as json_file:
+            json.dump(self.data, json_file, indent=4)
+
+    def has_id(self, bill_id: int):
+        return str(bill_id) in self.data
 
     async def add_feed_update(self, bill_id: int, update: FeedUpdate):
-        if str(bill_id) not in self.data:
-            self.data[str(bill_id)] = {"title": update.get_title(), "description": update.get_description(), "updates": []}
-        next_line = '\n'
-        print(f'Adding update to file:{next_line}Title: {update.get_title()}{next_line}Last Updated: {update.get_update_date()}{next_line}Stage: {update.get_stage()}')
-        self.data[str(bill_id)]['updates'].append({"guid": update.get_guid(), "stage": update.get_stage(), "categories": update.get_categories(), "timestamp": update.get_update_date().timestamp()})
+        if self.has_id(bill_id) is False: 
+            self.data[str(bill_id)] = {"feed_updates": [], "publication_updates": []}
+        self.data[str(bill_id)]['feed_updates'].append({"stage": update.get_stage(), "timestamp": update.get_update_date().timestamp()})
 
     async def has_update_stored(self, bill_id: int, update: FeedUpdate):
-        if str(bill_id) not in self.data: return False
-        update_entry = None
-        for entry in self.data[str(bill_id)]['updates']:
-            if update.get_update_date().timestamp() == entry['timestamp']:
-                update_entry = entry
-                break
+        if self.has_id(bill_id) is False: return False
+        updates = self.data[str(bill_id)]['feed_updates']
 
-        return update_entry is not None and update_entry['stage'] == update.get_stage()
+        for entry in updates:
+            if entry['stage'] == update.get_stage():
+                return True
 
-    async def get_last_update(self, bill_id: int, update: FeedUpdate):
-        if str(bill_id) not in self.data: return None
-        updates = self.data[str(bill_id)]['updates']
-        if len(updates) == 0: return None
+
+    async def get_last_update(self, bill_id: int):
+        if self.has_id(bill_id): return None
+        updates = self.data[str(bill_id)]['feed_updates']
+
         latest_update = None
 
         for entry in updates:
             if latest_update is None:
                 latest_update = entry
-
-            if entry['timestamp'] > latest_update['timestamp']:
+                continue
+            if latest_update['timestamp'] < entry['timestamp']:
                 latest_update = entry
-        if latest_update['guid'] == update.get_guid(): return None
         return latest_update
 
+    async def add_publication_update(self, bill_id: int, update: PublicationUpdate):
+        if self.has_id(bill_id) is False: 
+            self.data[str(bill_id)] = {'feed_updates': [], 'publication_updates': []}
+        self.data[str(bill_id)]['publication_updates'].append({'guid': update.get_guid(), 'timestamp': update.get_publication().timestamp()})
+
+        
+    async def has_publication_update(self, bill_id: int, update: PublicationUpdate):
+        if self.has_id(bill_id) is False: return False
+        updates = self.data[str(bill_id)]['publication_updates']
+
+        for entry in updates:
+            if entry['guid'] == update.get_guid():
+                if entry['timestamp'] == update.get_publication().timestamp():
+                    return True
 
 class DivisionJSONStorage(DivisionStorage):
     def __init__(self):
@@ -164,12 +174,13 @@ class UKParliamentModule:
         await self.parliament.get_divisions_tracker()._poll_commons()
         await self.parliament.get_divisions_tracker()._poll_lords()
         self.divisions_json_storage.save()
+        print("Finished")
  
     async def on_feed_update(self, feed: Feed, update: FeedUpdate):
         channel = self.guild.get_channel(config.UKPARL_CHANNEL)
         embed = Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
         next_line = '\n'
-        last_update = await self.bills_json_storage.get_last_update(update.get_bill_id(), update)
+        last_update = await self.bills_json_storage.get_last_update(update.get_bill_id())
         embed.description = (f"**Last Stage:**: {last_update['stage']}{next_line}" if last_update is not None else '') + f"**Next Stage:** {update.get_stage()}{next_line} **Summary:** {update.get_description()}{next_line}**Categories:**{', '.join(update.get_categories())}"
         embed.title = update.get_title() 
         if self.guild is not None:
