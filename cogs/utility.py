@@ -2,7 +2,6 @@ import datetime
 import discord
 import time
 import config
-import emoji
 import os
 import inspect
 import copy
@@ -10,6 +9,7 @@ import requests
 import pytz
 import bs4
 
+from emoji.unicode_codes.en import EMOJI_UNICODE_ENGLISH, EMOJI_ALIAS_UNICODE_ENGLISH
 from timezonefinder import TimezoneFinder
 from typing import Union
 from bson import ObjectId
@@ -334,13 +334,16 @@ class Utility(commands.Cog):
     async def parse_poll_options(ctx, options):
         emote_options = {}
         # check if user wants to have custom emotes
-        if options[0].split(':')[0].strip() in emoji.UNICODE_EMOJI['en']:
+        if options[0].split(':')[0].strip() in EMOJI_UNICODE_ENGLISH.values() or \
+            options[0].split(':')[0].strip() in EMOJI_ALIAS_UNICODE_ENGLISH.values() or \
+                get_custom_emote(ctx, ':'.join(options[0].split(':')[:3])):
+
             for option in options:
                 option_split = option.split(':')
                 # check if emote was provided
                 emote = option_split[0].strip()
                 # check if emote is unicode
-                is_unicode_emote = any(emote in emoji.UNICODE_EMOJI[ln] for ln in emoji.UNICODE_EMOJI)
+                is_unicode_emote = emote in EMOJI_UNICODE_ENGLISH.values() or emote in EMOJI_ALIAS_UNICODE_ENGLISH.values()
                 # check if emote is custom emote
                 custom_emote = get_custom_emote(ctx, ':'.join(option_split[:3]))
 
