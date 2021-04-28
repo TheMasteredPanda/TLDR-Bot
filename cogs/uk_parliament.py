@@ -1,5 +1,8 @@
 import functools
 import math
+
+from discord.ext.commands.converter import TextChannelConverter
+from modules.custom_commands import Channel, Guild
 from modules.reaction_menus import BookMenu
 from discord import embeds
 
@@ -10,18 +13,15 @@ from modules.utils import ParseArgs
 from discord.ext import commands
 from discord.ext.commands import Context
 from ukparliament.bills import SearchBillsBuilder, SearchBillsSortOrder
-from collections import namedtuple
-
-Pair = namedtuple("Pair", ["enum", "max_page_num"])
 
 
 class UK(commands.Cog):
     def __init__(self, bot: TLDR):
-        self.parliament = bot.get_parliament()
         self.bot = bot
 
-    async def load_parliament_data(self):
-        await self.parliament.load()
+    def load(self):
+        print("Loading")
+        self.parliament = self.bot.ukparl_module.parliament
 
     @staticmethod
     async def construct_bills_search_embed(
@@ -37,14 +37,14 @@ class UK(commands.Cog):
 
         bits = []
         next_line = "\n"
-        for i, bill in enumerate(bills[page_limit * (page - 1): page_limit * page]):
+        for i, bill in enumerate(bills[page_limit * (page - 1) : page_limit * page]):
             bill_title = bill.get_title()
             description = bill.get_long_title()[0:160] + "..."
             bill_id = bill.get_bill_id()
             bill_url = f"https://bills.parliament.uk/bills/{bill.get_bill_id()}"
             bits.append(
-                f"""**{(i + 1) + (page_limit * (page - 1))}. [{bill_title}]({bill_url}) | ID: {bill_id}**{next_line}
-                **Description:** {description}"""
+                f"**{(i + 1) + (page_limit * (page - 1))}. [{bill_title}]({bill_url}) | ID: {bill_id}**{next_line}"
+                f"**Description:** {description}"
             )
 
         embed = await embed_maker.message(
@@ -93,8 +93,12 @@ class UK(commands.Cog):
 
         async def template(description: str, title: str) -> embeds.Embed:
             return await embed_maker.message(
-                    ctx, title=title, description=description,
-                    author={"name": "UKParliament Bill"}, footer={"text": f"Page: {page}/{max_pages}"})  # type: ignore
+                ctx,
+                title=title,
+                description=description,
+                author={"name": "UKParliament Bill"},
+                footer={"text": f"Page: {page}/{max_pages}"},
+            )  # type: ignore
 
         next_line = "\n"
         if len(l_divisions) > 0:
@@ -103,19 +107,20 @@ class UK(commands.Cog):
                 did_pass = division.get_aye_count() > division.get_no_count()
                 bits.append(
                     f"**{i + 1}. [{division.get_division_title()}](https://votes.parliament.uk/Votes/"
-                    f"Lords/Division/{division.get_id()})**{next_line}" +
-                    f"**ID:** {division.get_id()}{next_line}" +
+                    f"Lords/Division/{division.get_id()})**{next_line}"
+                    f"**ID:** {division.get_id()}{next_line}"
                     f"**Summary:** "
                     f"{division.get_amendment_motion_notes()[0:150].replace('<p>', '').replace('</p>', '')}..."
-                    if division.get_amendment_motion_notes() is not None and
-                    division.get_amendment_motion_notes() != "" else "" +
+                    if division.get_amendment_motion_notes() is not None
+                    and division.get_amendment_motion_notes() != ""
+                    else ""
                     f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division"
                     f"of {division.get_aye_count() if did_pass else division.get_no_count()}"
                     f"{'Ayes' if did_pass else 'Noes'} to "
                     f"{division.get_aye_count() if did_pass is False else division.get_no_count()}"
-                    f" {'Noes' if did_pass else 'Ayes'}" +
+                    f" {'Noes' if did_pass else 'Ayes'}"
                     f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
-                    )
+                )
 
                 if i == (page_limit - 1) or i == (len(l_divisions) - 1):
                     pages.append(
@@ -149,10 +154,11 @@ class UK(commands.Cog):
                     bits.clear()
 
         first_page: embeds.Embed = await embed_maker.message(
-                ctx,
-                description="\n".join(formatted_bill_information),
-                author={"name": "UKParliament Bill"},
-                footer={"text": f"Page: {page}/{max_pages}"})  # type: ignore
+            ctx,
+            description="\n".join(formatted_bill_information),
+            author={"name": "UKParliament Bill"},
+            footer={"text": f"Page: {page}/{max_pages}"},
+        )  # type: ignore
         pages.insert(0, first_page)
         return (pages[(page - 1)], len(pages))
 
@@ -169,7 +175,7 @@ class UK(commands.Cog):
         bits = []
         next_line = "\n"
         for i, division in enumerate(
-            divisions[page_limit * (page - 1): page_limit * page]
+            divisions[page_limit * (page - 1) : page_limit * page]
         ):
             did_pass = division.get_aye_count() > division.get_no_count()
             bits.append(
@@ -202,7 +208,7 @@ class UK(commands.Cog):
         next_line = "\n"
         bits = []
         for i, division in enumerate(
-            divisions[page_limit * (page - 1): page_limit * page]
+            divisions[page_limit * (page - 1) : page_limit * page]
         ):
             did_pass = division.get_aye_count() > division.get_no_count()
             bits.append(
@@ -216,64 +222,167 @@ class UK(commands.Cog):
             )
 
         embed: embeds.Embed = await embed_maker.message(
-                ctx,
-                description=next_line.join(bits),
-                author={"name": "UKParliament Division"},
-                footer={"text": f"Page {page}/{max_pages}"})  # type: ignore
+            ctx,
+            description=next_line.join(bits),
+            author={"name": "UKParliament Division"},
+            footer={"text": f"Page {page}/{max_pages}"},
+        )  # type: ignore
         return embed, max_pages
 
     @commands.group(
         help="To access the commands interfacing the UK Parliament Site.",
         invoke_without_command=True,
         clearance="User",
+        usage="uk [child command]",
+        examples=["uk divisions linfo 1234", "uk mpelection Boris Johnson"],
+        Mod=cls.Help(
+            help="To access the commands inferfacing with the UK Parliament Site. And to access commands relevant to"
+            " the configuration of this feature",
+            usage="uk [child command]",
+            examples=["uk mod tracker channels"],
+            sub_commands=["bills", "divisions", "minfo", "mpelection", "mod"],
+        ),
         sub_commands=[
             "bills",
             "divisions",
-            "minfo",  # DOING
-            "mpelection",  # TODO
+            "minfo",
+            "mpelection",
         ],
         cls=cls.Group,
     )
     async def uk(self, ctx: commands.Context):
-        pass
+        return await embed_maker.command_error(ctx)
 
     @uk.group(
         help="For commands relating to bills",
         invoke_without_command=True,
+        uasge="uk bills [child command]",
+        examples=["uk bills search European Withdrawal"],
         clearance="User",
         sub_commands=["search"],
         cls=cls.Group,
     )
     async def bills(self, ctx: commands.Context):
-        pass
+        return await embed_maker.command_error(ctx)
 
     @uk.group(
         help="For commands relating to divisions",
         invoke_without_command=True,
+        usage="uk divisions [child command]",
+        examples=["uk divisions lsearch [args]"],
         clearance="User",
         sub_commands=["lsearch", "csearch", "linfo", "cinfo"],
         cls=cls.Group,
     )
     async def divisions(self, ctx: commands.Context):
-        pass
+        return await embed_maker.command_error(ctx)
+
+    @uk.group(
+        name="mod",
+        invoke_without_command=True,
+        help="Moderator level commands for this feature",
+        usage="uk mod [child command]",
+        examples=["uk mod tracker [args]"],
+        clearance="Mod",
+        sub_commands=["tracker"],
+        cls=cls.Group,
+    )
+    async def mod_commands(self, ctx: commands.Context):
+        return await embed_maker.command_error(ctx)
+
+    @mod_commands.group(
+        name="tracker",
+        invoke_without_command=True,
+        help="Commands related to the trackering section of this feature",
+        usage="uk mod tracker [child command]",
+        examples=["uk mod tracker channels"],
+        clearance="Mod",
+        sub_commands=["channels"],
+        cls=cls.Group,
+    )
+    async def mod_cmd_tracker(self, ctx: commands.Context):
+        return await embed_maker.command_error(ctx)
+
+    @mod_cmd_tracker.group(
+        name="channels",
+        invoke_without_command=True,
+        usage="uk mod tracker channels [args]",
+        examples=["uk mod tracker channels", "uk mod tracker channels set [args]"],
+        clearance="Mod",
+        cls=cls.Group,
+    )
+    async def mod_cmd_tracker_channels(self, ctx: commands.Context):
+        bits = []
+
+        config = self.bot.ukparl_module.config.config
+        for key in config["CHANNELS"].keys():
+            channel_id = config["CHANNELS"][key]
+            guild: Guild = self.bot.guilds[0]
+            channel = guild.get_channel(int(channel_id))
+            bits.append(
+                f"- {key}:" f" Couldn't find channel ({channel_id})"
+                if channel is None
+                else f"- {key}: {channel.name}"
+            )
+
+        next_line = "\n"
+        await embed_maker.message(
+            ctx, description=f"**Channels**{next_line}{next_line.join(bits)}", send=True
+        )
+
+    @mod_cmd_tracker_channels.command(
+        name="set",
+        help="Set a channel to one of the four trackers",
+        usage="uk mod tracker channels set [tracker_id] [channel_id or mention]",
+        examples=["uk mod tracker channelts set royalassent #royal-assent"],
+        clearance="Mod",
+        cls=cls.Command,
+    )
+    async def mod_cmd_tracker_channels_set(
+        self,
+        ctx: commands.Context,
+        tracker_id: str = "",
+        channel: TextChannelConverter = None,
+    ):
+        config = self.bot.ukparl_module.config
+        tracker_ids = config.config["CHANNELS"].keys()
+
+        if tracker_id.lower() not in tracker_ids:
+            next_line = "\n"
+            return await embed_maker.message(
+                ctx,
+                description=f"**Valid tracker ids:**{next_line} - {(next_line + ' - ').join(tracker_ids)}",
+                send=True,
+            )
+
+        config.config["CHANNELS"][tracker_id] = str(channel.id)
+        config.save()
+        await embed_maker.message(
+            ctx, description=f"Set {tracker_id} to channel {channel.name}", send=True
+        )
 
     @uk.command(
         name="mpelection",
         help="View latest election results of an MP by name or constituency name",
-        clearence=True,
+        clearence="User",
+        usage="uk mpelection [mp name] or uk mpelection <argument identifier> [borough name]",
+        examples=[
+            "uk mpelection Boris Johnson",
+            "uk mpelection --borough Belfast South --nonvoters",
+        ],
         cls=cls.Command,
         command_args=[
-            (("--borough", None, str), "Name of a borough"),
-            (("--nonvoters", None, bool), "Include non-voters in the charts"),
+            (("--borough", "-bo", str), "Name of a borough"),
+            (("--nonvoters", "-nv", bool), "Include non-voters in the charts"),
             (
-                ("--table", None, bool),
+                ("--table", "-t", bool),
                 "Whether or not the chart should be a pie or a table",
             ),
             (
-                ("--name", None, str),
+                ("--name", "-n", str),
                 "The name of the MP (used only if you're using the other arguments",
             ),
-            (("--historical", "--h", str), "Get list of recorded election results"),
+            (("--historical", "-h", str), "Get list of recorded election results"),
         ],
     )
     async def mp_elections(self, ctx: commands.Context, *, args: ParseArgs):
@@ -328,8 +437,6 @@ class UK(commands.Cog):
                 if h_result.get_election_date().strftime("%Y") == args["historical"]:
                     result = h_result
 
-        # print(result.get_result())
-        # print(result.get_candidates())
         others_formatted = []
         the_rest_formatted = []
 
@@ -344,12 +451,15 @@ class UK(commands.Cog):
                 )
 
         embed = embeds.Embed = await embed_maker.message(
-                ctx,
-                title=f'{result.get_election_date().strftime("%Y")} Election Results of {member.get_membership_from()}',
-                description=f"**Electorate Size:** {result.get_electorate_size():,}{next_line}"
-                f"**Turnout:** {result.get_turnout():,}{next_line}**Main Candidates:**{next_line}"
-                f"{next_line.join(the_rest_formatted)}{next_line}**Other Candidates (Under 1k):"
-                f"**{next_line}{next_line.join(others_formatted)}" if len(others_formatted) > 0 else "")
+            ctx,
+            title=f'{result.get_election_date().strftime("%Y")} Election Results of {member.get_membership_from()}',
+            description=f"**Electorate Size:** {result.get_electorate_size():,}{next_line}"
+            f"**Turnout:** {result.get_turnout():,}{next_line}**Main Candidates:**{next_line}"
+            f"{next_line.join(the_rest_formatted)}{next_line}**Other Candidates (Under 1k):"
+            f"**{next_line}{next_line.join(others_formatted)}"
+            if len(others_formatted) > 0
+            else "",
+        )
         if result is not None:
             image_file = self.bot.get_parliament_module().generate_election_graphic(
                 result, args["nonvoters"] is not None, args["table"] is not None
@@ -363,11 +473,16 @@ class UK(commands.Cog):
         name="minfo",
         help="Get information on a currently serving MP or Lord",
         usage="uk minfo [mp name / lord name]",
+        examples=[
+            "uk minfo Boris Johnson",
+            "uk minfo Duke of Norfolk",
+            "uk minfo Lord Sugar -p",
+        ],
         command_args=[
-            (("--borough", None, str), "Get mp info by borough name"),
-            (("--portrait", None, bool), "Fetch the portrait of the member"),
+            (("--borough", "-b", str), "Get mp info by borough name"),
+            (("--portrait", "-p", bool), "Fetch the portrait of the member"),
             (
-                ("--name", None, str),
+                ("--name", "-n", str),
                 "The name of the mp (used only if you're using the other args",
             ),
         ],
@@ -404,9 +519,9 @@ class UK(commands.Cog):
         if member is None:
             await embed_maker.message(
                 ctx,
-                description="Couldn't find" +
-                arg_name if args['pre'] is not None or args['name'] is not None else 'of borough' + args['borough'] +
-                ".",
+                description="Couldn't find" + arg_name
+                if args["pre"] is not None or args["name"] is not None
+                else "of borough" + args["borough"] + ".",
                 send=True,
             )
             return
@@ -461,7 +576,7 @@ class UK(commands.Cog):
 
         d = [
             f"**Name:** {member.get_display_name()}{next_line}**"
-            f"{'Representing:' if member._get_house() == 1 else 'Peer Type'}** {member.get_membership_from()}"
+            f"{'Representing:' if member.get_house() == 1 else 'Peer Type'}** {member.get_membership_from()}"
             f"{next_line}**Gender:** {'Male' if member.get_gender() == 'M' else 'Female'}",
             f"{next_line}**Represented/Representing:**{next_line}{next_line.join(representing_bits)}"
             if len(representing_bits) > 0
@@ -498,6 +613,7 @@ class UK(commands.Cog):
         name="linfo",
         help="Get House of Lords Division information",
         usage="uk divisions linfo [division id]",
+        examples=["uk divisions linfo 1234"],
         clearence="User",
         cls=cls.Command,
     )
@@ -522,7 +638,7 @@ class UK(commands.Cog):
             f"{division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'}"
             f" to {division.get_no_count() if did_pass else division.get_aye_count()} {'Noes' if did_pass else 'Ayes'}"
             f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}{next_line}"
-            f"**Summary:** {division.get_amendment_motion_notes()[0:250]}"
+            f"**Summary:** {division.get_amendment_motion_notes()[0:250]}",
         )  # type: ignore
         embed.set_image(url=f"attachment://{image_file.filename}")
         await ctx.send(file=image_file, embed=embed)
@@ -531,6 +647,7 @@ class UK(commands.Cog):
         name="cinfo",
         help="Get House of Commons Division information",
         usage="uk divisions cinfo [division id]",
+        examples=["uk divisions cinfo 1234"],
         clearence="User",
         cls=cls.Command,
     )
@@ -564,6 +681,7 @@ class UK(commands.Cog):
         name="csearch",
         help="Search for commons divisions",
         usage="uk divisions csearch [search term]",
+        examples=["uk divisions csearch European"],
         clearence="User",
         cls=cls.Command,
     )
@@ -590,17 +708,19 @@ class UK(commands.Cog):
             return pair[0]
 
         menu = BookMenu(
-                message=message,
-                author=ctx.author,  # type: ignore
-                max_page_num=pair[1],
-                page_constructor=temp_page_constructor,
-                page=1)
+            message=message,
+            author=ctx.author,  # type: ignore
+            max_page_num=pair[1],
+            page_constructor=temp_page_constructor,
+            page=1,
+        )
         self.bot.reaction_menus.add(menu)
 
     @divisions.command(
         name="lsearch",
         help="Search for lords divisions",
         usage="uk divisions lsearch [search term]",
+        examples=["uk divisions lsearch European"],
         clearence="User",
     )
     async def division_lords_search(self, ctx: commands.Context, *, search_term=""):
@@ -629,11 +749,12 @@ class UK(commands.Cog):
 
         message = await ctx.send(embed=embed)
         menu = BookMenu(
-                message=message,
-                author=ctx.author,  # type: ignore
-                max_page_num=max_pages,
-                page_constructor=temp_page_constructor,
-                page=1)
+            message=message,
+            author=ctx.author,  # type: ignore
+            max_page_num=max_pages,
+            page_constructor=temp_page_constructor,
+            page=1,
+        )
         self.bot.reaction_menus.add(menu)
 
     @bills.command(
@@ -641,6 +762,7 @@ class UK(commands.Cog):
         help="To display in more detail information about a bill.",
         clearence="User",
         usage="uk bills info [bill id]",
+        examples=["uk bills info 1234"],
         cls=cls.Command,
     )
     async def bill_info(self, ctx: commands.Context, bill_id: int):
@@ -670,11 +792,12 @@ class UK(commands.Cog):
                 return pair[0]
 
             menu = BookMenu(
-                    message,
-                    author=ctx.author,  # type: ignore
-                    page=1,
-                    max_page_num=pair[1],
-                    page_constructor=temp_page_constructor)
+                message,
+                author=ctx.author,  # type: ignore
+                page=1,
+                max_page_num=pair[1],
+                page_constructor=temp_page_constructor,
+            )
             self.bot.reaction_menus.add(menu)
 
         except Exception as ignore:
@@ -686,16 +809,20 @@ class UK(commands.Cog):
     @bills.command(
         help="Seach for bills using certain values and search terms",
         usage="uk bills search [search terms]",
+        examples=[
+            "uk bills search European Withdrawal",
+            "uk bills search --query Finance Bill --currenthouse Lords",
+            "uk bills search --sponsor Rishu Sunak",
+        ],
         name="search",
         clearence="User",
         command_args=[
-            (("--query", None, str), "Search Term to search for"),
-            (("--sponsor", None, str), "The name of the bill sponsor"),
-            (("--types", None, str), "The type of bill to search for"),
-            (("--order", None, str), "The order to display the searches in"),
-            (("--currenthouse", None, str), "The house the bill is currently in"),
-            (("--originatinghouse", None, str), "The house the bill originated in"),
-            (("--stage", None, str), "What stage the bill to search for is in"),
+            (("--query", "-q", str), "Search Term to search for"),
+            (("--sponsor", "-s", str), "The name of the bill sponsor"),
+            (("--types", None, "-t"), "The types of bill to search for"),
+            (("--order", None, "-o"), "The order to display the searches in"),
+            (("--currenthouse", "-ch", str), "The house the bill is currently in"),
+            (("--originatinghouse", "-oh", str), "The house the bill originated in"),
         ],
         cls=cls.Command,
     )
@@ -789,11 +916,12 @@ class UK(commands.Cog):
         embed = await page_constructor(page=1)
         message = await ctx.send(embed=embed)
         menu = BookMenu(
-                message,
-                author=ctx.author,  # type: ignore
-                page=1,
-                max_page_num=max_page_num,
-                page_constructor=page_constructor)
+            message,
+            author=ctx.author,  # type: ignore
+            page=1,
+            max_page_num=max_page_num,
+            page_constructor=page_constructor,
+        )
         self.bot.reaction_menus.add(menu)
 
 
