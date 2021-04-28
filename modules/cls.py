@@ -153,5 +153,5 @@ class Command(commands.Command):
 class Group(commands.Group, Command):
     """Basically the same as :class:`Command`, but it also sub classes :class:`discord.ext.commands.Group`."""
     def __init__(self, func, **kwargs):
-        super(commands.Group, self).__init__(func, **kwargs)
+        super(Group, self).__init__(func, **kwargs)
         super(Command, self).__init__(func, **kwargs)
