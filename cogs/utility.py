@@ -339,12 +339,9 @@ class Utility(commands.Cog):
                 get_custom_emote(ctx, ':'.join(options[0].split(':')[:3])):
 
             for option in options:
+                option = option.strip()
                 option_split = option.split(':')
-                # check if emote was provided
-                emote = option_split[0].strip()
-                # check if emote is unicode
-                is_unicode_emote = emote in EMOJI_UNICODE_ENGLISH.values() or emote in EMOJI_ALIAS_UNICODE_ENGLISH.values()
-                # check if emote is custom emote
+                emote = option_split[0].replace(' ', '')
                 custom_emote = get_custom_emote(ctx, ':'.join(option_split[:3]))
 
                 if custom_emote:
@@ -353,7 +350,7 @@ class Utility(commands.Cog):
                 else:
                     option = ':'.join(option_split[1:])
 
-                if len(option_split) > 1 and (is_unicode_emote or custom_emote):
+                if len(option_split) > 1:
                     emote_options[emote] = option
                 # in case user wanted to use options with emotes, but one of them didn't match
                 else:
