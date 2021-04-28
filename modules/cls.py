@@ -24,8 +24,6 @@ class Help:
         Shows different arguments of the commend.
     clearance: :class:`str`
         The clearance level needed for the command.
-    sub_commands: :class:`list`
-        List of subcommands if command is a group command.
     dm_only: :class:`bool`
         If True, command can be used in dms.
     command_args: :class:`list`
@@ -39,7 +37,6 @@ class Help:
         self.examples = kwargs.get('examples', [])
         self.usage = kwargs.get('usage', '')
         self.clearance = kwargs.get('clearance', 'User')
-        self.sub_commands = kwargs.get('sub_commands', [])
         self.dm_only = kwargs.get('dm_only', False)
         self.command_args = kwargs.get('command_args', [])
 
@@ -156,5 +153,5 @@ class Command(commands.Command):
 class Group(commands.Group, Command):
     """Basically the same as :class:`Command`, but it also sub classes :class:`discord.ext.commands.Group`."""
     def __init__(self, func, **kwargs):
-        super(Group, self).__init__(func, **kwargs)
+        super(commands.Group, self).__init__(func, **kwargs)
         super(Command, self).__init__(func, **kwargs)

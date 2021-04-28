@@ -50,7 +50,6 @@ class Template(commands.Cog):
         usage='template_group_command [required arg]',
         examples=['template_command needed_arg 123'],
         clearance='Mod',  # Clearances: User, Mod, Admin, Dev, can be seen/edited in config.py
-        sub_commands=['sub_command'], # list of sub commands, can be used instead of if else type statements using the first arg in the main command
         cls=cls.Group  # don't forget to change this to cls.Group
     )
     async def template_group_command(self, ctx: commands.Context, *, args: str):

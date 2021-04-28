@@ -57,7 +57,6 @@ class Mod(commands.Cog):
         help='Manage the servers custom commands',
         usage='customcommands (sub command) (args)',
         examples=['customcommands', 'customcommands 1'],
-        sub_commands=['variables', 'add', 'remove', 'edit'],
         clearance='Mod',
         aliases=['cc'],
         cls=cls.Group
@@ -369,7 +368,6 @@ class Mod(commands.Cog):
         help='Manage the watchlist, which logs all the users message to a channel',
         usage='watchlist (sub command) (args)',
         examples=['watchlist'],
-        sub_commands=['add', 'remove', 'add_filters'],
         clearance='Mod',
         cls=cls.Group
     )
@@ -598,7 +596,6 @@ class Mod(commands.Cog):
         clearance='Mod',
         aliases=['dd', 'dailydebate'],
         examples=['dailydebates'],
-        sub_commands=['add', 'insert', 'remove', 'set_time', 'set_channel', 'set_role', 'set_poll_channel', 'set_poll_options', 'disable'],
         cls=cls.Group,
     )
     async def dailydebates(self, ctx: commands.Context, page: str = 1):
@@ -996,7 +993,6 @@ class Mod(commands.Cog):
             'command_access Hatty',
             'command_access Mayor'
         ],
-        sub_commands=['give', 'take', 'default'],
         cls=cls.Group
     )
     async def command_access(self, ctx: commands.Context, user_input: Union[discord.Role, str] = None):

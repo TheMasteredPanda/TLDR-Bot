@@ -354,7 +354,7 @@ class Utility(commands.Cog):
                     emote_options[emote] = option
                 # in case user wanted to use options with emotes, but one of them didn't match
                 else:
-                    return await embed_maker.error(ctx, 'Invalid emote provided for option')
+                    return await embed_maker.error(ctx, f'Invalid emote provided for option: {emote}')
         else:
             if len(options) > 9:
                 return await embed_maker.error(ctx, 'Too many options given, max without custom emotes is 9')
@@ -639,8 +639,8 @@ class Utility(commands.Cog):
                        f"**Usage:** {command.docs.usage}\n" \
                        f"**Examples:**\n{examples}"
 
-            if command.docs.sub_commands:
-                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command.docs.sub_commands)
+            if type(command) == cls.Group and command.all_commands:
+                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc for sc in command.all_commands.keys())
                 sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
                 cmd_help += sub_commands_str
 
