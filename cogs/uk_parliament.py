@@ -20,7 +20,6 @@ class UK(commands.Cog):
         self.bot = bot
 
     def load(self):
-        print("Loading")
         self.parliament = self.bot.ukparl_module.parliament
 
     @staticmethod
@@ -297,11 +296,37 @@ class UK(commands.Cog):
         usage="uk mod tracker [child command]",
         examples=["uk mod tracker channels"],
         clearance="Mod",
-        sub_commands=["channels"],
+        sub_commands=["channels", "load", "statuses", "loop"],
         cls=cls.Group,
     )
     async def mod_cmd_tracker(self, ctx: commands.Context):
         return await embed_maker.command_error(ctx)
+
+    @mod_cmd_tracker.command(
+        name="statuses",
+        help="Show the status of each tracker",
+        usage="uk mod tracker statuses",
+        examples=["uk mod tracker statuses"],
+        clearance="Mod",
+        cls=cls.Command,
+    )
+    async def mod_cmd_tracker_statuses(self, ctx: commands.Context):
+        next_line = "\n"
+        statuses = self.bot.ukparl_module.tracker_status
+        bits = []
+
+        for key in statuses.keys():
+            entry = statuses[key]
+            bits.append(
+                f"{next_line}**{key}**:{next_line}  - **Started:** {'Yes' if entry['started'] else 'No'}{next_line}  - "
+                f"**Confirmed:** {'Yes' if entry['confirmed'] else 'No'}"
+            )
+
+        return await embed_maker.message(
+            ctx,
+            description=f"**Status for each Tracker**{next_line}{next_line.join(bits)}",
+            send=True,
+        )
 
     @mod_cmd_tracker.group(
         name="channels",
@@ -329,6 +354,69 @@ class UK(commands.Cog):
         await embed_maker.message(
             ctx, description=f"**Channels**{next_line}{next_line.join(bits)}", send=True
         )
+
+    @mod_cmd_tracker.group(
+        name="loop",
+        invoke_without_command=True,
+        help="Commands to start and stop the event loop checking the various rss feeds",
+        usage="uk mod tracker loop",
+        examples=["uk mod tracker loop start", "uk mod tracker loop stop"],
+        clearance="Mod",
+        cls=cls.Group,
+    )
+    async def mod_cmd_tracker_eventloop(self, ctx: commands.Context):
+        return await embed_maker.message(
+            ctx,
+            description=f"The event loop is currently {'running' if self.bot.ukparl_module.tracker_event_loop.is_running() else 'not running'}.",
+            send=True,
+        )
+
+    @mod_cmd_tracker_eventloop.command(
+        name="start",
+        help="Start the event loop.",
+        usage="uk mod tracker loop start",
+        examples=["uk mod tracker loop start"],
+        clearance="Mod",
+        cls=cls.Command,
+    )
+    async def mod_cmd_tracker_eventloop_start(self, ctx: commands.Context):
+        tracker_statuses = self.bot.ukparl_module.tracker_status
+        config = self.bot.ukparl_module.config
+
+        if (
+            config.get_channel_id("feed") == 0
+            and tracker_statuses["feed"]["started"] is True
+        ):
+            return await embed_maker.message(
+                ctx,
+                description="A listener registered to the 'feed' tracker doesn't have a channel to output to.",
+                send=True,
+            )
+
+        if self.bot.ukparl_module.tracker_event_loop.is_running() is False:
+            self.bot.ukparl_module.tracker_event_loop.start()
+            await embed_maker.message(ctx, description="Started event loop.", send=True)
+        else:
+            await embed_maker.message(
+                ctx, description="Event loop is already running.", send=True
+            )
+
+    @mod_cmd_tracker_eventloop.command(
+        name="stop",
+        help="Stop the event loop",
+        usage="uk mod tracker loop stop",
+        examples=["uk mod tracker loop stop"],
+        clearance="Mod",
+        cls=cls.Command,
+    )
+    async def mod_cmd_tracker_eventloop_stop(self, ctx: commands.Context):
+        if self.bot.ukparl_module.tracker_event_loop.is_running() is False:
+            self.bot.ukparl_module.tracker_event_loop.stop()
+            await embed_maker.message(ctx, description="Stopped event loop.", send=True)
+        else:
+            await embed_maker.message(
+                ctx, description="Event loop is already not running.", send=True
+            )
 
     @mod_cmd_tracker_channels.command(
         name="set",

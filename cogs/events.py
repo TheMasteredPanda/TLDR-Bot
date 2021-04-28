@@ -29,6 +29,7 @@ class Events(commands.Cog):
         await self.bot.timers.run_old()
         self.bot.leveling_system.initialise_guilds()
         await self.bot.ukparl_module.load()
+        self.bot.ukparl_module.set_guild(self.bot.guilds[0])
         self.bot.get_cog("UK").load()
         self.bot.logger.info(f"{self.bot.user} is ready")
 

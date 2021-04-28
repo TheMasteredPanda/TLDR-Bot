@@ -26,6 +26,7 @@ from ukparliament.divisions_tracker import DivisionStorage
 from ukparliament.utils import BetterEnum
 from discord.ext import tasks
 from ukparliament.ukparliament import UKParliament
+from ukparliament import bills_tracker
 from modules import database
 import config
 import os
@@ -44,6 +45,7 @@ class UKParliamentConfig:
                 "LordsDivisions": 0,
                 "CommonsDivisions": 0,
                 "Publications": 0,
+                "Feed": 0,
             }
 
             self.save()
@@ -56,6 +58,9 @@ class UKParliamentConfig:
     def save(self):
         with open("static/ukparliament.ini", "w") as config_file:
             self.config.write(config_file)
+
+    def get_channel_id(self, tracker_id):
+        return self.config["CHANNELS"][tracker_id]
 
 
 class PartyColour(BetterEnum):
@@ -130,46 +135,99 @@ class UKParliamentModule:
         self._bot = bot
         self._title_font = ImageFont.truetype("static/Metropolis-Bold.otf", 40)
         self._key_font = ImageFont.truetype("static/Metropolis-SemiBold.otf", 25)
-        self._bills_json_storage = BillsMongoStorage()
         self.config = UKParliamentConfig()
+        self._divisions_storage = DivisionMongoStorage()
+        self._bills_storage = BillsMongoStorage()
+        self.tracker_status = {
+            "lordsdivisions": {"started": False, "confirmed": False},
+            "commonsdivisions": {"started": False, "confirmed": False},
+            "royalassent": {"started": False, "confirmed": False},
+            "feed": {"started": False, "confirmed": False},
+            "publications": {"started": False, "confirmed": False},
+        }
 
-        self.guild: Union[Guild, None] = None
+        self._guild: Union[Guild, None] = None
         if os.path.exists("tmpimages") is False:
             os.mkdir("tmpimages")
 
     async def load(self):
-        self._bot.http.recreate()
         aiohttp_session = getattr(self._bot.http, "_HTTPClient__session")
         self.parliament = UKParliament(aiohttp_session)
         await self.parliament.load()
-        self.divisions_json_storage = DivisionMongoStorage()
-        self.parliament.start_bills_tracker(self._bills_json_storage)
-        self.parliament.get_bills_tracker().register(
-            self.on_feed_update, [Conditions.ALL]
-        )
-        self.parliament.get_bills_tracker().register(
-            self.on_royal_assent_update, [Conditions.ROYAL_ASSENT]
-        )
-        self.parliament.start_divisions_tracker(self.divisions_json_storage)
-        self.parliament.get_divisions_tracker().register(self.on_commons_division)
-        self.parliament.get_divisions_tracker().register(self.on_lords_division, False)
+        await self.load_trackers()
+
+    async def load_trackers(self):
+        config = self.config.config
+
+        if (
+            config["CHANNELS"]["lordsdivisions"] != 0
+            or config["CHANNELS"]["commonsdivisions"] != 0
+            or config["CHANNELS"]["royaalassent"]
+            or config["CHANNELS"]["feed"]
+        ):
+            self.parliament.start_bills_tracker(self._bills_storage)
+
+            if config["CHANNELS"]["feed"] != 0:
+                self.parliament.get_bills_tracker().register(
+                    self.on_feed_update, [Conditions.ALL]
+                )
+                self.tracker_status["feed"]["started"] = True
+
+            if config["CHANNELS"]["royalassent"]:
+                self.parliament.get_bills_tracker().register(
+                    self.on_royal_assent_update, [Conditions.ROYAL_ASSENT]
+                )
+                self.tracker_status["royalassent"]["started"] = True
+
+        if (
+            config["CHANNELS"]["lordsdivisions"] != 0
+            or config["CHANNELS"]["commonsdivisions"] != 0
+        ):
+            self.parliament.start_divisions_tracker(self._divisions_storage)
+            if config["CHANNELS"]["commonsdivisions"] != 0:
+                self.parliament.get_divisions_tracker().register(
+                    self.on_commons_division
+                )
+                self.tracker_status["commonsdivisions"]["started"] = True
+
+            if config["CHANNELS"]["lordsdivisions"] != 0:
+                self.parliament.get_divisions_tracker().register(
+                    self.on_lords_division, False
+                )
+                self.tracker_status["lordsdivisions"]["started"] = True
+
+        if (
+            config["CHANNELS"]["publications"] != 0
+            and self.parliament.get_bills_tracker() is not None
+        ):
+            b_tracker = self.parliament.get_bills_tracker()
+            if b_tracker is None:
+                return
+            self.parliament.start_publications_tracker(b_tracker)
+            self.tracker_status["publications"]["started"] = True
 
     def set_guild(self, guild):
-        self.guild = guild
+        self._guild = guild
 
     @tasks.loop(seconds=60)
     async def tracker_event_loop(self):
-        await self.parliament.get_bills_tracker().poll()
-        await self.parliament.get_divisions_tracker().poll_commons()
-        await self.parliament.get_divisions_tracker().poll_lords()
+        if self.parliament.get_publications_tracker() is not None:
+            await self.parliament.get_publications_tracker().poll()
+
+        if self.parliament.get_bills_tracker() is not None:
+            await self.parliament.get_bills_tracker().poll()
+
+        if self.parliament.get_divisions_tracker() is not None:
+            await self.parliament.get_divisions_tracker().poll_commons()
+            await self.parliament.get_divisions_tracker().poll_lords()
 
     async def on_feed_update(self, feed: Feed, update: FeedUpdate):
-        channel = self.guild.get_channel(config.UKPARL_CHANNEL)
+        channel = self._guild.get_channel(int(self.config.get_channel_id("feed")))
+        if channel is None:
+            return
         embed = Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
         next_line = "\n"
-        last_update = await self._bills_json_storage.get_last_update(
-            update.get_bill_id()
-        )
+        last_update = await self._bills_storage.get_last_update(update.get_bill_id())
         embed.description = (
             f"**Last Stage:**: {last_update['stage']}{next_line}"
             if last_update is not None
@@ -178,13 +236,18 @@ class UKParliamentModule:
             f"{next_line}**Categories:**{', '.join(update.get_categories())}"
         )
         embed.title = update.get_title()
-        if self.guild is not None:
-            embed.set_author(name="TLDRBot", icon_url=self.guild.icon_url)
+        if self._guild is not None:
+            embed.set_author(name="TLDRBot", icon_url=self._guild.icon_url)
 
+        self.tracker_status["feed"]["confirmed"] = True
         await channel.send(embed=embed)  # type: ignore
 
     async def on_royal_assent_update(self, feed: Feed, update: FeedUpdate):
-        channel = self.guild.get_channel(config.ROYAL_ASSENT_CHANNEL)
+        channel = self._guild.get_channel(
+            int(self.config.get_channel_id("royalassent"))
+        )
+        if channel is None:
+            return
         next_line = "\n"
         embed = Embed(
             colour=discord.Colour.from_rgb(134, 72, 186), timestamp=datetime.now()
@@ -194,10 +257,15 @@ class UKParliamentModule:
             f"**Signed At:** {update.get_update_date().strftime('%H:%M:%S on %Y:%m:%d')}{next_line}"
             f"**Summary:** {update.get_description()}"
         )
+        self.tracker_status["royalassent"]["confirmed"] = True
         await channel.send(embed=embed)
 
     async def on_commons_division(self, division: CommonsDivision, bill: Bill):
-        channel = self.guild.get_channel(config.COMMONS_CHANNEL)
+        channel = self._guild.get_channel(
+            int(self.config.get_channel_id("commonsdivisions"))
+        )
+        if channel is None:
+            return
         division_infographic = self.generate_division_image(self.parliament, division)
         embed = Embed(
             color=discord.Colour.from_rgb(84, 174, 51), timestamp=datetime.now()
@@ -205,24 +273,31 @@ class UKParliamentModule:
         did_pass = division.get_aye_count() > division.get_no_count()
         embed.title = f"**{division.get_division_title()}**"
         next_line = "\n"
-        description = f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of"
-        f" {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'}"
-        f" to {division.get_no_count() if did_pass else division.get_aye_count()} "
-        f"{'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** "
-        f"{division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        description = (
+            f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of"
+            f" {division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Noes'}"
+            f" to {division.get_no_count() if did_pass else division.get_aye_count()} "
+            f"{'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** "
+            f"{division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
         if bill is not None:
             description += (
                 f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/"
+                f"bills/{bill.get_bill_id()})**: {bill.get_long_title()}"
             )
-            f"bills/{bill.get_bill_id()})**: {bill.get_long_title()}"
 
         embed.description = description
         embed.set_image(url=f"attachment://{division_infographic.filename}")
+        self.tracker_status["commonsdivisions"]["confirmed"] = True
         await channel.send(file=division_infographic, embed=embed)
 
     async def on_lords_division(self, division: LordsDivision, bill: Bill):
-        channel = self.guild.get_channel(config.LORDS_CHANNEL)
+        channel = self._guild.get_channel(
+            int(self.config.get_channel_id("lordsdivisions"))
+        )
+        if channel is None:
+            return
         division_infographic = self.generate_division_image(self.parliament, division)
         embed = Embed(
             color=discord.Colour.from_rgb(166, 42, 22), timestamp=datetime.now()
@@ -231,13 +306,15 @@ class UKParliamentModule:
         embed.title = f"**{division.get_division_title()}**"
         embed.set_image(url=f"attachment://{division_infographic.filename}")
         next_line = "\n"
-        description = f"**ID:** {division.get_id()}{next_line}**Summary [(Link)](https://votes.parliament.uk/"
-        f"Votes/Lords/Division/{division.get_id()}):** {division.get_amendment_motion_notes()[0:250]}{next_line}"
-        f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of "
-        f"{division.get_aye_count() if did_pass else division.get_no_count()} "
-        f"{'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()}"
-        f" {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** "
-        f"{division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        description = (
+            f"**ID:** {division.get_id()}{next_line}**Summary [(Link)](https://votes.parliament.uk/"
+            f"Votes/Lords/Division/{division.get_id()}):** {division.get_amendment_motion_notes()[0:250]}{next_line}"
+            f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of "
+            f"{division.get_aye_count() if did_pass else division.get_no_count()} "
+            f"{'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()}"
+            f" {'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** "
+            f"{division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
         if bill is not None:
             description += (
@@ -245,6 +322,7 @@ class UKParliamentModule:
             )
             f"{bill.get_bill_id()})**: {bill.get_long_title()}"
         embed.description = description
+        self.tracker_status["lordsdivisions"]["confirmed"] = True
         await channel.send(file=division_infographic, embed=embed)
 
     async def get_mp_portrait(self, url: str):

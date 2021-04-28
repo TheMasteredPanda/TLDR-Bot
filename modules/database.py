@@ -161,31 +161,34 @@ class Connection:
                 'case_number': :class:`int`
             }
     """
+
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
-        self.db = self.mongo_client['TLDR']
-        self.leveling_users = self.db['leveling_users']
-        self.leveling_data = self.db['leveling_data']
-        self.left_leveling_users = self.db['left_leveling_users']
-        self.timers = self.db['timers']
-        self.commands = self.db['commands']
-        self.daily_debates = self.db['daily_debates']
-        self.tickets = self.db['tickets']
-        self.custom_commands = self.db['custom_commands']
-        self.watchlist = self.db['watchlist']
-        self.cases = self.db['cases']
-        self.bills_tracker = self.db['bills_tracker']
-        self.divisions_tracker = self.db['divisions_tracker']
+        self.db = self.mongo_client["TLDR"]
+        self.leveling_users = self.db["leveling_users"]
+        self.leveling_data = self.db["leveling_data"]
+        self.left_leveling_users = self.db["left_leveling_users"]
+        self.timers = self.db["timers"]
+        self.commands = self.db["commands"]
+        self.daily_debates = self.db["daily_debates"]
+        self.tickets = self.db["tickets"]
+        self.custom_commands = self.db["custom_commands"]
+        self.watchlist = self.db["watchlist"]
+        self.cases = self.db["cases"]
+        self.bills_tracker = self.db["bills_tracker"]
+        self.divisions_tracker = self.db["divisions_tracker"]
 
     def is_bill_update_stored(self, bill_id: int, update: FeedUpdate):
         """
         Check if a bill update from a feed is stored.
         """
-        feed_update = self.bills_tracker.find_one({
-            'bill_id': bill_id,
-            'timestamp': update.get_update_date().isoformat(),
-            'stage': update.get_stage()
-            })
+        feed_update = self.bills_tracker.find_one(
+            {
+                "bill_id": bill_id,
+                "timestamp": update.get_update_date().isoformat(),
+                "stage": update.get_stage(),
+            }
+        )
 
         return feed_update is not None
 
@@ -193,54 +196,73 @@ class Connection:
         """
         Adds a feed update to the collection under the bill's id.
         """
-        if self.is_bill_update_stored(bill_id, update): return
-        self.bills_tracker.insert_one({
-            'bill_id': bill_id,
-            'timestamp': update.get_update_date().isoformat(),
-            'stage': update.get_stage()
-            })
+        if self.is_bill_update_stored(bill_id, update):
+            return
+        self.bills_tracker.insert_one(
+            {
+                "bill_id": bill_id,
+                "timestamp": update.get_update_date().isoformat(),
+                "stage": update.get_stage(),
+            }
+        )
 
     def get_bill_last_update(self, bill_id):
         """
         Fetches the most recent update in a feed stored in the relevant
         collection.
         """
-        entry = self.bills_tracker.find_one({'timestamp': {'$gte': datetime.now().isoformat(), '%lt': datetime.now().isoformat()}}).sort({'timestamp': 1}).limit(1)
-        return entry
-    
+        entries = self.bills_tracker.find({"bill_id": bill_id}).sort(
+            [("timestamp", pymongo.DESCENDING)]
+        )
+        return entries[0] if entries.count() > 0 else None
+
     def is_division_stored(self, division: Union[LordsDivision, CommonsDivision]):
         """
         Checks if a division that is not related to a bill has already been stored in the relevant collection
         """
-        entry = self.divisions_tracker.find_one({'divison_id': division.get_id()})
+        entry = self.divisions_tracker.find_one({"division_id": division.get_id()})
         return entry is not None
 
     def add_division(self, division: Union[LordsDivision, CommonsDivision]):
         """
         Stores a division that is not related to a bill.
         """
-        if self.is_division_stored(division): return
-        self.divisions_tracker.insert_one({'bill_id': 0, 'division_id': division.get_id()})
+        if self.is_division_stored(division):
+            return
+        self.divisions_tracker.insert_one(
+            {"bill_id": 0, "division_id": division.get_id()}
+        )
 
-    def is_bill_division_stored(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
+    def is_bill_division_stored(
+        self, bill_id: int, division: Union[LordsDivision, CommonsDivision]
+    ):
         """
         Check if a division that is also related has already been stored in the relevant collection.
         """
-        entry = self.divisions_tracker.find_one({'bill_id': bill_id, 'division_id': division.get_id()})
+        entry = self.divisions_tracker.find_one(
+            {"bill_id": bill_id, "division_id": division.get_id()}
+        )
         return entry is not None
 
-    def add_bill_division(self, bill_id: int, division: Union[LordsDivision, CommonsDivision]):
+    def add_bill_division(
+        self, bill_id: int, division: Union[LordsDivision, CommonsDivision]
+    ):
         """
         Store a divisin that is related to a bill.
         """
-        if self.is_bill_division_stored(bill_id, division): return
-        self.divisions_tracker.insert_one({'bill_id': bill_id, 'division_id': division.get_id()})
-    
+        if self.is_bill_division_stored(bill_id, division):
+            return
+        self.divisions_tracker.insert_one(
+            {"bill_id": bill_id, "division_id": division.get_id()}
+        )
+
     def get_bill_divisions(self, bill_id: int):
         """
-        Fetch the division ids asscoatied with the provided bill id. 
+        Fetch the division ids asscoatied with the provided bill id.
         """
-        divisions = self.divisions_tracker.find({'bill_id': bill_id}).distinct('division_id')
+        divisions = self.divisions_tracker.find({"bill_id": bill_id}).distinct(
+            "division_id"
+        )
         return divisions
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
@@ -259,16 +281,15 @@ class Connection:
         :class:`dict`
             Leveling data on the member.
         """
-        leveling_user = self.leveling_users.find_one({
-            'guild_id': guild_id,
-            'user_id': member_id
-        })
+        leveling_user = self.leveling_users.find_one(
+            {"guild_id": guild_id, "user_id": member_id}
+        )
 
         if leveling_user is None:
             # add user to leveling_user collection
-            leveling_user = schemas['leveling_user']
-            leveling_user['guild_id'] = guild_id
-            leveling_user['user_id'] = member_id
+            leveling_user = schemas["leveling_user"]
+            leveling_user["guild_id"] = guild_id
+            leveling_user["user_id"] = member_id
             self.leveling_users.insert_one(leveling_user.copy())
 
         return leveling_user
@@ -293,18 +314,20 @@ class Connection:
             fields = {}
 
         if fields:
-            leveling_data = self.leveling_data.find_one({'guild_id': guild_id}, fields)
+            leveling_data = self.leveling_data.find_one({"guild_id": guild_id}, fields)
         else:
-            leveling_data = self.leveling_data.find_one({'guild_id': guild_id})
+            leveling_data = self.leveling_data.find_one({"guild_id": guild_id})
 
         if not leveling_data:
-            leveling_data = schemas['leveling_data']
-            leveling_data['guild_id'] = guild_id
+            leveling_data = schemas["leveling_data"]
+            leveling_data["guild_id"] = guild_id
             self.leveling_data.insert_one(leveling_data.copy())
 
         return leveling_data
 
-    def get_command_data(self, guild_id: int, command_name: str, *, insert: bool = False) -> dict:
+    def get_command_data(
+        self, guild_id: int, command_name: str, *, insert: bool = False
+    ) -> dict:
         """
         Get data on a command from the database, if command isn't in the database, it will be added, if insert is True.
 
@@ -322,14 +345,16 @@ class Connection:
         :class:`dict`
             The command data.
         """
-        command_data = self.commands.find_one({'guild_id': guild_id, 'command_name': command_name})
+        command_data = self.commands.find_one(
+            {"guild_id": guild_id, "command_name": command_name}
+        )
         if command_data is None:
             command_data = {
-                'guild_id': guild_id,
-                'command_name': command_name,
-                'disabled': 0,
-                'user_access': {},
-                'role_access': {}
+                "guild_id": guild_id,
+                "command_name": command_name,
+                "disabled": 0,
+                "user_access": {},
+                "role_access": {},
             }
             if insert:
                 self.commands.insert_one(command_data)
@@ -350,10 +375,10 @@ class Connection:
         :class:`dict`
             The daily debate data.
         """
-        daily_debates = self.daily_debates.find_one({'guild_id': guild_id})
+        daily_debates = self.daily_debates.find_one({"guild_id": guild_id})
         if not daily_debates:
-            daily_debates = schemas['daily_debates']
-            daily_debates['guild_id'] = guild_id
+            daily_debates = schemas["daily_debates"]
+            daily_debates["guild_id"] = guild_id
             self.daily_debates.insert_one(daily_debates)
 
         return daily_debates
@@ -372,16 +397,25 @@ class Connection:
         :class:`bool`
             True if automember is enabled, False if not.
         """
-        leveling_data = self.get_leveling_data(guild_id, {'automember': 1})
-        if not leveling_data or 'automember' not in leveling_data:
-            self.leveling_data.update_one({'guild_id': guild_id}, {'$set': {'automember': False}})
+        leveling_data = self.get_leveling_data(guild_id, {"automember": 1})
+        if not leveling_data or "automember" not in leveling_data:
+            self.leveling_data.update_one(
+                {"guild_id": guild_id}, {"$set": {"automember": False}}
+            )
             automember = False
         else:
-            automember = leveling_data['automember']
+            automember = leveling_data["automember"]
 
         return automember
 
-    def add_case(self, guild_id: int, type: str, reason: str, member: discord.member, moderator: discord.Member) -> dict:
+    def add_case(
+        self,
+        guild_id: int,
+        type: str,
+        reason: str,
+        member: discord.member,
+        moderator: discord.Member,
+    ) -> dict:
         """
         Adds a case to the database.
 
@@ -403,19 +437,24 @@ class Connection:
         :class:`dict`
             The case's data.
         """
-        case_number = self.cases.find({'guild_id': guild_id, 'user_id': member.id, 'type': type}).count() + 1
+        case_number = (
+            self.cases.find(
+                {"guild_id": guild_id, "user_id": member.id, "type": type}
+            ).count()
+            + 1
+        )
 
         case_data = {
-            'guild_id': guild_id,
-            'user_id': member.id,
-            'type': type,
-            'reason': reason,
-            'created_at': time.time(),
-            'moderator': moderator.id,
-            'case_number': case_number
+            "guild_id": guild_id,
+            "user_id": member.id,
+            "type": type,
+            "reason": reason,
+            "created_at": time.time(),
+            "moderator": moderator.id,
+            "case_number": case_number,
         }
         result = self.cases.insert_one(case_data)
-        case_data['_id'] = result.inserted_id
+        case_data["_id"] = result.inserted_id
 
         return case_data
 
@@ -435,8 +474,8 @@ class Connection:
         :class:`list`
            All the found cases.
         """
-        query = {'guild_id': guild_id, **kwargs}
-        return [c for c in self.cases.find(query).sort({'created_at': 1})]
+        query = {"guild_id": guild_id, **kwargs}
+        return [c for c in self.cases.find(query).sort({"created_at": 1})]
 
     def add_case_logs(self, case_id: ObjectId, logs_url: str):
         """
@@ -449,7 +488,7 @@ class Connection:
         logs_url: :class:`str`
            url of the logs.
         """
-        self.cases.update_one({'_id': case_id}, {'$set': {'logs_url': logs_url}})
+        self.cases.update_one({"_id": case_id}, {"$set": {"logs_url": logs_url}})
 
 
 def get_connection():
@@ -466,41 +505,38 @@ def get_connection():
 
 
 schemas = {
-    'leveling_user': {
-        'pp': 0,  # Participation points or parliamentary points
-        'p_level': 0,  # parliamentary level
-        'hp': 0,  # honours points
-        'h_level': 0,  # honours level
-        'p_role': '',  # parliamentary role
-        'h_role': None,  # honours role
-        'settings': {
-            '@_me': False  # setting to check if user wants to be @'d when they level up
+    "leveling_user": {
+        "pp": 0,  # Participation points or parliamentary points
+        "p_level": 0,  # parliamentary level
+        "hp": 0,  # honours points
+        "h_level": 0,  # honours level
+        "p_role": "",  # parliamentary role
+        "h_role": None,  # honours role
+        "settings": {
+            "@_me": False  # setting to check if user wants to be @'d when they level up
         },
-        'rp': 0,
-        'rep_timer': 0,
-        'last_rep': 0,
-        'boosts': {
+        "rp": 0,
+        "rep_timer": 0,
+        "last_rep": 0,
+        "boosts": {
             # 'rep': {
             #     'expires': 0,
             #     'multiplier': 0
             # }
-        }
-    },
-    'leveling_data': {
-        'guild_id': 0,
-        'level_up_channel': 0,
-        'leveling_routes': {
-            'parliamentary': [],
-            'honours': []
         },
-        'honours_channels': [],
     },
-    'daily_debates': {
-        'guild_id': 0,
-        'channel_id': 0,
-        'poll_channel_id': 0,
-        'role_id': 0,
-        'time': 0,
-        'topics': []
-    }
+    "leveling_data": {
+        "guild_id": 0,
+        "level_up_channel": 0,
+        "leveling_routes": {"parliamentary": [], "honours": []},
+        "honours_channels": [],
+    },
+    "daily_debates": {
+        "guild_id": 0,
+        "channel_id": 0,
+        "poll_channel_id": 0,
+        "role_id": 0,
+        "time": 0,
+        "topics": [],
+    },
 }
