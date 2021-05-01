@@ -7,7 +7,6 @@ from discord.embeds import Embed
 from discord.guild import Guild
 import time
 import aiofiles
-import aiohttp
 import random
 from discord import File
 import string
@@ -25,9 +24,7 @@ from ukparliament.divisions_tracker import DivisionStorage
 from ukparliament.utils import BetterEnum
 from discord.ext import tasks
 from ukparliament.ukparliament import UKParliament
-from ukparliament import bills_tracker
 from modules import database
-from modules import embed_maker
 import config
 import os
 import configparser
@@ -35,6 +32,10 @@ import configparser
 
 class UKParliamentConfig:
     def __init__(self):
+        """
+        Wrapper class for a .ini config file. Used soley to store the ids of channels
+        assigned to each tracker.
+        """
         self.config = configparser.ConfigParser()
 
         if os.path.exists("static/ukparliament.ini"):
@@ -51,19 +52,58 @@ class UKParliamentConfig:
             self.save()
 
     def set_channel(self, tracker_name: str, channel_id: int):
+        """
+        Set a channel to a tracker.
+
+        Parameters
+        ----------
+        tracker_name: :class:`str`
+            The id of the tracker.
+        channel_id: :class:`int`
+            The id of the text channel.
+        """
         if tracker_name not in self.config["CHANNELS"]:
             return
         self.config["CHANNELS"][tracker_name] = str(channel_id)
 
     def save(self):
+        """
+        Saves the config to the .ini file.
+        """
         with open("static/ukparliament.ini", "w") as config_file:
             self.config.write(config_file)
 
     def get_channel_id(self, tracker_id):
+        """
+        Retrieved the text channel id from the config by the tracker id is was
+        assigned to previously.
+
+        Parameters
+        ----------
+        tracker_id: :class:`str`
+            The id of the tracker.
+
+        Returns
+        -------
+        :class:`int`
+            The id of the text channel or 0
+        """
         return self.config["CHANNELS"][tracker_id]
 
 
 class PartyColour(BetterEnum):
+    """
+    An enumeration class used to assign party colours to colours selected from
+    the TLDR Colour Palette.
+
+    Enum Variables
+    --------------
+    id: :class:`int`
+        The id of a party, used to relate a party object to an enum
+    colour: :class:`str`
+        The hex colour code
+    """
+
     ALBA = {"id": 1034, "colour": "#73BFFA"}
     ALLIANCE = {"id": 1, "colour": "#D5D5D5"}
     CONSERVATIVE = {"id": 4, "colour": "#489FF8"}
@@ -86,6 +126,9 @@ class PartyColour(BetterEnum):
 
     @classmethod
     def from_id(cls, value: int):
+        """
+        Get a enum
+        """
         for p_enum in cls:
             if p_enum.value["id"] == value:
                 return p_enum
@@ -93,13 +136,58 @@ class PartyColour(BetterEnum):
 
 
 class BillsMongoStorage(BillsStorage):
+    """
+    The class used to storage information pertinent to the bills tracker.
+
+    This is only used to store information about a bill so that the bill is not
+    reannounced when the tracker polls the various rss feeds and endpoints.
+    """
+
     async def add_feed_update(self, bill_id: int, update: FeedUpdate):
+        """
+        Add a feed update.
+
+        Parameters
+        ----------
+        bill_id: :class:`int`
+            The id of the bill related to the feed update.
+        update: :class:`FeedUpdate`
+            The feed update.
+        """
         database.get_connection().add_bill_feed_update(bill_id, update)
 
     async def has_update_stored(self, bill_id: int, update: FeedUpdate):
+        """
+        Check if an update has been stored.
+
+        Parameters
+        ----------
+        bill_id: :class:`int`
+            The id of the bill related to the feed update.
+        update: :class:`FeedUpdate`
+            The feed update.
+
+        Returns
+        -------
+        :class:`bool`
+            True if the update has been stored else False
+        """
         return database.get_connection().is_bill_update_stored(bill_id, update)
 
     async def get_last_update(self, bill_id: int):
+        """
+        Gets the most recent update to be stored in relation to the bill_id.
+
+        Parameters
+        ---------
+        bill_id: :class:`int`
+            The id of the bill.
+
+        Returns
+        -------
+        :class: `Union[object, None]`
+            A dictionary object with three keys: bill_id, timestamp, and stage. Or nothing.
+        """
         return database.get_connection().get_bill_last_update(bill_id)
 
     async def add_publication_update(self, bill_id: int, update: PublicationUpdate):
@@ -110,36 +198,124 @@ class BillsMongoStorage(BillsStorage):
 
 
 class DivisionMongoStorage(DivisionStorage):
+    """
+    Used to store information relevant to divisions.
+
+    Information stored via this class is used to prevent already announced
+    divisions from being reannounced when the tracker polls the two commons and
+    lords endpoints.
+    """
+
     async def add_division(self, division: Union[LordsDivision, CommonsDivision]):
+        """
+        Add a division to the collection. A non-bill division is a division that is
+        not related to a bill.
+
+        Parameters
+        ----------
+        divsion: :class:`Union[LordsDivision, CommonsDivision]`
+            A commons or lords division.
+        """
         database.get_connection().add_division(division)
 
     async def add_bill_division(
         self, bill_id: int, division: Union[LordsDivision, CommonsDivision]
     ):
+        """
+        Add a bill division. Bill divisions are divisions relating to a bill.
+
+        Parameters
+        ----------
+        bill_id: :class:`int`
+            A bill id
+        division: :class:`Union[LordsDivision, CommonsDivision]`
+            A commons or lords division.
+        """
         database.get_connection().add_bill_division(bill_id, division)
 
     async def division_stored(self, division: Union[LordsDivision, CommonsDivision]):
+        """
+        Check if a non-bill division has been stored.
+
+        Parameters
+        ----------
+        division: :class:`Union[LordsDivision, CommonsDivision]`
+            A commons or lords division.
+        """
         return database.get_connection().is_division_stored(division)
 
     async def bill_division_stored(
         self, bill_id: int, division: Union[LordsDivision, CommonsDivision]
     ):
+        """
+        Check if a bill division is stored.
+
+        Parameters
+        ----------
+        bill_id: :class:`int`
+            The bill id
+        division: :class:`Union[LordsDivision, CommonsDivision]`
+            A commons or lords division
+        """
         return database.get_connection().is_bill_division_stored(bill_id, division)
 
     async def get_bill_divisions(self, bill_id: int):
+        """
+        Fetch all bill divisions.
+
+        Parameters
+        ----------
+        bill_id: :class:`int`
+            The bill id
+
+        Returns
+        -------
+        :class:`list`
+            A list of dictionaries with the following keys:
+            'bill_id': the id of the bill
+            'division_id': the id of the division
+            'timestamp': the timestamp of the division
+        """
         return database.get_connection().get_bill_divisions(bill_id)
 
 
 class ConfirmManager:
     def __init__(self):
+        """
+        A simple temporary code confirmation system. Used only for the 'dbclear'
+        command.
+        """
         self.cache = TTLCache(maxsize=30, ttl=90)
 
     def gen_code(self, member: discord.Member):
+        """
+        Generate a code and assign said code to a member. Lasts a maximum of 90 seconds.
+
+        Parameters
+        ---------
+        member: :class:`discord.Member`
+            A member of a guild.
+        """
         code = "".join(random.choice(string.ascii_lowercase) for i in range(5))
         self.cache[member.id] = code
         return code
 
     def confirm_code(self, member: discord.Member, code: str):
+        """
+        Confirm a code.
+
+        Parameters
+        ---------
+        member: :class:`discord.Member`
+            A discord member.
+        code: :class:`str`
+            The 5 character code.
+
+        Returns
+        ------
+        :class:`bool`
+            True if the code was valid, else False.
+        """
         c_code = self.cache.get(member.id)
         if c_code is None:
             return False
@@ -149,6 +325,24 @@ class ConfirmManager:
         return confirmed
 
     def has_code(self, member: discord.Member):
+        """
+        Check if a member has a code.
+
+        Parameters
+        ---------
+        member: :class:`discord.Member`
+            A discord member.
+
+        Returns
+        ------
+        :class:`bool
+            A discord member.
+
+        Returns
+        ------
+        :class:`bool`
+            True if the member does has a code cached, else false.
+        """
         return self.cache.get(member.id) is not None
 
 
@@ -159,6 +353,13 @@ class UKParliamentModule:
         self._divisions_storage = DivisionMongoStorage()
         self._bills_storage = BillsMongoStorage()
         self.confirm_manager = ConfirmManager()
+
+        """
+        These are used to allow a check  of the trackers to be done in the guild.
+        started refers to a listener has been registered to that tracker, confirmed
+        refers that listener being fired.
+
+        """
         self.tracker_status = {
             "lordsdivisions": {"started": False, "confirmed": False},
             "commonsdivisions": {"started": False, "confirmed": False},
@@ -168,16 +369,24 @@ class UKParliamentModule:
         }
 
         self._guild: Union[Guild, None] = None
-        if os.path.exists("tmpimages") is False:
-            os.mkdir("tmpimages")
 
     async def load(self):
+        """
+        Given that the aiohttp session can't be retrieved before the bot has invoked the on_ready
+        event this function is used to load what would have been loaded in the contructor if it
+        wasn't for this impediment.
+
+        """
         self.aiohttp_session = getattr(self._bot.http, "_HTTPClient__session")
         self.parliament = UKParliament(self.aiohttp_session)
         await self.parliament.load()
         await self.load_trackers()
+        await self.tracker_event_loop.start()
 
     async def load_trackers(self):
+        """
+        A function used to load the various trackers and listeners.
+        """
         config = self.config.config
 
         if (
@@ -232,13 +441,26 @@ class UKParliamentModule:
 
     @tasks.loop(seconds=60)
     async def tracker_event_loop(self):
-        if self.parliament.get_publications_tracker() is not None:
+        division_listener = (
+            self.tracker_status["lordsdivisions"]["started"]
+            or self.tracker_status["commonsdivisions"]["started"]
+        )
+        feed_listener = self.tracker_status["feed"]["started"]
+        royal_assent_listener = self.tracker_status["royalassent"]["started"]
+        publications_listener = self.tracker_status["publications"]["started"]
+
+        if (
+            self.parliament.get_publications_tracker() is not None
+            and publications_listener
+        ):
             await self.parliament.get_publications_tracker().poll()
 
-        if self.parliament.get_bills_tracker() is not None:
+        if self.parliament.get_bills_tracker() is not None and (
+            feed_listener or royal_assent_listener
+        ):
             await self.parliament.get_bills_tracker().poll()
 
-        if self.parliament.get_divisions_tracker() is not None:
+        if self.parliament.get_divisions_tracker() is not None and division_listener:
             await self.parliament.get_divisions_tracker().poll_commons()
             await self.parliament.get_divisions_tracker().poll_lords()
 
@@ -353,18 +575,25 @@ class UKParliamentModule:
         )
 
     async def get_mp_portrait(self, url: str):
+        """
+        Get a portrait of an MP.
+
+        Parameters
+        ---------
+        url: :class:`str`
+            The url of the portrait image.
+
+        Returns
+        -------
+        :class:`File`
+            A discord File.
+        """
         async with self.aiohttp_session.get(url) as resp:
             if resp.status != 200:
                 return None
-            file_id = "".join(random.choice(string.ascii_letters) for i in range(21))
-            f = await aiofiles.open(f"tmpimages/{file_id}.jpeg", mode="wb")
-            await f.write(await resp.read())
-            await f.close()
-
-            while not os.path.exists(f"tmpimages/{file_id}.jpeg"):
-                time.sleep(0.5)
-
-            return File(f"tmpimages/{file_id}.jpeg", filename=f"{file_id}.jpeg")
+            buffer = BytesIO(await resp.read())
+            buffer.seek(0)
+            return File(fp=buffer, filename="portrait.jpeg")
 
     async def generate_election_graphic(
         self,
@@ -372,6 +601,24 @@ class UKParliamentModule:
         include_nonvoters: bool = False,
         generate_table: bool = False,
     ):
+        """
+        Fetches a generated election graphic from the image_processor app.
+        This election graphic is either in the form of a pie or a table.
+
+        Parameters
+        ----------
+        result: :class:`ElectionResult`
+            An election result object.
+        include_nonvoters: :class:`bool`
+            Whether or not to include people who didn't vote in the chart.
+        generate_table:
+            Whether or not to generate a table rather than a pie chart.
+
+        Returns
+        -------
+        :class:`File`
+            A discord File.
+        """
         serialized_candidates = []
 
         for candidate in result.get_candidates():
@@ -404,12 +651,30 @@ class UKParliamentModule:
         ) as resp:
             if resp.status != 200:
                 raise Exception("Failed to get election image for election result.")
-            response = await resp.read()
-            return response
+            buffer = BytesIO(await resp.read())
+            buffer.seek(0)
+            return File(fp=buffer, filename="electionimage.png")
 
     async def generate_division_image(
         self, parliament: UKParliament, division: Union[LordsDivision, CommonsDivision]
     ):
+        """
+        Gets a generated division image from the image_processor app.
+
+        Parameters
+        ---------
+        parliament: :class:`UKParliament`
+            The uk parliament instance.
+        division: :class:`Union[LordsDivision, CommonsDivision]`
+            A lords of commons division.
+
+        Returns
+        -------
+        :class:`File`
+            A discord File
+        """
+
+        # Takes only the colour from each member and puts it into a json compatible dictionary.
         def serialize_members(members: list[PartyMember]) -> dict[str, str]:
             serialized_members: dict[str, str] = {}
 
@@ -420,6 +685,7 @@ class UKParliamentModule:
 
             return serialized_members
 
+        # Sorts members into their respective parties then sitches the list back together.
         def sort_members(members: list[PartyMember]) -> list[PartyMember]:
             parties = {}
 
@@ -456,6 +722,7 @@ class UKParliamentModule:
             if party is None:
                 continue
             party_name = party.get_abber()
+            # Shortens the longest party names, for easy reading on the chart.
             if party_name == "UK Independent Party":
                 party_name = "UKIP"
             if party_name == "Scottish National Party":
@@ -480,4 +747,4 @@ class UKParliamentModule:
                 )
             buffer = BytesIO(await resp.read())
             buffer.seek(0)
-            return buffer
+            return File(fp=buffer, filename="divisionimage.png")

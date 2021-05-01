@@ -448,10 +448,12 @@ class UK(commands.Cog):
         cls=cls.Group,
     )
     async def mod_cmd_tracker_eventloop(self, ctx: commands.Context):
+        if self.loaded is False:
+            return
         return await embed_maker.message(
             ctx,
             description=(
-                "The event loop is currently"
+                "The event loop is currently "
                 f"{'running' if self.bot.ukparl_module.tracker_event_loop.is_running() else 'not running'}."
             ),
             send=True,
@@ -644,10 +646,8 @@ class UK(commands.Cog):
                 result, args["nonvoters"] is not None, args["table"] is not None
             )
             embed.set_image(url="attachment://electionimage.png")  # type: ignore
-            image = BytesIO(image_file)
-            image.seek(0)
             await ctx.send(
-                file=File(fp=image, filename="electionimage.png"),
+                file=image_file,
                 embed=embed,
             )
         else:
@@ -815,7 +815,7 @@ class UK(commands.Cog):
             )
             portrait_image = await self.ukparl_module.get_mp_portrait(url)
             if portrait_image is not None:
-                embed.set_image(url=f"attachment://{portrait_image.filename}")
+                embed.set_image(url=f"attachment://portrait.jpeg")
                 await ctx.send(file=portrait_image, embed=embed)
         else:
             await ctx.send(embed=embed)
@@ -839,7 +839,7 @@ class UK(commands.Cog):
                 send=True,
             )
 
-        division_buffer = await self.ukparl_module.generate_division_image(
+        division_image = await self.ukparl_module.generate_division_image(
             self.parliament, division
         )
         next_line = "\n"
@@ -854,9 +854,7 @@ class UK(commands.Cog):
             f"**Summary:** {division.get_amendment_motion_notes()[0:250]}",
         )  # type: ignore
         embed.set_image(url="attachment://divisionimage.png")
-        await ctx.send(
-            file=File(fp=division_buffer, filename="divisionimage.png"), embed=embed
-        )
+        await ctx.send(file=division_image, embed=embed)
 
     @divisions.command(
         name="cinfo",
