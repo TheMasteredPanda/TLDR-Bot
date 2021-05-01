@@ -1,9 +1,10 @@
+from io import BytesIO
+from cachetools.ttl import TTLCache
 from bot import TLDR
 from datetime import datetime
 import discord
 from discord.embeds import Embed
 from discord.guild import Guild
-import matplotlib.pyplot as plt
 import time
 import aiofiles
 import aiohttp
@@ -11,10 +12,8 @@ import random
 from discord import File
 import string
 from typing import Union
-import math
-from PIL import ImageDraw, Image, ImageFont
 from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
-from ukparliament.structures.members import ElectionResult, Party, PartyMember
+from ukparliament.structures.members import ElectionResult, PartyMember
 from ukparliament.bills_tracker import (
     Conditions,
     Feed,
@@ -28,6 +27,7 @@ from discord.ext import tasks
 from ukparliament.ukparliament import UKParliament
 from ukparliament import bills_tracker
 from modules import database
+from modules import embed_maker
 import config
 import os
 import configparser
@@ -130,14 +130,35 @@ class DivisionMongoStorage(DivisionStorage):
         return database.get_connection().get_bill_divisions(bill_id)
 
 
+class ConfirmManager:
+    def __init__(self):
+        self.cache = TTLCache(maxsize=30, ttl=90)
+
+    def gen_code(self, member: discord.Member):
+        code = "".join(random.choice(string.ascii_lowercase) for i in range(5))
+        self.cache[member.id] = code
+        return code
+
+    def confirm_code(self, member: discord.Member, code: str):
+        c_code = self.cache.get(member.id)
+        if c_code is None:
+            return False
+        confirmed = c_code == code
+        if confirmed:
+            self.cache.pop(member.id)
+        return confirmed
+
+    def has_code(self, member: discord.Member):
+        return self.cache.get(member.id) is not None
+
+
 class UKParliamentModule:
     def __init__(self, bot: TLDR):
         self._bot = bot
-        self._title_font = ImageFont.truetype("static/Metropolis-Bold.otf", 40)
-        self._key_font = ImageFont.truetype("static/Metropolis-SemiBold.otf", 25)
         self.config = UKParliamentConfig()
         self._divisions_storage = DivisionMongoStorage()
         self._bills_storage = BillsMongoStorage()
+        self.confirm_manager = ConfirmManager()
         self.tracker_status = {
             "lordsdivisions": {"started": False, "confirmed": False},
             "commonsdivisions": {"started": False, "confirmed": False},
@@ -151,8 +172,8 @@ class UKParliamentModule:
             os.mkdir("tmpimages")
 
     async def load(self):
-        aiohttp_session = getattr(self._bot.http, "_HTTPClient__session")
-        self.parliament = UKParliament(aiohttp_session)
+        self.aiohttp_session = getattr(self._bot.http, "_HTTPClient__session")
+        self.parliament = UKParliament(self.aiohttp_session)
         await self.parliament.load()
         await self.load_trackers()
 
@@ -266,7 +287,7 @@ class UKParliamentModule:
         )
         if channel is None:
             return
-        division_infographic = self.generate_division_image(self.parliament, division)
+        division_bytes = await self.generate_division_image(self.parliament, division)
         embed = Embed(
             color=discord.Colour.from_rgb(84, 174, 51), timestamp=datetime.now()
         )
@@ -288,9 +309,12 @@ class UKParliamentModule:
             )
 
         embed.description = description
-        embed.set_image(url=f"attachment://{division_infographic.filename}")
+        embed.set_image(url="attachment://divisionimage.png")
         self.tracker_status["commonsdivisions"]["confirmed"] = True
-        await channel.send(file=division_infographic, embed=embed)
+        await channel.send(
+            file=discord.File(fp=division_bytes, filename="divisionimage.png"),
+            embed=embed,
+        )
 
     async def on_lords_division(self, division: LordsDivision, bill: Bill):
         channel = self._guild.get_channel(
@@ -298,17 +322,17 @@ class UKParliamentModule:
         )
         if channel is None:
             return
-        division_infographic = self.generate_division_image(self.parliament, division)
+        division_buffer = await self.generate_division_image(self.parliament, division)
         embed = Embed(
             color=discord.Colour.from_rgb(166, 42, 22), timestamp=datetime.now()
         )
         did_pass = division.get_aye_count() > division.get_no_count()
         embed.title = f"**{division.get_division_title()}**"
-        embed.set_image(url=f"attachment://{division_infographic.filename}")
+        embed.set_image(url="attachment://divisionimage.png")
         next_line = "\n"
         description = (
             f"**ID:** {division.get_id()}{next_line}**Summary [(Link)](https://votes.parliament.uk/"
-            f"Votes/Lords/Division/{division.get_id()}):** {division.get_amendment_motion_notes()[0:250]}{next_line}"
+            f"Votes/Lords/Division/{division.get_id()}):** {division.get_amendment_motion_notes()[0:250]}...{next_line}"
             f"**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of "
             f"{division.get_aye_count() if did_pass else division.get_no_count()} "
             f"{'Ayes' if did_pass else 'Noes'} to {division.get_no_count() if did_pass else division.get_aye_count()}"
@@ -319,200 +343,82 @@ class UKParliamentModule:
         if bill is not None:
             description += (
                 f"{next_line}**Bill Summary [(Link)](https://bills.parliament.uk/bills/"
+                f"{bill.get_bill_id()})**: {bill.get_long_title()}**"
             )
-            f"{bill.get_bill_id()})**: {bill.get_long_title()}"
         embed.description = description
         self.tracker_status["lordsdivisions"]["confirmed"] = True
-        await channel.send(file=division_infographic, embed=embed)
+        await channel.send(
+            file=discord.File(fp=division_buffer, filename="divisionimage.png"),
+            embed=embed,
+        )
 
     async def get_mp_portrait(self, url: str):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    return None
-                file_id = "".join(
-                    random.choice(string.ascii_letters) for i in range(21)
-                )
-                f = await aiofiles.open(f"tmpimages/{file_id}.jpeg", mode="wb")
-                await f.write(await resp.read())
-                await f.close()
+        async with self.aiohttp_session.get(url) as resp:
+            if resp.status != 200:
+                return None
+            file_id = "".join(random.choice(string.ascii_letters) for i in range(21))
+            f = await aiofiles.open(f"tmpimages/{file_id}.jpeg", mode="wb")
+            await f.write(await resp.read())
+            await f.close()
 
-                while not os.path.exists(f"tmpimages/{file_id}.jpeg"):
-                    time.sleep(0.5)
+            while not os.path.exists(f"tmpimages/{file_id}.jpeg"):
+                time.sleep(0.5)
 
-                return File(f"tmpimages/{file_id}.jpeg", filename=f"{file_id}.jpeg")
+            return File(f"tmpimages/{file_id}.jpeg", filename=f"{file_id}.jpeg")
 
-    def generate_election_graphic(
+    async def generate_election_graphic(
         self,
         result: ElectionResult,
         include_nonvoters: bool = False,
         generate_table: bool = False,
     ):
-        under_1k = []
-        the_rest = []
-        candidates = result.get_candidates()
+        serialized_candidates = []
 
-        for candidate in candidates:
-            if candidate["votes"] > 1000:
-                the_rest.append(candidate)
-            else:
-                under_1k.append(candidate)
+        for candidate in result.get_candidates():
+            party = self.parliament.get_party_by_id(candidate["party_id"])
+            party_name = party.get_abber() if party is not None else ""
+            if party_name == "UK Independent Party":
+                party_name = "UKIP"
+            if party_name == "Scottish National Party":
+                party_name = "SNP"
 
-        nonvoters = result.get_electorate_size() - result.get_turnout()
-        under_1k_total = sum([c["votes"] for c in under_1k])
-        parent_pie_values = [c["votes"] for c in the_rest]
-        parent_pie_labels = []
-        for c in the_rest:
-            party = self.parliament.get_party_by_id(c["party_id"])
-            abbr = party.get_abber() if party is not None else ""
-            if abbr == "UK Independent Party":
-                abbr = "UKIP"
-            if abbr == "Scottish National Party":
-                abbr = "SNP"
-            parent_pie_labels.append(f"{abbr} ({c['votes']:,} votes)")
-
-        parent_pie_values.append(under_1k_total)
-        parent_pie_labels.append(f"Others ({under_1k_total:,} votes)")
-        if nonvoters != 0 and include_nonvoters:
-            parent_pie_values.append(nonvoters)
-            parent_pie_labels.append(f"Didn't Vote ({nonvoters:,} votes)")
-
-        # make figure and assign axis objects
-        plt.tight_layout()
-        fig, ax1 = plt.subplots()
-
-        # large pie chart parameters
-        # explode = [0.1, 0, 0]
-        # rotate so that first wedge is split by the x-axis
-
-        if generate_table is False:
-            ax1.pie(parent_pie_values, radius=0.6, labels=parent_pie_labels)
-        else:
-            ax1.set_axis_off()
-            rows = []
-
-            for c in result.get_candidates():
-                party_name = c["party_name"]
-                if party_name == "UK Independence Party":
-                    party_name = "UKIP"
-                if party_name == "Sccotish National Party":
-                    party_name = "SNP"
-                rows.append(
-                    [
-                        c["name"],
-                        party_name,
-                        f"{c['votes']:,}",
-                        "{:.1%}".format(c["vote_share"]),
-                        c["vote_share_change"],
-                    ]
-                )
-
-            table = ax1.table(
-                cellText=rows,
-                loc="upper center",
-                colLabels=[
-                    "Candidate",
-                    "Party",
-                    "Votes",
-                    "Vote Share",
-                    "Vote Share Change",
-                ],
-                cellLoc="center",
+            serialized_candidates.append(
+                {
+                    "party_name": party_name,
+                    "votes": candidate["votes"],
+                    "vote_share": candidate["vote_share"],
+                    "vote_share_change": candidate["vote_share_change"],
+                    "name": candidate["name"],
+                }
             )
-            table.auto_set_column_width(col=list(range(len(result.get_candidates()))))
-            cells = table.get_celld()
 
-            for i in range(5):
-                for j in range(0, 13):
-                    cells[(j, i)].set_height(0.065)
+        async with self.aiohttp_session.post(
+            f"{config.WEB_API_URL}/electionimage",
+            json={
+                "candidates": serialized_candidates,
+                "electorate_size": result.get_electorate_size(),
+                "turnout": result.get_turnout(),
+                "include_nonvoters": include_nonvoters,
+                "generate_table": generate_table,
+            },
+        ) as resp:
+            if resp.status != 200:
+                raise Exception("Failed to get election image for election result.")
+            response = await resp.read()
+            return response
 
-            table.auto_set_font_size(False)
-        file_id = "".join(random.choice(string.ascii_letters) for i in range(15))
-        plt.savefig(f"tmpimages/{file_id}.png")
-        image_file = File(f"tmpimages/{file_id}.png", filename=f"{file_id}.png")
-        return image_file
-
-    def generate_division_image(
+    async def generate_division_image(
         self, parliament: UKParliament, division: Union[LordsDivision, CommonsDivision]
     ):
-        def draw_ayes(draw: ImageDraw.ImageDraw, members: list[PartyMember]):
-            columns = math.ceil(len(members) / 10)
-            draw.text((100, 420), "Ayes", font=self._title_font, fill=(0, 0, 0))
+        def serialize_members(members: list[PartyMember]) -> dict[str, str]:
+            serialized_members: dict[str, str] = {}
 
-            for column in range(columns + 1):
-                for j, member in enumerate(members[10 * (column - 1) : 10 * column]):
-                    draw.ellipse(
-                        [
-                            (
-                                80 + ((20 * column) + (2 * column)),
-                                480 + (20 * j) + (2 * j),
-                            ),
-                            (
-                                100 + ((20 * column) + (2 * column)),
-                                500 + (20 * j) + (2 * j) - 2,
-                            ),
-                        ],
-                        f"{PartyColour.from_id(member.get_party_id()).value['colour']}",
-                    )
+            for member in members:
+                serialized_members[str(member.get_id())] = PartyColour.from_id(
+                    member.get_party_id()
+                ).value["colour"]
 
-        def draw_noes(draw: ImageDraw.ImageDraw, members: list[PartyMember]):
-            columns = math.ceil(len(members) / 10)
-            draw.text((100, 120), "Noes", font=self._title_font, fill=(0, 0, 0))
-            for column in range(columns + 1):
-                for j, member in enumerate(members[10 * (column - 1) : 10 * column]):
-                    draw.ellipse(
-                        [
-                            (
-                                80 + ((20 * column) + (2 * column)),
-                                180 + (20 * j) + (2 * j),
-                            ),
-                            (
-                                100 + ((20 * column) + ((2 * column) - 2)),
-                                200 + (20 * j) + ((2 * j) - 2),
-                            ),
-                        ],
-                        f"{PartyColour.from_id(member.get_party_id()).value['colour']}",
-                    )
-
-        def get_parties(division: Union[CommonsDivision, LordsDivision]) -> list[Party]:
-            party_ids = []
-
-            for member in division.get_aye_members():
-                party_id = member.get_party_id()
-                if party_id not in party_ids:
-                    party_ids.append(party_id)
-
-            for member in division.get_no_members():
-                party_id = member.get_party_id()
-                if party_id not in party_ids:
-                    party_ids.append(party_id)
-
-            return list(
-                filter(
-                    lambda party: party is not None,
-                    map(lambda p_id: parliament.get_party_by_id(p_id), party_ids),
-                )
-            )  # type: ignore
-
-        def draw_keys(
-            draw: ImageDraw.ImageDraw, division: Union[CommonsDivision, LordsDivision]
-        ):
-            parties = get_parties(division)
-
-            for i, party in enumerate(parties):
-                name = party.get_name()
-                w, h = draw.textsize(name)
-                draw.text(
-                    (1600, 120 + (60 * i)),
-                    f"{name}",
-                    font=self._key_font,
-                    fill="#ffffff",
-                    anchor="lt",
-                )
-                draw.ellipse(
-                    [(1520, 110 + (60 * i)), (1570, 150 + (60 * i))],
-                    fill=f"{PartyColour.from_id(party.get_party_id()).value['colour']}",
-                )
+            return serialized_members
 
         def sort_members(members: list[PartyMember]) -> list[PartyMember]:
             parties = {}
@@ -531,13 +437,47 @@ class UKParliamentModule:
             results.reverse()
             return results
 
-        im = Image.new("RGB", (2100, 800), "#edebea")
-        draw = ImageDraw.Draw(im)
-        draw.rectangle([(1450, 0), (2100, 800)], fill="#b7dade")
-        draw.polygon([(1300, 0), (1450, 0), (1450, 800)], fill="#b7dade")
-        draw_ayes(draw, sort_members(division.get_aye_members()))
-        draw_noes(draw, sort_members(division.get_no_members()))
-        draw_keys(draw, division)
-        file_id = "".join(random.choice(string.ascii_lowercase) for i in range(20))
-        im.save(f"tmpimages/{file_id}.png", "PNG")
-        return File(f"tmpimages/{file_id}.png", filename=f"{file_id}.png")
+        aye_serialized_members = serialize_members(
+            sort_members(division.get_aye_members())
+        )
+        no_serialized_members = serialize_members(
+            sort_members(division.get_no_members())
+        )
+        serialized_parties = {}
+
+        members = division.get_aye_members()
+        members.extend(division.get_no_members())
+
+        for member in members:
+            party_id = member.get_party_id()
+            if party_id in serialized_parties:
+                continue
+            party = self.parliament.get_party_by_id(party_id)
+            if party is None:
+                continue
+            party_name = party.get_abber()
+            if party_name == "UK Independent Party":
+                party_name = "UKIP"
+            if party_name == "Scottish National Party":
+                party_name = "SNP"
+
+            serialized_parties[str(party_id)] = {
+                "name": party_name,
+                "colour": PartyColour.from_id(party_id).value["colour"],
+            }
+
+        async with self.aiohttp_session.post(
+            f"{config.WEB_API_URL}/divisionimage",
+            json={
+                "aye_members": aye_serialized_members,
+                "no_members": no_serialized_members,
+                "parties": serialized_parties,
+            },
+        ) as resp:
+            if resp.status != 200:
+                raise Exception(
+                    f"Couldn't fetch division image. Status Code: {resp.status}"
+                )
+            buffer = BytesIO(await resp.read())
+            buffer.seek(0)
+            return buffer

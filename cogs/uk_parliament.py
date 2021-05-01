@@ -1,7 +1,11 @@
 import functools
+from io import BytesIO
 import math
+from typing import Union
 
 from discord.ext.commands.converter import TextChannelConverter
+from discord.file import File
+from modules import database
 from modules.custom_commands import Channel, Guild
 from modules.reaction_menus import BookMenu
 from discord import embeds
@@ -18,9 +22,12 @@ from ukparliament.bills import SearchBillsBuilder, SearchBillsSortOrder
 class UK(commands.Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+        self.loaded = False
 
     def load(self):
-        self.parliament = self.bot.ukparl_module.parliament
+        self.ukparl_module = self.bot.ukparl_module
+        self.parliament = self.ukparl_module.parliament
+        self.loaded = True
 
     @staticmethod
     async def construct_bills_search_embed(
@@ -296,11 +303,83 @@ class UK(commands.Cog):
         usage="uk mod tracker [child command]",
         examples=["uk mod tracker channels"],
         clearance="Mod",
-        sub_commands=["channels", "load", "statuses", "loop"],
+        sub_commands=[
+            "channels",
+            "load",
+            "statuses",
+            "loop",
+            "dbclear",
+            "dbastats",
+        ],
         cls=cls.Group,
     )
     async def mod_cmd_tracker(self, ctx: commands.Context):
         return await embed_maker.command_error(ctx)
+
+    @mod_cmd_tracker.command(
+        name="dbclear",
+        help=(
+            "Clear all recorded entries from the two MongoDB collectioned used by the tracker."
+            "Doing this will produce from the bot duplicate tracker announcement from the last few days."
+        ),
+        usage="uk mod tracker dbclear",
+        examples=["uk mod tracker dbclear", "uk mod tracker dbclear [auth code]"],
+        clearance="Admin",
+        cls=cls.Command,
+    )
+    async def mod_cmd_tracker_db_clear(self, ctx: commands.Context, code: str = ""):
+        if self.loaded is False:
+            return
+
+        confirm_manager = self.ukparl_module.confirm_manager
+
+        if confirm_manager.has_code(ctx.author):
+            if code == "":
+                return await embed_maker.message(
+                    ctx,
+                    description="Confirm code required to execute this command successfully.",
+                    send=True,
+                )
+            if confirm_manager.confirm_code(ctx.author, code):
+                database.get_connection().clear_bills_tracker_collection()
+                database.get_connection().clear_divisions_tracker_collection()
+                return await embed_maker.message(
+                    ctx,
+                    description="Cleared bills_tracker and division_tracker collections.",
+                    send=True,
+                )
+            else:
+                return await embed_maker.message(
+                    ctx, description="Confirm code incorrect.", send=True
+                )
+        code = confirm_manager.gen_code(ctx.author)
+        await embed_maker.message(
+            ctx,
+            description="Sending confirmation to delete contents of 'bills_tracker' and 'divisions_tracker'.",
+            send=True,
+        )
+        await ctx.author.send(f"Code to confirm clear Mongo Collections: {code}")
+
+    @mod_cmd_tracker.command(
+        name="dbstats",
+        help="At the moment this only displays the amount of documents in both bills_tracker and divisions_tracker collections",
+        usage="uk mod tracker dbstats",
+        clearence="dev",
+        cls=cls.Command,
+    )
+    async def mod_cmd_tracker_db_stats(self, ctx: commands.Context):
+        if self.loaded is False:
+            return
+        next_line = "\n"
+        await embed_maker.message(
+            ctx,
+            description=(
+                f"**Collection Count**{next_line}- bills_tracker:"
+                f" {database.get_connection().get_bills_tracker_count()}{next_line}- divisions_tracker:"
+                f" {database.get_connection().get_divisions_tracker_count()}"
+            ),
+            send=True,
+        )
 
     @mod_cmd_tracker.command(
         name="statuses",
@@ -311,6 +390,8 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def mod_cmd_tracker_statuses(self, ctx: commands.Context):
+        if self.loaded is False:
+            return  # type: ignore
         next_line = "\n"
         statuses = self.bot.ukparl_module.tracker_status
         bits = []
@@ -337,6 +418,8 @@ class UK(commands.Cog):
         cls=cls.Group,
     )
     async def mod_cmd_tracker_channels(self, ctx: commands.Context):
+        if self.loaded is False:
+            return  # type: ignore
         bits = []
 
         config = self.bot.ukparl_module.config.config
@@ -367,7 +450,10 @@ class UK(commands.Cog):
     async def mod_cmd_tracker_eventloop(self, ctx: commands.Context):
         return await embed_maker.message(
             ctx,
-            description=f"The event loop is currently {'running' if self.bot.ukparl_module.tracker_event_loop.is_running() else 'not running'}.",
+            description=(
+                "The event loop is currently"
+                f"{'running' if self.bot.ukparl_module.tracker_event_loop.is_running() else 'not running'}."
+            ),
             send=True,
         )
 
@@ -380,6 +466,8 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def mod_cmd_tracker_eventloop_start(self, ctx: commands.Context):
+        if self.loaded is False:
+            return  # type: ignore
         tracker_statuses = self.bot.ukparl_module.tracker_status
         config = self.bot.ukparl_module.config
 
@@ -410,6 +498,8 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def mod_cmd_tracker_eventloop_stop(self, ctx: commands.Context):
+        if self.loaded is False:
+            return  # type: ignore
         if self.bot.ukparl_module.tracker_event_loop.is_running() is False:
             self.bot.ukparl_module.tracker_event_loop.stop()
             await embed_maker.message(ctx, description="Stopped event loop.", send=True)
@@ -432,6 +522,8 @@ class UK(commands.Cog):
         tracker_id: str = "",
         channel: TextChannelConverter = None,
     ):
+        if self.loaded is False:
+            return  # type: ignore
         config = self.bot.ukparl_module.config
         tracker_ids = config.config["CHANNELS"].keys()
 
@@ -474,8 +566,9 @@ class UK(commands.Cog):
         ],
     )
     async def mp_elections(self, ctx: commands.Context, *, args: ParseArgs):
+        if self.loaded is False:
+            return
         member = None
-
         name_arg = args["pre"] if args["pre"] != "" else args["name"]
         if name_arg != "" and name_arg is not None:
             for m in self.parliament.get_commons_members():
@@ -489,37 +582,35 @@ class UK(commands.Cog):
                     member = m
                     break
 
-        elif args["borough"] != "":
+        elif args["borough"] != "" and args["borough"] is not None:
             for m in self.parliament.get_commons_members():
                 if args["borough"].lower() in m.get_membership_from().lower():
                     member = m
                     break
 
         if member is None:
-            await embed_maker.message(
+            return await embed_maker.message(
                 ctx,
                 description=f"Couldn't find latest elections results for"
                 f" {'Borough' if args['borough'] != '' and args['borough'] is not None else 'MP'}"
                 f" {args['borough'] if args['borough'] != '' and args['borough'] is not None else args['pre']}",
                 send=True,
             )
-            return
 
         next_line = "\n"
         results = await self.parliament.get_election_results(member)
         result = results[0]
 
-        if args["historical"] != "":
+        if args["historical"] != "" and args["historical"] is not None:
             historical_bits = [
                 f"- {er.get_election_date().strftime('%Y')}" for er in results
             ]
-            await embed_maker.message(
+            return await embed_maker.message(
                 ctx,
                 title=f"Recorded Eletion Results of the Borough {member.get_membership_from()}",
                 description=f"**Elections:** {next_line}{next_line.join(historical_bits)}",
                 send=True,
             )
-            return
         else:
             for h_result in results:
                 if h_result.get_election_date().strftime("%Y") == args["historical"]:
@@ -549,11 +640,16 @@ class UK(commands.Cog):
             else "",
         )
         if result is not None:
-            image_file = self.bot.get_parliament_module().generate_election_graphic(
+            image_file = await self.ukparl_module.generate_election_graphic(
                 result, args["nonvoters"] is not None, args["table"] is not None
             )
-            embed.set_image(url=f"attachment://{image_file.filename}")  # type: ignore
-            await ctx.send(file=image_file, embed=embed)
+            embed.set_image(url="attachment://electionimage.png")  # type: ignore
+            image = BytesIO(image_file)
+            image.seek(0)
+            await ctx.send(
+                file=File(fp=image, filename="electionimage.png"),
+                embed=embed,
+            )
         else:
             await ctx.send(embed=embed)
 
@@ -564,7 +660,7 @@ class UK(commands.Cog):
         examples=[
             "uk minfo Boris Johnson",
             "uk minfo Duke of Norfolk",
-            "uk minfo Lord Sugar -p",
+            "uk minfo -n Lord Sugar -p",
         ],
         command_args=[
             (("--borough", "-b", str), "Get mp info by borough name"),
@@ -577,7 +673,14 @@ class UK(commands.Cog):
         clearence="User",
         cls=cls.Command,
     )
-    async def member_info(self, ctx: commands.Context, *, args: ParseArgs):
+    async def member_info(
+        self, ctx: commands.Context, *, args: Union[ParseArgs, str] = ""
+    ):
+        if self.loaded is False:
+            return  # type: ignore
+        if args == "":
+            return await embed_maker.command_error(ctx)
+
         member = None
         members = self.parliament.get_commons_members()
         members.extend(self.parliament.get_lords_members())
@@ -621,76 +724,96 @@ class UK(commands.Cog):
 
         for rep in biography.get_representations():
             representing_bits.append(
-                f"- MP for {rep['constituency_name']} from {rep['started'].strftime('%Y-%m-%d')}"
-                f"{' to ' if rep['ended'] is not None else ''}"
-                f"{rep['ended'].strftime('%Y-%m-%d') if rep['ended'] is not None else ''}"
+                (
+                    f"- MP for {rep['constituency_name']} from {rep['started'].strftime('%Y-%m-%d')}"
+                    f"{' to ' if rep['ended'] is not None else ''}"
+                    f"{rep['ended'].strftime('%Y-%m-%d') if rep['ended'] is not None else ''}"
+                )
             )
 
         gov_posts_bits = []
 
         for post in biography.get_government_posts():
             gov_posts_bits.append(
-                f"- {post['office']} from {post['started'].strftime('%Y-%m-%d')}"
-                f"{' to ' if post['ended'] is not None else ''}"
-                f"{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}"
+                (
+                    f"- {post['office']} from {post['started'].strftime('%Y-%m-%d')}"
+                    f"{' to ' if post['ended'] is not None else ''}"
+                    f"{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}"
+                )
             )
 
         opp_posts_bits = []
 
         for post in biography.get_oppositions_posts():
             opp_posts_bits.append(
-                f" - {post['office']} from {post['started'].strftime('%Y-%m-%d')}"
-                f"{' to ' if post['ended'] is not None else ''}"
-                f"{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}"
+                (
+                    f" - {post['office']} from {post['started'].strftime('%Y-%m-%d')}"
+                    f"{' to ' if post['ended'] is not None else ''}"
+                    f"{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}"
+                )
             )
 
         other_posts_bits = []
 
         for post in biography.get_other_posts():
             other_posts_bits.append(
-                f" - {post['office']} from {post['started'].strftime('%Y-%m-%d')}"
-                f"{' to ' if post['ended'] is not None else ''}"
-                f"{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}"
+                (
+                    f" - {post['office']} from {post['started'].strftime('%Y-%m-%d')}"
+                    f"{' to ' if post['ended'] is not None else ''}"
+                    f"{post['ended'].strftime('%Y-%m-%d') if post['ended'] is not None else ''}"
+                )
             )
 
         cmte_bits = []
 
         for membership in biography.get_committee_memberships():
             cmte_bits.append(
-                f"- Member of {membership['committee']} from {membership['started'].strftime('%Y-%m-%d')}"
-                f"{' to ' if membership['ended'] is not None else ''}"
-                f"{membership['ended'].strftime('%Y-%m-%d') if membership['ended'] is not None else ''}"
+                (
+                    f"- Member of {membership['committee']} from {membership['started'].strftime('%Y-%m-%d')}"
+                    f"{' to ' if membership['ended'] is not None else ''}"
+                    f"{membership['ended'].strftime('%Y-%m-%d') if membership['ended'] is not None else ''}"
+                )
             )
 
-        d = [
+        d = (
             f"**Name:** {member.get_display_name()}{next_line}**"
             f"{'Representing:' if member.get_house() == 1 else 'Peer Type'}** {member.get_membership_from()}"
-            f"{next_line}**Gender:** {'Male' if member.get_gender() == 'M' else 'Female'}",
-            f"{next_line}**Represented/Representing:**{next_line}{next_line.join(representing_bits)}"
-            if len(representing_bits) > 0
-            else "",
-            f"{next_line}**Government Posts**{next_line}{next_line.join(gov_posts_bits)}"
-            if len(gov_posts_bits) > 0
-            else "",
-            f"{next_line}**Opposition Posts:**{next_line}{next_line.join(opp_posts_bits)}"
-            if len(opp_posts_bits) > 0
-            else "",
-            f"{next_line}**Other Posts:**{next_line}{next_line.join(other_posts_bits)}"
-            if len(other_posts_bits) > 0
-            else "",
-            f"{next_line}**Committee Posts:**{next_line}{next_line.join(cmte_bits)}"
-            if len(cmte_bits) > 0
-            else "",
-        ]
+            f"{next_line}**Gender:** {'Male' if member.get_gender() == 'M' else 'Female'}"
+            + (
+                f"{next_line}**Represented/Representing:**{next_line}{next_line.join(representing_bits)}"
+                if len(representing_bits) > 0
+                else ""
+            )
+            + (
+                f"{next_line}**Government Posts**{next_line}{next_line.join(gov_posts_bits)}"
+                if len(gov_posts_bits) > 0
+                else ""
+            )
+            + (
+                f"{next_line}**Opposition Posts:**{next_line}{next_line.join(opp_posts_bits)}"
+                if len(opp_posts_bits) > 0
+                else ""
+            )
+            + (
+                f"{next_line}**Other Posts:**{next_line}{next_line.join(other_posts_bits)}"
+                if len(other_posts_bits) > 0
+                else ""
+            )
+            + (
+                f"{next_line}**Committee Posts:**{next_line}{next_line.join(cmte_bits)}"
+                if len(cmte_bits) > 0
+                else ""
+            )
+        )
 
-        embed: embeds.Embed = await embed_maker.message(ctx, description="\n".join(d))  # type: ignore
+        embed: embeds.Embed = await embed_maker.message(ctx, description=d)  # type: ignore
 
         if args["portrait"] is not None:
             url = (
                 member.get_thumbnail_url().replace("Thumbnail", "Portrait")
                 + "?cropType=FullSize&webVersion=false"
             )
-            portrait_image = await self.bot.get_parliament_module().get_mp_portrait(url)
+            portrait_image = await self.ukparl_module.get_mp_portrait(url)
             if portrait_image is not None:
                 embed.set_image(url=f"attachment://{portrait_image.filename}")
                 await ctx.send(file=portrait_image, embed=embed)
@@ -706,6 +829,8 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def division_lord_info(self, ctx: commands.Context, division_id: int):
+        if self.loaded is False:
+            return  # type: ignore
         division = await self.parliament.get_lords_division(division_id)
         if division is None:
             await embed_maker.message(
@@ -714,7 +839,7 @@ class UK(commands.Cog):
                 send=True,
             )
 
-        image_file = self.bot.get_parliament_module().generate_division_image(
+        division_buffer = await self.ukparl_module.generate_division_image(
             self.parliament, division
         )
         next_line = "\n"
@@ -728,8 +853,10 @@ class UK(commands.Cog):
             f"{next_line}**Division Date:** {division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}{next_line}"
             f"**Summary:** {division.get_amendment_motion_notes()[0:250]}",
         )  # type: ignore
-        embed.set_image(url=f"attachment://{image_file.filename}")
-        await ctx.send(file=image_file, embed=embed)
+        embed.set_image(url="attachment://divisionimage.png")
+        await ctx.send(
+            file=File(fp=division_buffer, filename="divisionimage.png"), embed=embed
+        )
 
     @divisions.command(
         name="cinfo",
@@ -740,6 +867,8 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def division_common_info(self, ctx: commands.Context, division_id: int):
+        if self.loaded is False:
+            return  # type: ignore
         division = await self.parliament.get_commons_division(division_id)
         if division is None:
             await embed_maker.message(
@@ -774,6 +903,8 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def division_commons_search(self, ctx: commands.Context, *, search_term=""):
+        if self.loaded is False:
+            return  # type: ignore
         divisions = await self.parliament.search_for_commons_divisions(search_term)
         if len(divisions) == 0:
             await embed_maker.message(
@@ -812,6 +943,8 @@ class UK(commands.Cog):
         clearence="User",
     )
     async def division_lords_search(self, ctx: commands.Context, *, search_term=""):
+        if self.loaded is False:
+            return  # type: ignore
         divisions = await self.parliament.search_for_lords_divisions(search_term)
         if len(divisions) == 0:
             await embed_maker.message(
@@ -854,6 +987,8 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def bill_info(self, ctx: commands.Context, bill_id: int):
+        if self.loaded is False:
+            return  # type: ignore
         try:
             bill = await self.parliament.get_bill(bill_id)
             c_divisions = await self.parliament.search_for_commons_divisions(
@@ -915,7 +1050,10 @@ class UK(commands.Cog):
         cls=cls.Command,
     )
     async def bills_search(self, ctx: commands.Context, *, args: ParseArgs = None):
+        if self.loaded is False:
+            return  # type: ignore
         builder = SearchBillsBuilder.builder()
+
         if args is None:
             return
 

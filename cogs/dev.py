@@ -31,11 +31,11 @@ class Dev(commands.Cog):
         self.bot = bot
 
     @commands.command(
-        help='Time a command',
-        usage='time_cmd [command]',
-        examples=['time_cmd lb'],
-        clearance='Dev',
-        cls=cls.Command
+        help="Time a command",
+        usage="time_cmd [command]",
+        examples=["time_cmd lb"],
+        clearance="Dev",
+        cls=cls.Command,
     )
     async def time_cmd(self, ctx: commands.Context, *, command_name: str = None):
         if command_name is None:
@@ -43,7 +43,7 @@ class Dev(commands.Cog):
 
         command = self.bot.get_command(command_name)
         if command is None:
-            return await embed_maker.error(ctx, 'Invalid command')
+            return await embed_maker.error(ctx, "Invalid command")
 
         msg = copy.copy(ctx.message)
         msg.content = ctx.prefix + command_name
@@ -56,22 +56,27 @@ class Dev(commands.Cog):
             end = time.perf_counter()
             success = False
             try:
-                await ctx.send(f'```py\n{traceback.format_exc()}\n```')
+                await ctx.send(f"```py\n{traceback.format_exc()}\n```")
             except discord.HTTPException:
                 pass
         else:
             end = time.perf_counter()
             success = True
 
-        colour = 'green' if success else 'red'
-        await embed_maker.message(ctx, description=f'Success: {success} | Time: {(end - start) * 1000:.2f}ms', colour=colour, send=True)
+        colour = "green" if success else "red"
+        await embed_maker.message(
+            ctx,
+            description=f"Success: {success} | Time: {(end - start) * 1000:.2f}ms",
+            colour=colour,
+            send=True,
+        )
 
     @commands.command(
-        help='Run any command as another user',
-        usage='sudo [user] [command]',
-        examples=['sudo hattyot lb'],
-        clearance='Dev',
-        cls=cls.Command
+        help="Run any command as another user",
+        usage="sudo [user] [command]",
+        examples=["sudo hattyot lb"],
+        clearance="Dev",
+        cls=cls.Command,
     )
     async def sudo(self, ctx: commands.Context, user: str = None, *, cmd: str = None):
         if user is None or cmd is None:
@@ -79,7 +84,7 @@ class Dev(commands.Cog):
 
         member = await get_member(ctx, user)
         if member is None:
-            return await embed_maker.error(ctx, 'Invalid user')
+            return await embed_maker.error(ctx, "Invalid user")
 
         msg = copy.copy(ctx.message)
         msg.channel = ctx.channel
@@ -89,26 +94,28 @@ class Dev(commands.Cog):
         await self.bot.invoke(new_ctx)
 
     @commands.command(
-        help='Reload an extension, so you dont have to restart the bot',
-        usage='reload_extension [ext]',
-        examples=['reload_extension cogs.levels'],
-        clearance='Dev',
-        aliases=['re'],
+        help="Reload an extension, so you dont have to restart the bot",
+        usage="reload_extension [ext]",
+        examples=["reload_extension cogs.levels"],
+        clearance="Dev",
+        aliases=["re"],
         cls=cls.Command,
     )
     async def reload_extension(self, ctx: commands.Context, ext: str):
         if ext in self.bot.extensions.keys():
             self.bot.reload_extension(ext)
-            return await embed_maker.message(ctx, description=f'`{ext}` has been reloaded', colour='green', send=True)
+            return await embed_maker.message(
+                ctx, description=f"`{ext}` has been reloaded", colour="green", send=True
+            )
         else:
-            return await embed_maker.error(ctx, 'That is not a valid extension')
+            return await embed_maker.error(ctx, "That is not a valid extension")
 
     @commands.command(
-        help='Evaluate code',
-        usage='eval [code]',
-        examples=['eval ctx.author.id'],
-        clearance='Dev',
-        cls=cls.Command
+        help="Evaluate code",
+        usage="eval [code]",
+        examples=["eval ctx.author.id"],
+        clearance="Dev",
+        cls=cls.Command,
     )
     async def eval(self, ctx: commands.Context, *, cmd: str = None):
         if cmd is None:
@@ -127,28 +134,28 @@ class Dev(commands.Cog):
         insert_returns(body)
 
         env = {
-            'bot': ctx.bot,
-            'discord': discord,
-            'commands': commands,
-            'ctx': ctx,
-            '__import__': __import__,
-            'db': db
+            "bot": ctx.bot,
+            "discord": discord,
+            "commands": commands,
+            "ctx": ctx,
+            "__import__": __import__,
+            "db": db,
         }
         exec(compile(parsed, filename="<ast>", mode="exec"), env)
 
         result = repr(await eval(f"{fn_name}()", env))
         # return done if result is empty, so it doesnt cause empty message error
-        if result == '':
-            result = 'Done'
+        if result == "":
+            result = "Done"
 
         await ctx.send(result)
 
     @commands.command(
-        help='Disable a command',
-        usage='disable_command',
-        examples=['disable_command'],
-        clearance='Dev',
-        cls=cls.Command
+        help="Disable a command",
+        usage="disable_command",
+        examples=["disable_command"],
+        clearance="Dev",
+        cls=cls.Command,
     )
     async def disable_command(self, ctx: commands.Context, command: str = None):
         if command is None:
@@ -156,22 +163,27 @@ class Dev(commands.Cog):
 
         cmd_obj = self.bot.get_command(command)
         if cmd_obj is None:
-            return await embed_maker.command_error(ctx, '[command]')
+            return await embed_maker.command_error(ctx, "[command]")
 
         command_data = db.get_command_data(ctx.guild.id, command, insert=True)
 
-        if command_data['disabled']:
-            return await embed_maker.error(ctx, f'`{command}` is already disabled')
+        if command_data["disabled"]:
+            return await embed_maker.error(ctx, f"`{command}` is already disabled")
 
-        db.commands.update_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name}, {'$set': {'disabled': 1}})
-        return await embed_maker.message(ctx, description=f'`{command}` has been disabled', colour='green', send=True)
+        db.commands.update_one(
+            {"guild_id": ctx.guild.id, "command_name": cmd_obj.name},
+            {"$set": {"disabled": 1}},
+        )
+        return await embed_maker.message(
+            ctx, description=f"`{command}` has been disabled", colour="green", send=True
+        )
 
     @commands.command(
-        help='Enable a command',
-        usage='enable_command',
-        examples=['enable_command'],
-        clearance='Dev',
-        cls=cls.Command
+        help="Enable a command",
+        usage="enable_command",
+        examples=["enable_command"],
+        clearance="Dev",
+        cls=cls.Command,
     )
     async def enable_command(self, ctx: commands.Context, command: str = None):
         if command is None:
@@ -179,20 +191,31 @@ class Dev(commands.Cog):
 
         cmd_obj = self.bot.get_command(command)
         if cmd_obj is None:
-            return await embed_maker.command_error(ctx, '[command]')
+            return await embed_maker.command_error(ctx, "[command]")
 
         command_data = db.get_command_data(ctx.guild.id, command, insert=True)
 
-        if not command_data['disabled']:
-            return await embed_maker.error(ctx, f'`{command}` is already enabled')
+        if not command_data["disabled"]:
+            return await embed_maker.error(ctx, f"`{command}` is already enabled")
 
-        db.commands.update_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name}, {'$set': {'disabled': 0}})
-        command_data['disabled'] = 0
-        await embed_maker.message(ctx, description=f'`{command}` has been enabled', colour='green', send=True)
+        db.commands.update_one(
+            {"guild_id": ctx.guild.id, "command_name": cmd_obj.name},
+            {"$set": {"disabled": 0}},
+        )
+        command_data["disabled"] = 0
+        await embed_maker.message(
+            ctx, description=f"`{command}` has been enabled", colour="green", send=True
+        )
 
         # check if all data is default, if it is delete the data from db
-        if not command_data['disabled'] and not command_data['user_access'] and not command_data['role_access']:
-            db.commands.delete_one({'guild_id': ctx.guild.id, 'command_name': cmd_obj.name})
+        if (
+            not command_data["disabled"]
+            and not command_data["user_access"]
+            and not command_data["role_access"]
+        ):
+            db.commands.delete_one(
+                {"guild_id": ctx.guild.id, "command_name": cmd_obj.name}
+            )
 
 
 def setup(bot):

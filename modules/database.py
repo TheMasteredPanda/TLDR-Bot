@@ -178,6 +178,18 @@ class Connection:
         self.bills_tracker = self.db["bills_tracker"]
         self.divisions_tracker = self.db["divisions_tracker"]
 
+    def clear_bills_tracker_collection(self):
+        self.bills_tracker.delete_many({})
+
+    def clear_divisions_tracker_collection(self):
+        self.divisions_tracker.delete_many({})
+
+    def get_bills_tracker_count(self):
+        return self.bills_tracker.count_documents({})
+
+    def get_divisions_tracker_count(self):
+        return self.divisions_tracker.count_documents({})
+
     def is_bill_update_stored(self, bill_id: int, update: FeedUpdate):
         """
         Check if a bill update from a feed is stored.
