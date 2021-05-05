@@ -138,7 +138,7 @@ class Utility(commands.Cog):
             (('--option', '-o', list), 'Option for the poll'),
             (('--time', '-t', format_time.parse), '[Optional] How long the poll will stay active for e.g. 5d 5h 5m'),
             (('--update_interval', '-u', str), '[Optional] If set, the bot will update the poll with data in given interval of time'),
-            (('--pick_count', '-p', str), '[Optional] How many options users can pick'),
+            (('--pick_count', '-p', str), '[Optional] How many options users can pick, defaults to 1'),
             (('--role', '-r', str), '[Optional] The role the poll will be restricted to')
         ],
         clearance='Mod',
@@ -164,7 +164,7 @@ class Utility(commands.Cog):
             poll_time = 300  # 5 minutes
 
         update_interval = args['update_interval']
-        pick_count = args['pick_count']
+        pick_count = args['pick_count'] if args['pick_count'] else '1'
         restrict_role_identifier = args['role']
 
         emote_options = await self.parse_poll_options(ctx, options)
@@ -331,13 +331,22 @@ class Utility(commands.Cog):
             )
 
     @staticmethod
-    async def parse_poll_options(ctx, options):
-        emote_options = {}
-        # check if user wants to have custom emotes
-        if options[0].split(':')[0].strip() in EMOJI_UNICODE_ENGLISH.values() or \
-            options[0].split(':')[0].strip() in EMOJI_ALIAS_UNICODE_ENGLISH.values() or \
-                get_custom_emote(ctx, ':'.join(options[0].split(':')[:3])):
+    def remove_last_char(msg: str):
+        pos = len(msg) - 1
+        while pos > -1 and ord(msg[pos]) & 0xC0 == 0x80:
+            # character at pos is a continuation byte (bit 7 set, bit 6 not)
+            pos -= 1
+        return msg[:pos]
 
+    async def parse_poll_options(self, ctx, options):
+        emote_options = {}
+        is_valid_emote = lambda e: e in EMOJI_UNICODE_ENGLISH.values() or e in EMOJI_ALIAS_UNICODE_ENGLISH.values()
+        encoded = options[0].split(':')[0].strip().encode()
+        # check if user wants to have custom emotes
+        first_emote = options[0].split(':')[0].strip()
+        if is_valid_emote(first_emote) or \
+            is_valid_emote(self.remove_last_char(first_emote)) or \
+                get_custom_emote(ctx, ':'.join(options[0].split(':')[:3])):
             for option in options:
                 option = option.strip()
                 option_split = option.split(':')
@@ -345,7 +354,7 @@ class Utility(commands.Cog):
                 custom_emote = get_custom_emote(ctx, ':'.join(option_split[:3]))
 
                 if custom_emote:
-                    emote = custom_emote
+                    emote = str(custom_emote)
                     option = ':'.join(option_split[3:])
                 else:
                     option = ':'.join(option_split[1:])
