@@ -1,4 +1,3 @@
-import discord
 import os
 import copy
 import config
@@ -134,9 +133,9 @@ class TLDR(commands.Bot):
             return await pm_cog.process_pm(ctx)
 
         # check if message matches any custom commands
-        # custom_command = await self.check_custom_command(message)
-        # if custom_command:
-        #     return
+        custom_command = await self.check_custom_command(message)
+        if custom_command:
+            return
 
         # invoke command if message starts with prefix
         if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, '').strip():

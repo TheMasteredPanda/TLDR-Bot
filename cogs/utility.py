@@ -239,8 +239,6 @@ class Utility(commands.Cog):
             }
         )
 
-        return await ctx.message.delete(delay=3)
-
     @commands.Cog.listener()
     async def on_anon_poll_timer_over(self, timer):
         message_id = timer['extras']['message_id']
@@ -416,8 +414,6 @@ class Utility(commands.Cog):
 
         for e in emote_options.keys():
             await poll_msg.add_reaction(e)
-
-        return await ctx.message.delete(delay=5)
 
     @commands.command(
         help='See the list of your current reminders or remove some reminders',

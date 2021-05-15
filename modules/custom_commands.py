@@ -187,22 +187,10 @@ class CustomCommands:
             A custom command if one is found.
         """
         # using aggregation match custom command "name" value against message content
-        match = [*db.custom_commands.aggregate([
-            {
-                '$addFields': {
-                    'regex_match': {
-                        '$regexMatch': {
-                            'regex': "$name",
-                            'input': message.content
-                        }
-                    }
-                },
-            },
-            {'$match': {'guild_id': message.guild.id, 'regex_match': True}}
-        ])]
-        if match:
-            del match[0]['regex_match']
-            return match[0]
+        custom_commands = db.custom_commands.find({'guild_id': message.guild.id})
+        for cc in custom_commands:
+            if re.findall(cc['name'], message.content):
+                return cc
 
     @staticmethod
     async def can_run(ctx: commands.Context, command: dict):
@@ -263,11 +251,11 @@ class CustomCommands:
 
         # replace $gN type variables with values
         groups = re.findall(command['name'], ctx.message.content)
-        for i, group in enumerate(groups[0]):
+        for i, group in enumerate(groups[0] if type(groups[0]) == tuple else groups):
             response = response.replace(f'$g{i + 1}', group)
 
         # get list of variables with regex
-        variables_list = re.findall(r'({([%*&>]?(?:.\w+\s?)+(?:\.\w+)?)})', response)
+        variables_list = re.findall(r'({([%*&>]?(?:.+\s?)+(?:\..+)?)})', response)
         # loop over found variables, done in a loop, so when an error occurs, the invalid variable can be ignored
         for variable, value in variables_list:
             try:
@@ -300,7 +288,8 @@ class CustomCommands:
                         msg.content = config.PREFIX + value[1:]
                         new_ctx = await self.bot.get_context(msg, cls=type(ctx))
                         await self.bot.invoke(new_ctx)
-                        response = re.sub(rf'\n?{variable}\n?', '', response)
+                        response = response.replace(f'{variable}', '')
+                        continue
 
                 # replace variable in response with new value
                 response = response.replace(variable, variable.format(**values))
