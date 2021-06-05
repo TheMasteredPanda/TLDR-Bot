@@ -477,8 +477,8 @@ class Leveling(commands.Cog):
         return await embed_maker.message(ctx, description=msg, colour='green', send=True)
 
     @staticmethod
-    def calculate_user_message_average_point_gain(member_id):
-        member_messages = [*db.messages.find({'user_id': member_id}).sort('time', 1)]
+    def calculate_user_message_average_point_gain(member_id, guild_id):
+        member_messages = [*db.messages.find({'user_id': member_id, 'guild_id': guild_id}).sort('time', 1)]
 
         previous_time = 0
         messages_points_gained = 0
@@ -505,7 +505,7 @@ class Leveling(commands.Cog):
         leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
         user_level = leveling_member.parliamentary.level
         points = leveling_member.parliamentary.points
-        points_per_message = self.calculate_user_message_average_point_gain(ctx.author.id)
+        points_per_message = self.calculate_user_message_average_point_gain(ctx.author.id, ctx.guild.id)
         if not level:
             # points needed until level_up
             pp_till_next_level = round((5 / 6) * (user_level + 1) * (2 * (user_level + 1) * (user_level + 1) + 27 * (user_level + 1) + 91)) - points
@@ -519,8 +519,8 @@ class Leveling(commands.Cog):
             pp_needed_rank_up = round((5 / 6) * rank_up_level * (2 * rank_up_level * rank_up_level + 27 * rank_up_level + 91)) - points
             avg_msg_rank_up = math.ceil(pp_needed_rank_up / points_per_message)
             description = f'Messages needed to:\n'\
-                          f'Level up: **{avg_msg_needed}**\n'\
-                          f'Rank up: **{avg_msg_rank_up}**'
+                          f'Level up: **{avg_msg_needed}** [{math.ceil(pp_till_next_level / 20)}]\n'\
+                          f'Rank up: **{avg_msg_rank_up}** [{math.ceil(pp_needed_rank_up / 20)}]'
         else:
             pp_needed = round((5 / 6) * level * (2 * level * level + 27 * level + 91)) - points
             avg_msg_needed = math.ceil(pp_needed / points_per_message)
