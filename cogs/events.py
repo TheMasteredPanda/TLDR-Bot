@@ -59,6 +59,8 @@ class Events(commands.Cog):
         if message.author.bot or not message.guild or message.content.startswith(config.PREFIX):
             return
 
+        db.messages.insert_one({'user_id': message.author.id, 'time': round(time.time())})
+
         leveling_cog = self.bot.get_cog('Leveling')
         asyncio.create_task(leveling_cog.process_message(message))
 
