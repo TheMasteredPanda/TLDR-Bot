@@ -59,7 +59,9 @@ class Events(commands.Cog):
         if message.author.bot or not message.guild or message.content.startswith(config.PREFIX):
             return
 
+        seven_days_ago = round(time.time()) - (7 * 24 * 60 * 60)
         db.messages.insert_one({'guild_id': message.guild.id, 'user_id': message.author.id, 'time': round(time.time())})
+        db.messages.delete_many({'guild_id': message.guild.id, 'user_id': message.author.id, 'time': {'$lt': seven_days_ago}})
 
         leveling_cog = self.bot.get_cog('Leveling')
         asyncio.create_task(leveling_cog.process_message(message))
