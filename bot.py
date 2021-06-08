@@ -181,8 +181,8 @@ class TLDR(commands.Bot):
         ctx.command = copy.copy(ctx.command)
         ctx.command.docs = ctx.command.get_help(ctx.author)
 
-        # check if command has been disabled, let devs run command anyway
-        if ctx.command.docs.disabled and 'Dev' not in modules.utils.get_user_clearance(message.author):
+        # check if command has been disabled
+        if ctx.command.docs.disabled:
             return await modules.embed_maker.error(ctx, 'This command has been disabled')
 
         # return if user doesnt have clearance for command

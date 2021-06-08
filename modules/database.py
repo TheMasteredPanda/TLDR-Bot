@@ -156,13 +156,6 @@ class Connection:
                 'moderator': :class:`int`,
                 'case_number': :class:`int`
             }
-    messages :class:`pymongo.collection.Collection`
-        The messages collection. Used for storing data about user messages.
-        Currently only used for
-            {
-                'user_id': :class:`int`
-                'time': :class:`int`
-            }
     """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -177,7 +170,6 @@ class Connection:
         self.custom_commands = self.db['custom_commands']
         self.watchlist = self.db['watchlist']
         self.cases = self.db['cases']
-        self.messages = self.db['messages']
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
         """
