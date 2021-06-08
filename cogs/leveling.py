@@ -493,7 +493,7 @@ class Leveling(commands.Cog):
                 messages_points_gained += 1
                 previous_time = message['time']
 
-        return (messages_points_gained / len(member_messages)) * 20, messages_points_gained / (7 * 24 * 60)
+        return (messages_points_gained / len(member_messages)) * 20, messages_points_gained / (90 * 24 * 60)
 
     @commands.command(
         help='See how many messages you need to send to level up and rank up or see how many messages until you reach a level (dont forget about the 60s cooldown).',
@@ -510,12 +510,12 @@ class Leveling(commands.Cog):
         leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
         user_level = leveling_member.parliamentary.level
         points = leveling_member.parliamentary.points
-        points_per_message, minutes_per_message = self.mlu_data(ctx.author.id, ctx.guild.id)
+        points_per_message, points_messages_per_minute = self.mlu_data(ctx.author.id, ctx.guild.id)
         if not level:
             # points needed until level_up
             pp_till_next_level = round((5 / 6) * (user_level + 1) * (2 * (user_level + 1) * (user_level + 1) + 27 * (user_level + 1) + 91)) - points
             avg_msg_needed = math.ceil(pp_till_next_level / points_per_message)
-            avg_time_needed = round((avg_msg_needed / minutes_per_message) * 60)
+            avg_time_needed = round((avg_msg_needed / points_messages_per_minute) * 60)
 
             # points needed to rank up
             user_rank = leveling_member.user_role_level(leveling_member.parliamentary)
@@ -524,7 +524,7 @@ class Leveling(commands.Cog):
             rank_up_level = user_level + missing_levels
             pp_needed_rank_up = round((5 / 6) * rank_up_level * (2 * rank_up_level * rank_up_level + 27 * rank_up_level + 91)) - points
             avg_msg_rank_up = math.ceil(pp_needed_rank_up / points_per_message)
-            avg_time_rank_up = round((avg_msg_rank_up / minutes_per_message) * 60)
+            avg_time_rank_up = round((avg_msg_rank_up / points_messages_per_minute) * 60)
             description = f'Messages needed to:\n'\
                           f'Level up: **{avg_msg_needed}** Time needed: `{format_time.seconds(avg_time_needed)}`\n'\
                           f'Rank up: **{avg_msg_rank_up}** Time needed: `{format_time.seconds(avg_time_rank_up)}`'
@@ -532,14 +532,14 @@ class Leveling(commands.Cog):
             level = int(level)
             pp_needed = round((5 / 6) * level * (2 * level * level + 27 * level + 91)) - points
             avg_msg_needed = math.ceil(pp_needed / points_per_message)
-            avg_time_needed = round((avg_msg_needed / minutes_per_message) * 60)
+            avg_time_needed = round((avg_msg_needed / points_messages_per_minute) * 60)
             description = f'Messages needed to reach level `{level}`: **{avg_msg_needed}** Time needed: `{format_time.seconds(avg_time_needed)}`'
 
         return await embed_maker.message(
             ctx,
             description=description,
             author={'name': 'MLU'},
-            footer={'text': 'The numbers were calculated with the statistics of your messages in the past 7 days.'},
+            footer={'text': 'The numbers were calculated with the statistics of your messages in the past 90 days.'},
             send=True
         )
 
