@@ -1114,7 +1114,7 @@ class Mod(commands.Cog):
         cls=cls.Command
     )
     async def command_access_give(self, ctx: commands.Context, command: Union[Command, cls.Command, str] = None,
-                                  user_input: Union[discord.Role, str] = None):
+                                  *, user_input: Union[discord.Role, str] = None):
         if command is None:
             return await embed_maker.command_error(ctx)
 
@@ -1150,7 +1150,7 @@ class Mod(commands.Cog):
         cls=cls.Command
     )
     async def command_access_take(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
-                                  user_input: Union[discord.Role, str] = None):
+                                  *, user_input: Union[discord.Role, str] = None):
         if command is None:
             return await embed_maker.command_error(ctx)
 
