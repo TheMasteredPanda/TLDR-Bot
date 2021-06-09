@@ -1,4 +1,6 @@
 import json
+import random
+
 import requests
 import re
 import config
@@ -82,49 +84,37 @@ class Fun(commands.Cog):
         return await ctx.send(file=discord.File(fp=image, filename=f'pride.{extension}'), embed=embed)
 
     @commands.command(
-        help='Gets a random duck image',
-        usage='duck',
-        examples=['duck'],
+        help='Get an image of an animal. Choices: Cat, Dog, Bunny, Duck, Bird, Fox, Koala, Panda',
+        usage='animal [type of animal]',
+        examples=['animal dog', 'a cat'],
         clearance='User',
+        aliases=['a'],
         cls=cls.Command
     )
-    async def duck(self, ctx):
-        url = 'https://random-d.uk/api/v2/random'
+    async def animal(self, ctx: commands.Context, animal: str = None):
+        animals = {
+            'cat': ('https://api.thecatapi.com/v1/images/search', lambda response: response.json()[0]['url']),
+            'dog': ('https://dog.ceo/api/breeds/image/random', lambda response: response.json()['message']),
+            'duck': ('https://random-d.uk/api/v2/random', lambda response: response.json()['url']),
+            'bunny': ('https://api.bunnies.io/v2/loop/random/?media=webm', lambda response: response.json()['media']['webm']),
+            'fox': ('https://randomfox.ca/floof/', lambda response: response.json()['image']),
+            'panda': ('https://some-random-api.ml/img/panda', lambda response: response.json()['link']),
+            'bird': ('https://some-random-api.ml/img/birb', lambda response: response.json()['link']),
+            'koala': ('https://some-random-api.ml/img/koala', lambda response: response.json()['link'])
+        }
+
+        if animal is None:
+            animal = random.choice([*animals.keys()])
+        else:
+            animal = animal.lower()
+
+        if animal not in animals:
+            return await embed_maker.error(ctx, f'`{animal}` is not a valid animal choice')
+
+        url, func = animals[animal]
         response = requests.get(url)
-        img_url = response.json()['url']
 
-        return await ctx.send(img_url)
-
-    @commands.command(
-        help='Gets a random dog image',
-        usage='dog',
-        examples=['dog'],
-        clearance='User',
-        aliases=['doggo'],
-        cls=cls.Command
-    )
-    async def dog(self, ctx):
-        url = 'https://dog.ceo/api/breeds/image/random'
-        response = requests.get(url)
-        json_text = response.text.encode("ascii", "ignore").decode('ascii')
-        img_url = json.loads(json_text)['message']
-
-        return await ctx.send(img_url)
-
-    @commands.command(
-        help='Gets a random cat image',
-        usage='cat',
-        examples=['cat'],
-        clearance='User',
-        cls=cls.Command
-    )
-    async def cat(self, ctx):
-        url = 'https://api.thecatapi.com/v1/images/search'
-        response = requests.get(url)
-        json_text = response.text.encode("ascii", "ignore").decode('ascii')
-        img_url = json.loads(json_text)[0]['url']
-
-        return await ctx.send(img_url)
+        return await ctx.send(func(response))
 
     @commands.command(
         help='Gets a random dad joke',
