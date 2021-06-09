@@ -84,7 +84,7 @@ class Fun(commands.Cog):
         return await ctx.send(file=discord.File(fp=image, filename=f'pride.{extension}'), embed=embed)
 
     @commands.command(
-        help='Get an image of an animal. Choices: Cat, Dog, Bunny, Duck, Bird, Fox, Koala, Panda',
+        help='Get an image of an animal. Choices: Cat, Dog, Lizard, Bunny, Duck, Bird, Fox, Koala, Panda',
         usage='animal [type of animal]',
         examples=['animal dog', 'a cat'],
         clearance='User',
@@ -100,7 +100,8 @@ class Fun(commands.Cog):
             'fox': ('https://randomfox.ca/floof/', lambda response: response.json()['image']),
             'panda': ('https://some-random-api.ml/img/panda', lambda response: response.json()['link']),
             'bird': ('https://some-random-api.ml/img/birb', lambda response: response.json()['link']),
-            'koala': ('https://some-random-api.ml/img/koala', lambda response: response.json()['link'])
+            'koala': ('https://some-random-api.ml/img/koala', lambda response: response.json()['link']),
+            'lizard': ('https://nekos.life/api/v2/img/lizard', lambda response: response.json()['url'])
         }
 
         if animal is None:
