@@ -303,7 +303,7 @@ class Events(commands.Cog):
     async def on_message_edit(self, before, after):
         # re run command if command was edited
         if before.content != after.content and after.content.startswith(config.PREFIX):
-            return await self.bot.process_commands(after)
+            return await self.bot.process_command(after)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
