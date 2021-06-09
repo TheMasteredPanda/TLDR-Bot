@@ -82,6 +82,20 @@ class Fun(commands.Cog):
         return await ctx.send(file=discord.File(fp=image, filename=f'pride.{extension}'), embed=embed)
 
     @commands.command(
+        help='Gets a random duck image',
+        usage='duck',
+        examples=['duck'],
+        clearance='User',
+        cls=cls.Command
+    )
+    async def duck(self, ctx):
+        url = 'https://random-d.uk/api/v2/random'
+        response = requests.get(url)
+        img_url = response.json()['url']
+
+        return await ctx.send(img_url)
+
+    @commands.command(
         help='Gets a random dog image',
         usage='dog',
         examples=['dog'],
