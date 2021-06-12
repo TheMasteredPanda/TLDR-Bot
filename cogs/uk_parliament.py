@@ -239,12 +239,12 @@ class UK(commands.Cog):
         help="To access the commands interfacing the UK Parliament Site.",
         invoke_without_command=True,
         clearance="User",
-        usage="uk [child command]",
+        usage="uk [sub command]",
         examples=["uk divisions linfo 1234", "uk mpelection Boris Johnson"],
         Mod=cls.Help(
             help="To access the commands inferfacing with the UK Parliament Site. And to access commands relevant to"
             " the configuration of this feature",
-            usage="uk [child command]",
+            usage="uk [sub command]",
             examples=["uk mod tracker channels"],
             sub_commands=["bills", "divisions", "minfo", "mpelection", "mod"],
         ),
@@ -262,7 +262,7 @@ class UK(commands.Cog):
     @uk.group(
         help="For commands relating to bills",
         invoke_without_command=True,
-        uasge="uk bills [child command]",
+        usage="uk bills [sub command]",
         examples=["uk bills search European Withdrawal"],
         clearance="User",
         sub_commands=["search"],
@@ -274,7 +274,7 @@ class UK(commands.Cog):
     @uk.group(
         help="For commands relating to divisions",
         invoke_without_command=True,
-        usage="uk divisions [child command]",
+        usage="uk divisions [sub command]",
         examples=["uk divisions lsearch [args]"],
         clearance="User",
         sub_commands=["lsearch", "csearch", "linfo", "cinfo"],
@@ -287,7 +287,7 @@ class UK(commands.Cog):
         name="mod",
         invoke_without_command=True,
         help="Moderator level commands for this feature",
-        usage="uk mod [child command]",
+        usage="uk mod [sub command]",
         examples=["uk mod tracker [args]"],
         clearance="Mod",
         sub_commands=["tracker"],
@@ -300,7 +300,7 @@ class UK(commands.Cog):
         name="tracker",
         invoke_without_command=True,
         help="Commands related to the trackering section of this feature",
-        usage="uk mod tracker [child command]",
+        usage="uk mod tracker [sub command]",
         examples=["uk mod tracker channels"],
         clearance="Mod",
         sub_commands=[

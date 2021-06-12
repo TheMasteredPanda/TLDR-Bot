@@ -504,6 +504,10 @@ class UKParliamentModule:
         await channel.send(embed=embed)
 
     async def on_commons_division(self, division: CommonsDivision, bill: Bill):
+        if self.config is None:
+            print("Config is none")
+            exit(0)
+
         channel = self._guild.get_channel(
             int(self.config.get_channel_id("commonsdivisions"))
         )
