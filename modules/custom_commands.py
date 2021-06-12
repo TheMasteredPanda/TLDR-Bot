@@ -18,7 +18,7 @@ class User:
     This class is for custom command variables to grant limited access to certain user values.
 
     Attributes
-    __________
+    ---------------
     id: :class:`int`
         ID of the user.
     name: :class:`str`
@@ -54,7 +54,7 @@ class Guild:
     This class is for custom command variables to grant limited access to certain guild values.
 
     Attributes
-    __________
+    ---------------
     id: :class:`int`
         ID of the guild.
     name: :class:`str`
@@ -81,7 +81,7 @@ class Channel:
     This class is for custom command variables to grant limited access to certain channel values.
 
     Attributes
-    __________
+    ---------------
     id: :class:`int`
         ID of the channel.
     name: :class:`str`
@@ -108,7 +108,7 @@ class Message:
     This class is for custom command variables to grant limited access to certain message values.
 
     Attributes
-    __________
+    ---------------
     id: :class:`int`
         ID of the message.
     content: :class:`str`
@@ -135,7 +135,7 @@ class Role:
     This class is for custom command variables to grant limited access to certain role values.
 
     Attributes
-    __________
+    ---------------
     id: :class:`int`
         ID of the role.
     name: :class:`str`
@@ -163,7 +163,7 @@ class CustomCommands:
     Handler of custom commands.
 
     Attributes
-    __________
+    ---------------
     bot: :class:`bot.TLDR`
         Bot instance.
     """
@@ -177,7 +177,7 @@ class CustomCommands:
         Matches discord message against custom commands.
 
         Parameters
-        ___________
+        ----------------
         message: :class:`discord.Message`
             The discord message which's content will be used to match against custom command names.
 
@@ -198,7 +198,7 @@ class CustomCommands:
         Checks if ctx.author can run custom command.
 
         Parameters
-        ___________
+        ----------------
         ctx: :class:`discord.ext.commands.Context`
             Context
         command: :class:`dict`
@@ -226,7 +226,7 @@ class CustomCommands:
         Replaces all the variables and groups in command response with relevant data.
 
         Parameters
-        ___________
+        ----------------
         ctx: :class:`discord.ext.commands.Context`
             Context
         command: :class:`dict`

@@ -15,7 +15,7 @@ class Timers:
     Functions will be called by dispatching bot events by the name `on_{event}_timer_over`.
 
     Attributes
-    __________
+    ---------------
     bot: :class:`bot.TLDR`
         The discord bot.
     """
@@ -39,7 +39,7 @@ class Timers:
         Runs a timer, by sleeping until the timer expires.
 
         Parameters
-        ___________
+        ----------------
         timer: :class:`dict`
             Timer dictionary from :func:`create`
         """
@@ -56,7 +56,7 @@ class Timers:
         Event will be dispatched with the name `on_{event}_timer_over`.
 
         Parameters
-        ___________
+        ----------------
         timer: :class:`dict`
             Timer dictionary from :func:`create`
         """
@@ -72,7 +72,7 @@ class Timers:
         Create a new timer.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild the timer will belong to.
         expires: :class:`int`

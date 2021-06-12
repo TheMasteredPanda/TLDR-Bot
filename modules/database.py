@@ -13,7 +13,7 @@ class Connection:
     Database handler. Creates connection to the database.
 
     Attributes
-    __________
+    ---------------
     mongo_client: :class:`pymongo.MongoClient`
         The pymongo client.
 
@@ -176,7 +176,7 @@ class Connection:
         Get member's leveling data from the database, if user isn't in the database, they will be added.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the member's guild.
         member_id: :class:`int`
@@ -206,7 +206,7 @@ class Connection:
         Get guild's leveling data from the database, if guild isn't in the database, it will be added.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
         fields: Optional[:class:`dict`]
@@ -237,7 +237,7 @@ class Connection:
         Get data on a command from the database, if command isn't in the database, it will be added, if insert is True.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of command's guild.
         command_name: :class:`int`
@@ -269,7 +269,7 @@ class Connection:
         Get daily debates data of a guild.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
 
@@ -291,7 +291,7 @@ class Connection:
         Get automember setting of guild.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
 
@@ -314,7 +314,7 @@ class Connection:
         Adds a case to the database.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
         type: :class:`str`
@@ -352,7 +352,7 @@ class Connection:
         Get cases based on given kwargs.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
            ID of the guild.
         kwargs: :class:`dict`
@@ -371,7 +371,7 @@ class Connection:
         Set the logs url for a case.
 
         Parameters
-        ___________
+        ----------------
         case_id: :class:`ObjectId`
            ID of the case.
         logs_url: :class:`str`

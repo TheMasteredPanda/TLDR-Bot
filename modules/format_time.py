@@ -14,7 +14,7 @@ def seconds(sec: int, *, accuracy: int = 2):
     Converts seconds into human readable time, eg. 2 days 5 hours 35 minutes 16 seconds
 
     Parameters
-    ___________
+    ----------------
     sec: :class:`int`
         The amount of seconds to convert.
     accuracy: :class:`int`
@@ -58,7 +58,7 @@ def parse(string: str = None, return_string: bool = False):
     Converts time from human readable format from the beginning of given string to seconds.
 
     Parameters
-    ___________
+    ----------------
     string: :class:`str`
         The human readable time string.
     return_string :class:`bool`

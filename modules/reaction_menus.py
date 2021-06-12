@@ -15,7 +15,7 @@ class ReactionMenus:
     Class that manages reaction menus.
 
     Attributes
-    __________
+    ---------------
     bot: :class:`bot.TLDR`
         The discord bot.
     menus: :class:`TTLOrderedDict`
@@ -34,7 +34,7 @@ class ReactionMenus:
         Adds menu to :attr:`menus`.
 
         Parameters
-        ___________
+        ----------------
         menu: Union[:class:`ReactionMenu`, :class:`BookMenu`]
             The menu that will be added to :attr:`menus`
         """
@@ -57,7 +57,7 @@ class ReactionMenu:
     Implements reaction menu.
 
     Attributes
-    __________
+    ---------------
     message: :class:`discord.Message`
         Message that acts as the menu.
     buttons: :class:`dict`
@@ -75,7 +75,7 @@ class ReactionMenu:
         Calls a button function of the menu by it's reaction.
 
         Parameters
-        ___________
+        ----------------
         reaction: :class:`discord.Reaction`
             Reaction that will be used to call the function of a button.
         user: :class:`discord.User`
@@ -97,7 +97,7 @@ class BookMenu(ReactionMenu):
     It automatically adds buttons and their functions.
 
     Attributes
-    __________
+    ---------------
     buttons: :class:`list`
         All the buttons attached to the menu.
     author: :class:`discord.Member`
@@ -147,7 +147,7 @@ class BookMenu(ReactionMenu):
         Moves the BookMenu back by pages_back amount.
 
         Parameters
-        ___________
+        ----------------
         user: :class:`discord.User`
             User that pressed the button.
         pages_back: :class:`int`
@@ -170,7 +170,7 @@ class BookMenu(ReactionMenu):
         Moves the BookMenu forward by pages_forward amount.
 
         Parameters
-        ___________
+        ----------------
         user: :class:`discord.User`
             User that pressed the button.
         pages_forward: :class:`int`

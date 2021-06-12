@@ -22,7 +22,7 @@ class Command(commands.Converter):
         Converts provided argument to command
 
         Parameters
-        ___________
+        ----------------
         ctx: :class:`discord.ext.commands.Context`
             Context, will be used to get member.
         argument: :class:`str`
@@ -46,7 +46,7 @@ class ParseArgs(commands.Converter, dict):
         This uses regex to parse args.
 
         Parameters
-        ___________
+        ----------------
         ctx: :class:`discord.ext.commands.Context`
             Context, will be used to command.
         argument: :class:`str`
@@ -105,7 +105,7 @@ def id_match(identifier: str, extra: str) -> re.Match:
     Matches identifier to discord ID regex and matches given extra regex to identifier
 
     Parameters
-    ___________
+    ----------------
     identifier: :class:`str`
         The identifier that will be matched against discord ID regex and given extra regex
     extra: :class:`str`
@@ -126,7 +126,7 @@ def get_custom_emote(ctx: commands.Context, emote: str) -> Optional[discord.Emoj
     Look up custom emote by id or by name
 
     Parameters
-    ___________
+    ----------------
     ctx: :class:`discord.ext.commands.Context`
         Context, used to get emojis.
     emote: :class:`str`
@@ -165,7 +165,7 @@ async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional
     Get guild's role by its name or id.
 
     Parameters
-    ___________
+    ----------------
     guild: :class:`discord.Guild`
         Guild where to search the role from.
     role_identifier: :class:`str`
@@ -190,7 +190,7 @@ def get_user_clearance(member: discord.Member) -> list:
     Get member's clearance levels.
 
     Parameters
-    ___________
+    ----------------
     member: :class:`discord.Member`
         Member's whose clearance levels will be returned
 
@@ -213,7 +213,7 @@ async def get_member_from_string(ctx: commands.Context, string: str) -> Tuple[Op
     Get member from the first part of the string and return the remaining string.
 
     Parameters
-    ___________
+    ----------------
     ctx: :class:`discord.ext.commands.Context`
         Context.
     string: :class:`str`
@@ -254,7 +254,7 @@ async def get_member_by_id(guild: discord.Guild, member_id: int) -> Optional[dis
     Simple function to get or fetch member in guild by member's id.
 
     Parameters
-    ___________
+    ----------------
     guild: :class:`discord.guild`
         Guild from which to get member.
     member_id: :class:`id`
@@ -282,7 +282,7 @@ async def get_member(ctx: commands.Context, source, *, multi: bool = True, retur
     Member could also be a mention, so ctx.message.mentions are checked.
 
     Parameters
-    ___________
+    ----------------
     ctx: :class:`discord.ext.commands.Context`
         Context.
     source: :class:`str`

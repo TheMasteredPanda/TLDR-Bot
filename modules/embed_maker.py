@@ -29,7 +29,7 @@ async def message(
     A function to easily create embeds with a certain look.
 
     Parameters
-    ___________
+    ----------------
     ctx: :class:`discord.ext.commands.Context`
         discord context.
     description: :class:`str`
@@ -83,7 +83,7 @@ async def error(ctx: Context, description, **kwargs):
     Default colour is red and send is True.
 
     Parameters
-    ___________
+    ----------------
     ctx: :class:`discord.ext.commands.Context`
         discord context.
     description: :class:`str`
@@ -104,7 +104,7 @@ async def command_error(ctx, bad_arg: str = None):
     A simple function to easily create command error embeds with a certain look and info about ctx.command.
 
     Parameters
-    ___________
+    ----------------
     ctx: :class:`discord.ext.commands.Context`
         discord context.
     bad_arg: :class:`str`

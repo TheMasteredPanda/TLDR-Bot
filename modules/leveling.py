@@ -24,7 +24,7 @@ class DatabaseList(list):
     To keep things simple, __delitem__ and insert methods automatically raise an exception.
 
     Attributes
-    __________
+    ---------------
     collection: :class:`pymongo.collection.Collection`
         The collection that the list is tied to.
     query_filter: :class:`dict`
@@ -82,7 +82,7 @@ class Boost:
     A boost gives a user (multiplier * 100)% more parliamentary points.
 
     Attributes
-    __________
+    ---------------
     leveling_member: :class:`LevelingMember`
         The LevelingMember who has the boost.
     boost_type: :class:`str`
@@ -138,7 +138,7 @@ class LevelingUserBoosts:
     Represents LevelingUser's boosts.
 
     Attributes
-    __________
+    ---------------
     leveling_member: :class:`LevelingMember`
         The LevelingMember to whom these boosts belong to.
     rep: :class:`Boost`
@@ -199,7 +199,7 @@ class LevelingUserSettings:
     Also implements some functionality for the settings.
 
     Attributes
-    __________
+    ---------------
     leveling_member: :class:`LevelingMember`
         The LevelingMember.
     at_me: :class:`bool`
@@ -234,7 +234,7 @@ class LevelingUserBranch:
     Represents the data a user has on a branch, points, level, role etc etc.
 
     Attributes
-    __________
+    ---------------
     leveling_member: :class:`LevelingMember`
         The LevelingMember.
     branch: :class:`LevelingRoute`
@@ -274,7 +274,7 @@ class LevelingUser:
     Represents all the data in the database on a user.
 
     Attributes
-    __________
+    ---------------
     leveling_member: :class:`LevelingMember`
         The LevelingMember.
     parliamentary: :class:`LevelingUserBranch`
@@ -371,7 +371,7 @@ class LevelingRole:
     Represents a leveling role attached to a :class:`LevelingRoute`.
 
     Attributes
-    __________
+    ---------------
     guild: :class:`discord.Guild`
         The discord guild object.
     branch: :class:`LevelingRoute`
@@ -438,7 +438,7 @@ class LevelingRoute:
     Represents a leveling route.
 
     Attributes
-    __________
+    ---------------
     guild: :class:`discord.Guild`
         The discord guild object.
     name: :class:`str`
@@ -461,7 +461,7 @@ class LevelingRoute:
         Get a role in the LevelingRoute.
 
         Parameters
-        ___________
+        ----------------
         role_name: :class:`str`
             The name of the role that will be searched for.
 
@@ -484,7 +484,7 @@ class LevelingRoutes:
     Represents all the leveling routes attached to :class:`LevelingGuild`.
 
     Attributes
-    __________
+    ---------------
     guild: :class:`discord.Guild`
         The discord guild object.
     parliamentary: :class:`LevelingRoute`
@@ -505,7 +505,7 @@ class LevelingRoutes:
         Get :class:`LevelingRole` by it's name.
 
         Parameters
-        ___________
+        ----------------
         role_name: :class:`str`
             The name of the role that will be searched for.
 
@@ -529,7 +529,7 @@ class LevelingData:
     Represents all the data attached to :class:`LevelingGuild`.
 
     Attributes
-    __________
+    ---------------
     guild: :class:`discord.Guild`
         The discord guild object.
     level_up_channel: :class:`int`
@@ -584,7 +584,7 @@ class LevelingGuild(LevelingData):
     This implements the functionality of :class:`LevelingData`.
 
     Attributes
-    __________
+    ---------------
     bot: :class:`TLDR`
         The bot instance.
     guild: :class:`discord.Guild`
@@ -611,7 +611,7 @@ class LevelingGuild(LevelingData):
         Get :class:`LevelingRole` by it's name.
 
         Parameters
-        ___________
+        ----------------
         role_name: :class:`str`
             The name of the role that will be searched for.
 
@@ -627,7 +627,7 @@ class LevelingGuild(LevelingData):
         Get :class:`LevelingRoute` by it's name.
 
         Parameters
-        ___________
+        ----------------
         name: :class:`str`
             The name of the route that will be searched for.
 
@@ -646,7 +646,7 @@ class LevelingGuild(LevelingData):
         Looks for member in :attr:`members`, if member isn't found, will look for member in guild and add it to :attr:`members`.
 
         Parameters
-        ___________
+        ----------------
         member_id: :class:`int`
             Id of the member that will be searched for.
 
@@ -674,7 +674,7 @@ class LevelingGuild(LevelingData):
         Converts :class:`discord.Member` to :class:`LevelingMember` and adds it to :attr:`members`.
 
         Parameters
-        ___________
+        ----------------
         member: :class:`discord.Member`
             The discord member.
 
@@ -692,7 +692,7 @@ class LevelingGuild(LevelingData):
         Get level up channel for LevelingGuild.
 
         Parameters
-        ___________
+        ----------------
         message: :class:`discord.Message`
             The discord message that will be used as a backup if LevelingGuild doesn't have a level_up_channel set.
 
@@ -717,7 +717,7 @@ class LevelingMember(LevelingUser):
     This implements the functionality of :class:`LevelingUser`.
 
     Attributes
-    __________
+    ---------------
     bot: :class:`TLDR`
         The bot instance.
     guild: :class:`LevelingGuild`
@@ -772,7 +772,7 @@ class LevelingMember(LevelingUser):
         Converts LevelingRole to guild role object and adds the role to the discord member.
 
         Parameters
-        ___________
+        ----------------
         role: :class:`LevelingRole`
             The role that will be added to the member.
 
@@ -801,7 +801,7 @@ class LevelingMember(LevelingUser):
         Levels up and ranks up LevelingMember.
 
         Parameters
-        __________
+        ---------------
         branch :class:`LevelingRoute`
             The branch the LevelingMember will be leveled up on.
 
@@ -842,7 +842,7 @@ class LevelingMember(LevelingUser):
         Send LevelingMember message about their level up.
 
         Parameters
-        __________
+        ---------------
         message: :class:`discord.Message`
             The message which caused the level up, needed for :func:`get_level_up_channel`.
         user_branch: :class:`LevelingUserBranch`
@@ -1042,7 +1042,7 @@ class LevelingSystem:
     This is used to get LevelingGuilds and LevelingMembers if needed.
 
     Attributes
-    __________
+    ---------------
     bot: :class:`TLDR`
         The bot instance.
     guilds: :class:`List[:class:`LevelingGuild`]`
