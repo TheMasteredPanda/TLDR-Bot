@@ -590,9 +590,10 @@ class Utility(commands.Cog):
         cls=cls.Command
     )
     async def help(self, ctx: commands.Context, *, command: str = None):
-        help_object = {}
-
         user_clearance = get_user_clearance(ctx.author)
+
+        # compile help_object to include all the categories as keys and commands as values
+        help_object = {}
         for cmd in self.bot.commands:
             # create copy of original command so we don't modify the original when adding docs or other values
             cmd = copy.copy(cmd)
@@ -607,6 +608,7 @@ class Utility(commands.Cog):
             else:
                 help_object[cog_name].append(cmd)
 
+        # if user didnt ask for a specific command, display all the available categories and commands to the user
         if command is None:
             embed = await embed_maker.message(
                 ctx,
@@ -614,16 +616,18 @@ class Utility(commands.Cog):
                 author={'name': f'Help - {user_clearance[-1]}'}
             )
 
-            for cog in help_object:
+            sorted_cog_names = ['Leveling', 'Utility', 'Fun', 'Mod', 'Settings', 'Dev', 'Special Access']
+            for cog_name in sorted_cog_names:
+                cog = help_object[cog_name]
                 embed.add_field(
-                    name=f'>{cog}',
-                    value=r" \| ".join([f'`{c}`' for c in help_object[cog]]), inline=False
+                    name=f'>{cog_name}',
+                    value=r" \| ".join([f'`{command}`' for command in cog]), inline=False
                 )
 
             return await ctx.send(embed=embed)
         elif command:
             if self.bot.get_command(command) is None:
-                return await embed_maker.error(ctx, f"Couldn't find a command by: `{command}`")
+                return await embed_maker.error(ctx, f"Couldn't find a command by the name: `{command}`")
 
             command = self.bot.get_command(command, member=ctx.author)
             if command.cog_name not in help_object:
