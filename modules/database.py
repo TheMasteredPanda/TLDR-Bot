@@ -156,6 +156,12 @@ class Connection:
                 'moderator': :class:`int`,
                 'case_number': :class:`int`
             }
+    guild_settings :class:`pymongo.collection.Collection`
+        The guild settings collection
+            {
+                'guild_id': :class:`int`,
+                'mute_role_id': :class:`int`
+            }
     """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -170,6 +176,31 @@ class Connection:
         self.custom_commands = self.db['custom_commands']
         self.watchlist = self.db['watchlist']
         self.cases = self.db['cases']
+        self.guild_settings = self.db['guild_settings']
+
+    def get_guild_settings(self, guild_id: int) -> dict:
+        """
+        Get Settings attached to guild that dont fit in other collections.
+
+        Parameters
+        ----------------
+        guild_id: :class:`int`
+            ID of the guild.
+
+        Returns
+        -------
+        :class:`dict`
+            Guild's settings.
+        """
+        guild_settings = self.guild_settings.find_one({'guild_id': guild_id})
+        if guild_settings is None:
+            guild_settings = {
+                'guild_id': guild_id,
+                'mute_role_id': None
+            }
+            self.guild_settings.insert_one(guild_settings)
+
+        return guild_settings
 
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
         """
@@ -365,19 +396,6 @@ class Connection:
         """
         query = {'guild_id': guild_id, **kwargs}
         return [c for c in self.cases.find(query).sort({'created_at': 1})]
-
-    def add_case_logs(self, case_id: ObjectId, logs_url: str):
-        """
-        Set the logs url for a case.
-
-        Parameters
-        ----------------
-        case_id: :class:`ObjectId`
-           ID of the case.
-        logs_url: :class:`str`
-           url of the logs.
-        """
-        self.cases.update_one({'_id': case_id}, {'$set': {'logs_url': logs_url}})
 
 
 def get_connection():

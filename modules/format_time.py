@@ -28,7 +28,7 @@ def seconds(sec: int, *, accuracy: int = 2):
         Time in human readable format.
     """
     if sec < 60:
-        return f'{sec} seconds'
+        return f'{round(sec)} seconds'
 
     ret = []
 

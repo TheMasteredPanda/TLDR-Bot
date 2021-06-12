@@ -14,6 +14,7 @@ import modules.reaction_menus
 import modules.custom_commands
 import modules.cls
 import modules.invite_logger
+import modules.moderation
 
 from datetime import datetime
 from discord.ext import commands
@@ -48,6 +49,7 @@ class TLDR(commands.Bot):
         self.custom_commands = modules.custom_commands.CustomCommands(self)
         self.leveling_system = modules.leveling.LevelingSystem(self)
         self.invite_logger = modules.invite_logger.InviteLogger(self)
+        self.moderation = modules.moderation.ModerationSystem(self)
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead

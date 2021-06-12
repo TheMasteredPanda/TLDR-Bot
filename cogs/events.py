@@ -22,7 +22,7 @@ class Events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        bot_game = discord.Game(f'@me')
+        bot_game = discord.Game(f'>help')
         await self.bot.change_presence(activity=bot_game)
 
         await self.check_left_members()
@@ -567,6 +567,14 @@ class Events(commands.Cog):
             # wasnt able to send dm to user, so will send the message in the bot channel
             channel: discord.TextChannel = self.bot.get_channel(config.BOT_CHANNEL_ID)
             await channel.send(embed=embed, content=f'<@{member.id}>, I wasn\'t able to dm you')
+
+    @commands.Cog.listener()
+    async def on_ban(self, member: discord.Member):
+        # delete user from leveling_users
+        db.leveling_users.delete_one({
+            'guild_id': member.guild.id,
+            'user_id': member.id
+        })
 
 
 def setup(bot):
