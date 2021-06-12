@@ -9,6 +9,8 @@ import requests
 import pytz
 import bs4
 
+from iso639 import languages
+from googletrans import Translator
 from emoji.unicode_codes.en import EMOJI_UNICODE_ENGLISH, EMOJI_ALIAS_UNICODE_ENGLISH
 from timezonefinder import TimezoneFinder
 from typing import Union
@@ -29,6 +31,29 @@ db = database.get_connection()
 class Utility(commands.Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+
+    @commands.command(
+        help='Translate text to english',
+        usage='translate [text]',
+        examples=['translate tere'],
+        clearance='User',
+        cls=cls.Command
+    )
+    async def translate(self, ctx: commands.Context, *, text: str = None):
+        if text is None:
+            return await embed_maker.command_error(ctx)
+
+        translator = Translator()
+        translated = translator.translate(text, dest='en')
+        source_language = languages.get(alpha2=translated.src).name
+
+        return await embed_maker.message(
+            ctx,
+            author={'name': 'Translator'},
+            description=f'**{source_language}:** {text}\n'
+                        f'**English:** {translated.text}',
+            send=True
+        )
 
     def cg_to_string(self, tags: bs4.element.Tag, asked_for: list[str], parent: str = ''):
         spacer = f'|{"-" * 4}'
