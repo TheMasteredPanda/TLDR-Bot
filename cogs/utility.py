@@ -643,6 +643,9 @@ class Utility(commands.Cog):
 
             sorted_cog_names = ['Leveling', 'Utility', 'Fun', 'Mod', 'Settings', 'Dev', 'Special Access']
             for cog_name in sorted_cog_names:
+                if cog_name not in help_object:
+                    continue
+
                 cog = help_object[cog_name]
                 embed.add_field(
                     name=f'>{cog_name}',
