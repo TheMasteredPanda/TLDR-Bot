@@ -1,20 +1,23 @@
-import discord
 import os
 import copy
 import config
 import asyncio
+import discord
 import traceback
 import modules.utils
-import modules.cls
+import modules.timers
 import modules.database
+import modules.leveling
 import modules.embed_maker
 import modules.ukparliament
 
 import modules.google_drive
 import modules.reaction_menus
-import modules.timers
 import modules.custom_commands
-import modules.leveling
+import modules.cls
+import modules.invite_logger
+import modules.moderation
+
 from datetime import datetime
 from discord.ext import commands
 from typing import Union, Optional
@@ -52,7 +55,8 @@ class TLDR(commands.Bot):
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
         self.leveling_system = modules.leveling.LevelingSystem(self)
-        self.ukparl_module = modules.ukparliament.UKParliamentModule(self)
+        self.invite_logger = modules.invite_logger.InviteLogger(self)
+        self.moderation = modules.moderation.ModerationSystem(self)
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead

@@ -14,7 +14,7 @@ class PrivateMessages(commands.Cog):
         self.bot = bot
         # when get __getattribute__ is called, instead of people needing to call pm_help, they can call help
         self.help = self.pm_help
-        self.commands = ['help', 'report_issue']
+        self.commands = ['help', 'report_issue', 'open_ticket']
 
     async def process_pm(self, ctx):
         cmd, args = self.parse_msg(ctx)
@@ -75,14 +75,7 @@ class PrivateMessages(commands.Cog):
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'{help_cmd} is not a valid command')
                 return await ctx.author.send(embed=embed)
 
-    @commands.command(
-        dm_only=True,
-        help='Report an issue you have with the server or with a user',
-        usage='report_issue [issue]',
-        examples=['report_issue member hattyot is breaking cg1'],
-        cls=cls.Command
-    )
-    async def report_issue(self, ctx: commands.Context, issue: str = None, _=None):
+    async def _open_ticket(self, ctx: commands.Context, issue: str = None):
         if not issue:
             command = ctx.command
             examples_str = '\n'.join(command.docs.examples)
@@ -113,6 +106,26 @@ class PrivateMessages(commands.Cog):
             content = 'Attachments:\n'
 
         return await self.send_ticket_embed(ctx, main_guild, ticket_embed, content=content, files=files)
+
+    @commands.command(
+        dm_only=True,
+        help='Report an issue you have with the server or with a user',
+        usage='report_issue [issue]',
+        examples=['report_issue member hattyot is breaking cg1'],
+        cls=cls.Command
+    )
+    async def report_issue(self, ctx: commands.Context, issue: str = None, _=None):
+        return await self._open_ticket(ctx, issue)
+
+    @commands.command(
+        dm_only=True,
+        help='Open a ticket and forward it to the mods.',
+        usage='open_ticket [issue]',
+        examples=['open_ticket member hattyot is breaking cg 1.1'],
+        cls=cls.Command
+    )
+    async def open_ticket(self, ctx: commands.Context, issue: str = None, _=None):
+        return await self._open_ticket(ctx, issue)
 
     @staticmethod
     async def send_ticket_embed(ctx: commands.Context, guild: discord.Guild, embed: discord.Embed, content: str = None, files: list = None):

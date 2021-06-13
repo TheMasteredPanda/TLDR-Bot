@@ -14,7 +14,7 @@ class Drive:
     Currently only supports logging in/authenticating with a service account.
 
     Attributes
-    __________
+    ---------------
     credentials: :class:`auth2client.service_account.ServiceAccountCredentials`
         The service account client created from the service account file.
     service: :class:`googleapiclient.discovery.Resource`
@@ -30,7 +30,7 @@ class Drive:
         A function for either getting or creating a folder in the google drive folder config.DRIVE_PARENT_FOLDER_ID
 
         Parameters
-        ___________
+        ----------------
         folder_name: :class:`str`
             Name of the requested folder.
 
@@ -62,7 +62,7 @@ class Drive:
         A function for uploading files to google drive
 
         Parameters
-        ___________
+        ----------------
         data: :class:`str`
             Text that will be the data of the file.
         file_name: :class:`str`

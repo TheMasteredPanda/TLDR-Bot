@@ -175,7 +175,6 @@ class Leveling(commands.Cog):
             help='See current leveling routes or add, remove or edit roles',
             usage='ranks (branch) (sub command) (args)',
             examples=['ranks', 'ranks honours'],
-            sub_commands=['add', 'remove']
         ),
 
         cls=cls.Group
@@ -290,7 +289,6 @@ class Leveling(commands.Cog):
             help='See all the perks that a role has to offer or add or remove them',
             usage='perks (<sub command/role name>) (args)',
             examples=['perks', 'perks Party Member'],
-            sub_commands=['set', 'add', 'remove'],
         ),
 
         cls=cls.Group
@@ -773,11 +771,10 @@ class Leveling(commands.Cog):
         leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
         if setting is None:
             at_me_value = f'You will {"not" * (not leveling_member.settings.at_me)} be @\' when you level up.'
-            embed.add_field(name='>@me', value=f'**{leveling_member.settings.at_me}**\n{at_me_value}', inline=False)
+            embed.add_field(name='| @me', value=f'**{leveling_member.settings.at_me}**\n{at_me_value}', inline=False)
 
             rep_at_value = f'You will {"not" * (not leveling_member.settings.rep_at)} be messaged when your rep timer expires and you can give someone a rep point again.'
-            embed.add_field(name='>rep@', value=f'**{leveling_member.settings.rep_at}**\n{rep_at_value}', inline=False)
-
+            embed.add_field(name='| rep@', value=f'**{leveling_member.settings.rep_at}**\n{rep_at_value}', inline=False)
             return await ctx.send(embed=embed)
         elif setting not in ['@me', 'rep@']:
             return await embed_maker.error(ctx, f'{setting} is not a valid setting\nValid Settings: `@me` | `rep@`')

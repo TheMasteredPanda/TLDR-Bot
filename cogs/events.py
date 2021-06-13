@@ -22,11 +22,12 @@ class Events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        bot_game = discord.Game(f"@me")
+        bot_game = discord.Game(f">help")
         await self.bot.change_presence(activity=bot_game)
 
         await self.check_left_members()
         await self.bot.timers.run_old()
+        await self.bot.invite_logger.initialize_invites()
         self.bot.leveling_system.initialise_guilds()
         await self.bot.ukparl_module.load()
         self.bot.ukparl_module.set_guild(self.bot.guilds[0])
@@ -176,7 +177,7 @@ class Events(commands.Cog):
         channel_id = daily_debate_data["channel_id"]
         if not topics:
             # remind mods that a topic needs to be set up
-            msg = f"Daily debate starts in {format_time.seconds(tm)} and no topics have been set up <@&{config.MOD_ROLE_ID}> <@&810787506022121533>"
+            msg = f"Daily debate starts in {format_time.seconds(tm)} and no topics have been set up <@&810787506022121533>"
             channel = guild.get_channel(channel_id)
 
             if channel is None:
@@ -372,7 +373,7 @@ class Events(commands.Cog):
     async def on_message_edit(self, before, after):
         # re run command if command was edited
         if before.content != after.content and after.content.startswith(config.PREFIX):
-            return await self.bot.process_commands(after)
+            return await self.bot.process_command(after)
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
@@ -689,6 +690,13 @@ class Events(commands.Cog):
             await channel.send(
                 embed=embed, content=f"<@{member.id}>, I wasn't able to dm you"
             )
+
+    @commands.Cog.listener()
+    async def on_ban(self, member: discord.Member):
+        # delete user from leveling_users
+        db.leveling_users.delete_one(
+            {"guild_id": member.guild.id, "user_id": member.id}
+        )
 
 
 def setup(bot):

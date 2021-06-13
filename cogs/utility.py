@@ -2,13 +2,16 @@ import datetime
 import discord
 import time
 import config
-import emoji
 import os
 import inspect
 import copy
 import requests
 import pytz
+import bs4
 
+from iso639 import languages
+from googletrans import Translator
+from emoji.unicode_codes.en import EMOJI_UNICODE_ENGLISH, EMOJI_ALIAS_UNICODE_ENGLISH
 from timezonefinder import TimezoneFinder
 from typing import Union
 from bson import ObjectId
@@ -30,6 +33,90 @@ class Utility(commands.Cog):
         self.bot = bot
 
     @commands.command(
+        help='Translate text to english',
+        usage='translate [text]',
+        examples=['translate tere'],
+        clearance='User',
+        cls=cls.Command
+    )
+    async def translate(self, ctx: commands.Context, *, text: str = None):
+        if text is None:
+            return await embed_maker.command_error(ctx)
+
+        translator = Translator()
+        translated = translator.translate(text, dest='en')
+        source_language = languages.get(alpha2=translated.src).name
+
+        return await embed_maker.message(
+            ctx,
+            author={'name': 'Translator'},
+            description=f'**{source_language}:** {text}\n'
+                        f'**English:** {translated.text}',
+            send=True
+        )
+
+    def cg_to_string(self, tags: bs4.element.Tag, asked_for: list[str], parent: str = ''):
+        spacer = f'|{"-" * 4}'
+        string = ""
+        parent_count = len(parent.split('.')) if parent else 0
+        asked_for_cg_number = asked_for[parent_count] if len(asked_for) > parent_count else None
+
+        for i, cg in enumerate(filter(lambda cg: type(cg) == bs4.element.Tag, tags)):
+            contents = cg.contents
+
+            cg_number = str(i + 1)
+            if asked_for_cg_number is None or asked_for_cg_number == cg_number:
+                new_parent = f'{parent + ("." if parent else "")}{cg_number}'
+                if len(contents) > 1:
+                    sub_cg = self.cg_to_string(contents[1], asked_for, new_parent)
+                    string += f'{spacer * parent_count}`{new_parent}.`: {contents[0]}'
+                    string += f'{sub_cg}'
+                else:
+                    string += f'{spacer * parent_count}`{new_parent}.`: {cg.contents[0]}\n'
+
+        return string
+
+    async def get_cg(self, asked_for: list[str]):
+        # This session needs to be gotten in this weird way cause it's a double underscore variable
+        aiohttp_session = getattr(self.bot.http, '_HTTPClient__session')
+        async with aiohttp_session.get('https://tldrnews.co.uk/discord-community-guidelines/') as resp:
+            content = await resp.text()
+
+            soup = bs4.BeautifulSoup(content, 'html.parser')
+            entry = soup.find('div', {'class': 'entry-content'})
+            cg_list = [*entry.children][15]
+
+            return self.cg_to_string(cg_list, asked_for)
+
+    @commands.command(
+        help='command to get any community guideline',
+        usage='cg [cg]',
+        examples=['cg 1', 'cg 1.5.1'],
+        clearance='User',
+        cls=cls.Command
+    )
+    async def cg(self, ctx: commands.Context, guideline: str = None):
+        cg_link = "https://tldrnews.co.uk/discord-community-guidelines/"
+        if guideline is None:
+            return await embed_maker.message(
+                ctx,
+                description=f'You can find the full list of the community guidelines here: [{cg_link}]({cg_link})',
+                send=True
+            )
+
+        cg_text = await self.get_cg(guideline.split('.'))
+
+        if not cg_text:
+            return await embed_maker.error(ctx, f'{guideline} is not a valid community guideline.')
+
+        return await embed_maker.message(
+            ctx,
+            description=cg_text,
+            author={'name': "Community Guidelines"},
+            send=True
+        )
+
+    @commands.command(
         name='time',
         help='See time in any location in the world',
         usage='time [location]',
@@ -44,21 +131,23 @@ class Utility(commands.Cog):
         if not config.GEONAMES_USERNAME:
             return await embed_maker.error(ctx, 'GEONAMES_USERNAME has not been set in the config file.')
 
-        response = requests.get(f'http://api.geonames.org/searchJSON?q={location_str}&maxRows=1&username={config.GEONAMES_USERNAME}')
-        location_json = response.json()
-        if 'geonames' not in location_json:
-            return await embed_maker.error(ctx, f'Geonames error: {location_json["status"]["message"]}')
+        aiohttp_session = getattr(self.bot.http, '_HTTPClient__session')
+        async with aiohttp_session.get(f'http://api.geonames.org/searchJSON?q={location_str}&maxRows=1&username={config.GEONAMES_USERNAME}') as resp:
+            location_json = await resp.json()
+            if 'geonames' not in location_json:
+                return await embed_maker.error(ctx, f'Geonames error: {location_json["status"]["message"]}')
 
-        location = location_json['geonames'][0]
+            location = location_json['geonames'][0]
 
-        timezone_finder = TimezoneFinder()
-        location_timezone_str = timezone_finder.timezone_at(lng=float(location['lng']), lat=float(location['lat']))
-        location_timezone = pytz.timezone(location_timezone_str)
+            timezone_finder = TimezoneFinder()
+            location_timezone_str = timezone_finder.timezone_at(lng=float(location['lng']), lat=float(location['lat']))
+            location_timezone = pytz.timezone(location_timezone_str)
 
-        time_at = datetime.datetime.now(location_timezone)
-        time_at_str = time_at.strftime('%H:%M:%S')
+            time_at = datetime.datetime.now(location_timezone)
+            time_at_str = time_at.strftime('%H:%M:%S')
 
-        return await embed_maker.message(ctx, description=f'Time at {location["name"]}, {location["countryName"]} is: `{time_at_str}`', send=True)
+            google_maps_link = f'https://www.google.com/maps/search/?api=1&query={location["lat"]},{location["lng"]}'
+            return await embed_maker.message(ctx, description=f'Time at [{location["name"]}, {location["countryName"]}]({google_maps_link}) is: `{time_at_str}`', send=True)
 
     @commands.command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'
@@ -74,7 +163,7 @@ class Utility(commands.Cog):
             (('--option', '-o', list), 'Option for the poll'),
             (('--time', '-t', format_time.parse), '[Optional] How long the poll will stay active for e.g. 5d 5h 5m'),
             (('--update_interval', '-u', str), '[Optional] If set, the bot will update the poll with data in given interval of time'),
-            (('--pick_count', '-p', str), '[Optional] How many options users can pick'),
+            (('--pick_count', '-p', str), '[Optional] How many options users can pick, defaults to 1'),
             (('--role', '-r', str), '[Optional] The role the poll will be restricted to')
         ],
         clearance='Mod',
@@ -100,7 +189,7 @@ class Utility(commands.Cog):
             poll_time = 300  # 5 minutes
 
         update_interval = args['update_interval']
-        pick_count = args['pick_count']
+        pick_count = args['pick_count'] if args['pick_count'] else '1'
         restrict_role_identifier = args['role']
 
         emote_options = await self.parse_poll_options(ctx, options)
@@ -174,8 +263,6 @@ class Utility(commands.Cog):
                 'restrict_role': None if not restrict_role else restrict_role.id
             }
         )
-
-        return await ctx.message.delete(delay=3)
 
     @commands.Cog.listener()
     async def on_anon_poll_timer_over(self, timer):
@@ -267,30 +354,39 @@ class Utility(commands.Cog):
             )
 
     @staticmethod
-    async def parse_poll_options(ctx, options):
+    def remove_last_char(msg: str):
+        pos = len(msg) - 1
+        while pos > -1 and ord(msg[pos]) & 0xC0 == 0x80:
+            # character at pos is a continuation byte (bit 7 set, bit 6 not)
+            pos -= 1
+        return msg[:pos]
+
+    async def parse_poll_options(self, ctx, options):
         emote_options = {}
+        is_valid_emote = lambda e: e in EMOJI_UNICODE_ENGLISH.values() or e in EMOJI_ALIAS_UNICODE_ENGLISH.values()
+        encoded = options[0].split(':')[0].strip().encode()
         # check if user wants to have custom emotes
-        if options[0].split(':')[0].strip() in emoji.UNICODE_EMOJI['en']:
+        first_emote = options[0].split(':')[0].strip()
+        if is_valid_emote(first_emote) or \
+            is_valid_emote(self.remove_last_char(first_emote)) or \
+                get_custom_emote(ctx, ':'.join(options[0].split(':')[:3])):
             for option in options:
+                option = option.strip()
                 option_split = option.split(':')
-                # check if emote was provided
-                emote = option_split[0].strip()
-                # check if emote is unicode
-                is_unicode_emote = any(emote in emoji.UNICODE_EMOJI[ln] for ln in emoji.UNICODE_EMOJI)
-                # check if emote is custom emote
+                emote = option_split[0].replace(' ', '')
                 custom_emote = get_custom_emote(ctx, ':'.join(option_split[:3]))
 
                 if custom_emote:
-                    emote = custom_emote
+                    emote = str(custom_emote)
                     option = ':'.join(option_split[3:])
                 else:
                     option = ':'.join(option_split[1:])
 
-                if len(option_split) > 1 and (is_unicode_emote or custom_emote):
+                if len(option_split) > 1:
                     emote_options[emote] = option
                 # in case user wanted to use options with emotes, but one of them didn't match
                 else:
-                    return await embed_maker.error(ctx, 'Invalid emote provided for option')
+                    return await embed_maker.error(ctx, f'Invalid emote provided for option: {emote}')
         else:
             if len(options) > 9:
                 return await embed_maker.error(ctx, 'Too many options given, max without custom emotes is 9')
@@ -308,7 +404,7 @@ class Utility(commands.Cog):
             'poll -q Where are you from? -o 🇩🇪: Germany -o 🇬🇧: UK'
         ],
         command_args=[
-            (('--question', None, str), 'The question for the poll'),
+            (('--question', '-q', str), 'The question for the poll'),
             (('--option', '-o', list), 'Option for the poll'),
         ],
         clearance='Mod',
@@ -343,8 +439,6 @@ class Utility(commands.Cog):
 
         for e in emote_options.keys():
             await poll_msg.add_reaction(e)
-
-        return await ctx.message.delete(delay=5)
 
     @commands.command(
         help='See the list of your current reminders or remove some reminders',
@@ -414,9 +508,6 @@ class Utility(commands.Cog):
         guild_id = timer['guild_id']
         guild = self.bot.get_guild(int(guild_id))
 
-        if guild:
-            return
-
         member_id = timer['extras']['member_id']
         member = guild.get_member(int(member_id))
         if member is None:
@@ -431,7 +522,8 @@ class Utility(commands.Cog):
 
         try:
             return await member.send(embed=embed)
-        except Exception:
+        except Exception as e:
+            self.bot.logger.exception(e)
             bot_channel = self.bot.get_channel(config.BOT_CHANNEL_ID)
             return await bot_channel.send(f'I wasn\'t able to dm you, so here\'s the reminder <@{member.id}>', embed=embed)
 
@@ -523,9 +615,10 @@ class Utility(commands.Cog):
         cls=cls.Command
     )
     async def help(self, ctx: commands.Context, *, command: str = None):
-        help_object = {}
-
         user_clearance = get_user_clearance(ctx.author)
+
+        # compile help_object to include all the categories as keys and commands as values
+        help_object = {}
         for cmd in self.bot.commands:
             # create copy of original command so we don't modify the original when adding docs or other values
             cmd = copy.copy(cmd)
@@ -540,6 +633,7 @@ class Utility(commands.Cog):
             else:
                 help_object[cog_name].append(cmd)
 
+        # if user didnt ask for a specific command, display all the available categories and commands to the user
         if command is None:
             embed = await embed_maker.message(
                 ctx,
@@ -547,16 +641,18 @@ class Utility(commands.Cog):
                 author={'name': f'Help - {user_clearance[-1]}'}
             )
 
-            for cog in help_object:
+            sorted_cog_names = ['Leveling', 'Utility', 'Fun', 'Mod', 'Settings', 'Dev', 'Special Access']
+            for cog_name in sorted_cog_names:
+                cog = help_object[cog_name]
                 embed.add_field(
-                    name=f'>{cog}',
-                    value=r" \| ".join([f'`{c}`' for c in help_object[cog]]), inline=False
+                    name=f'>{cog_name}',
+                    value=r" \| ".join([f'`{command}`' for command in cog]), inline=False
                 )
 
             return await ctx.send(embed=embed)
         elif command:
             if self.bot.get_command(command) is None:
-                return await embed_maker.error(ctx, f"Couldn't find a command by: `{command}`")
+                return await embed_maker.error(ctx, f"Couldn't find a command by the name: `{command}`")
 
             command = self.bot.get_command(command, member=ctx.author)
             if command.cog_name not in help_object:
@@ -577,8 +673,8 @@ class Utility(commands.Cog):
                        f"**Usage:** {command.docs.usage}\n" \
                        f"**Examples:**\n{examples}"
 
-            if command.docs.sub_commands:
-                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(s for s in command.docs.sub_commands)
+            if type(command) == cls.Group and command.all_commands:
+                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc for sc in command.all_commands.keys())
                 sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
                 cmd_help += sub_commands_str
 

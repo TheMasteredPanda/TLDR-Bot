@@ -17,7 +17,7 @@ class Connection:
     Database handler. Creates connection to the database.
 
     Attributes
-    __________
+    ---------------
     mongo_client: :class:`pymongo.MongoClient`
         The pymongo client.
 
@@ -160,6 +160,12 @@ class Connection:
                 'moderator': :class:`int`,
                 'case_number': :class:`int`
             }
+    guild_settings :class:`pymongo.collection.Collection`
+        The guild settings collection
+            {
+                'guild_id': :class:`int`,
+                'mute_role_id': :class:`int`
+            }
     """
 
     def __init__(self):
@@ -177,6 +183,7 @@ class Connection:
         self.cases = self.db["cases"]
         self.bills_tracker = self.db["bills_tracker"]
         self.divisions_tracker = self.db["divisions_tracker"]
+        self.guild_settings = self.db["guild_settings"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
@@ -277,12 +284,33 @@ class Connection:
         )
         return divisions
 
+    def get_guild_settings(self, guild_id: int) -> dict:
+        """
+        Get Settings attached to guild that dont fit in other collections.
+
+        Parameters
+        ----------------
+        guild_id: :class:`int`
+            ID of the guild.
+
+        Returns
+        -------
+        :class:`dict`
+            Guild's settings.
+        """
+        guild_settings = self.guild_settings.find_one({"guild_id": guild_id})
+        if guild_settings is None:
+            guild_settings = {"guild_id": guild_id, "mute_role_id": None}
+            self.guild_settings.insert_one(guild_settings)
+
+        return guild_settings
+
     def get_leveling_user(self, guild_id: int, member_id: int) -> dict:
         """
         Get member's leveling data from the database, if user isn't in the database, they will be added.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the member's guild.
         member_id: :class:`int`
@@ -311,7 +339,7 @@ class Connection:
         Get guild's leveling data from the database, if guild isn't in the database, it will be added.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
         fields: Optional[:class:`dict`]
@@ -344,7 +372,7 @@ class Connection:
         Get data on a command from the database, if command isn't in the database, it will be added, if insert is True.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of command's guild.
         command_name: :class:`int`
@@ -378,7 +406,7 @@ class Connection:
         Get daily debates data of a guild.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
 
@@ -400,7 +428,7 @@ class Connection:
         Get automember setting of guild.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
 
@@ -432,7 +460,7 @@ class Connection:
         Adds a case to the database.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
             ID of the guild.
         type: :class:`str`
@@ -475,7 +503,7 @@ class Connection:
         Get cases based on given kwargs.
 
         Parameters
-        ___________
+        ----------------
         guild_id: :class:`int`
            ID of the guild.
         kwargs: :class:`dict`
