@@ -137,7 +137,7 @@ class PartyColour(BetterEnum):
 
 class BillsMongoStorage(BillsStorage):
     """
-    The class used to storage information pertinent to the bills tracker.
+    The class used to store information pertinent to the bills tracker.
 
     This is only used to store information about a bill so that the bill is not
     reannounced when the tracker polls the various rss feeds and endpoints.
@@ -370,6 +370,9 @@ class UKParliamentModule:
 
         self._guild: Union[Guild, None] = None
 
+    async def load_settings(self):
+        pass
+
     async def load(self):
         """
         Given that the aiohttp session can't be retrieved before the bot has invoked the on_ready
@@ -381,7 +384,6 @@ class UKParliamentModule:
         self.parliament = UKParliament(self.aiohttp_session)
         await self.parliament.load()
         await self.load_trackers()
-        await self.tracker_event_loop.start()
 
     async def load_trackers(self):
         """
@@ -441,6 +443,7 @@ class UKParliamentModule:
 
     @tasks.loop(seconds=60)
     async def tracker_event_loop(self):
+        print("Tracker event loop trigger.")
         division_listener = (
             self.tracker_status["lordsdivisions"]["started"]
             or self.tracker_status["commonsdivisions"]["started"]

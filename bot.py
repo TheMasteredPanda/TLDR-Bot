@@ -21,7 +21,6 @@ import modules.moderation
 from datetime import datetime
 from discord.ext import commands
 from typing import Union, Optional
-from ukparliament.ukparliament import UKParliament
 
 
 intents = discord.Intents.all()
@@ -50,13 +49,14 @@ class TLDR(commands.Bot):
                 self.load_extension(f"cogs.{filename[:-3]}")
                 self.logger.info(f"Cog {filename[:-3]} is now loaded.")
 
-        self.google_drive = modules.google_drive.Drive()
+        # self.google_drive = modules.google_drive.Drive()
         self.timers = modules.timers.Timers(self)
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
         self.leveling_system = modules.leveling.LevelingSystem(self)
         self.invite_logger = modules.invite_logger.InviteLogger(self)
         self.moderation = modules.moderation.ModerationSystem(self)
+        self.ukparl_module = modules.ukparliament.UKParliamentModule(self)
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead
