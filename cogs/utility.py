@@ -742,7 +742,9 @@ class Utility(commands.Cog):
                 "Special Access",
             ]
             for cog_name in sorted_cog_names:
-                print(help_object.keys())
+                if cog_name not in help_object:
+                    continue
+
                 cog = help_object[cog_name]
                 embed.add_field(
                     name=f">{cog_name}",
