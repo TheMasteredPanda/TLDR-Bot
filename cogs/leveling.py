@@ -157,8 +157,8 @@ class Leveling(commands.Cog):
             expires = round(time.time()) + (3600 * 6)
 
         # give boost to to receiving leveling member
-        giving_leveling_member.boosts.rep.expires = expires
-        giving_leveling_member.boosts.rep.multiplier = 0.1
+        receiving_leveling_member.boosts.rep.expires = expires
+        receiving_leveling_member.boosts.rep.multiplier = 0.1
 
     @commands.group(
         invoke_without_command=True,
