@@ -74,7 +74,7 @@ class UK(commands.Cog):
         formatted_bill_information = [
             f"**Title:** {bill.get_title()}",
             f"**Description:** {bill.get_long_title()}",
-            f"**Introduced:** {bill.get_date_introduced().strftime('%Y-%m-%d %H:%M:%S')}",
+            # f"**Introduced:** {bill.get_date_introduced().strftime('%Y-%m-%d %H:%M:%S')}",
             f"**Last Update:** {bill.get_last_update().strftime('%Y-%m-%d %H:%M:%S')}",
             f"**Act of Parliament:** {'Yes' if bill.is_act() else 'No'}",
         ]
@@ -185,13 +185,14 @@ class UK(commands.Cog):
         ):
             did_pass = division.get_aye_count() > division.get_no_count()
             bits.append(
-                f"**{(page_limit * (page -1)) + i + 1}. {division.get_division_title()}**{next_line}"
-                f"**ID:** {division.get_id()}{next_line}**Summary:** {division.get_amendment_motion_notes()[0:150]}"
+                f"**{(page_limit * (page -1)) + i + 1}. [{division.get_division_title()}]"
+                f"(https://votes.parliament.uk/Votes/Lords/Division/{division.get_id()})**{next_line}"
+                f"**ID:** {division.get_id()}{next_line}**Summary:** {division.get_amendment_motion_notes()[0:150]}..."
                 f"{next_line}**Division Result:** {'Passed' if did_pass else 'Not passed'} by a division of "
                 f"{division.get_aye_count() if did_pass else division.get_no_count()} {'Ayes' if did_pass else 'Notes'}"
                 f" to {division.get_no_count() if did_pass else division.get_aye_count()} "
                 f"{'Noes' if did_pass else 'Ayes'}{next_line}**Division Date:** "
-                f"{division.get_division_date().strftime('%Y-%m-%s %H:%M:%S')}"
+                f"{division.get_division_date().strftime('%Y-%m-%d %H:%M:%S')}"
             )
 
         embed = await embed_maker.message(
@@ -305,7 +306,7 @@ class UK(commands.Cog):
         clearance="Mod",
         sub_commands=[
             "channels",
-            "load",
+            # "load",
             "statuses",
             "loop",
             "dbclear",
@@ -398,6 +399,12 @@ class UK(commands.Cog):
 
         for key in statuses.keys():
             entry = statuses[key]
+            if key == "loop":
+                bits.append(
+                    f"**Loop Status**: {'Enabled' if entry is True else 'Disabled'}"
+                )
+                continue
+
             bits.append(
                 f"{next_line}**{key}**:{next_line}  - **Started:** {'Yes' if entry['started'] else 'No'}{next_line}  - "
                 f"**Confirmed:** {'Yes' if entry['confirmed'] else 'No'}"
@@ -422,9 +429,10 @@ class UK(commands.Cog):
             return  # type: ignore
         bits = []
 
-        config = self.bot.ukparl_module.config.config
-        for key in config["CHANNELS"].keys():
-            channel_id = config["CHANNELS"][key]
+        channels = self.ukparl_module.config.get_channel_ids()
+
+        for key in channels.keys():
+            channel_id = channels[key]
             guild: Guild = self.bot.guilds[0]
             channel = guild.get_channel(int(channel_id))
             bits.append(
@@ -485,6 +493,7 @@ class UK(commands.Cog):
 
         if self.bot.ukparl_module.tracker_event_loop.is_running() is False:
             self.bot.ukparl_module.tracker_event_loop.start()
+            self.bot.ukparl_module.tracker_status["loop"] = True
             await embed_maker.message(ctx, description="Started event loop.", send=True)
         else:
             await embed_maker.message(
@@ -502,9 +511,10 @@ class UK(commands.Cog):
     async def mod_cmd_tracker_eventloop_stop(self, ctx: commands.Context):
         if self.loaded is False:
             return  # type: ignore
-        if self.bot.ukparl_module.tracker_event_loop.is_running() is False:
+        if self.bot.ukparl_module.tracker_event_loop.is_running() is True:
             self.bot.ukparl_module.tracker_event_loop.stop()
             await embed_maker.message(ctx, description="Stopped event loop.", send=True)
+            self.ukparl_module.tracker_status["loop"] = False
         else:
             await embed_maker.message(
                 ctx, description="Event loop is already not running.", send=True
@@ -527,18 +537,17 @@ class UK(commands.Cog):
         if self.loaded is False:
             return  # type: ignore
         config = self.bot.ukparl_module.config
-        tracker_ids = config.config["CHANNELS"].keys()
+        channels = config.get_channel_ids()
 
-        if tracker_id.lower() not in tracker_ids:
+        if tracker_id.lower() not in channels.keys():
             next_line = "\n"
             return await embed_maker.message(
                 ctx,
-                description=f"**Valid tracker ids:**{next_line} - {(next_line + ' - ').join(tracker_ids)}",
+                description=f"**Valid tracker ids:**{next_line} - {(next_line + ' - ').join(channels.keys)}",
                 send=True,
             )
 
-        config.config["CHANNELS"][tracker_id] = str(channel.id)
-        config.save()
+        config.set_channel(tracker_id, channel.id)
         await embed_maker.message(
             ctx, description=f"Set {tracker_id} to channel {channel.name}", send=True
         )
@@ -567,10 +576,14 @@ class UK(commands.Cog):
             (("--historical", "-h", str), "Get list of recorded election results"),
         ],
     )
-    async def mp_elections(self, ctx: commands.Context, *, args: ParseArgs):
+    async def mp_elections(
+        self, ctx: commands.Context, *, args: Union[ParseArgs, str] = ""
+    ):
         if self.loaded is False:
             return
         member = None
+        if args == "":
+            return await embed_maker.command_error(ctx)
         name_arg = args["pre"] if args["pre"] != "" else args["name"]
         if name_arg != "" and name_arg is not None:
             for m in self.parliament.get_commons_members():
@@ -903,7 +916,9 @@ class UK(commands.Cog):
     async def division_commons_search(self, ctx: commands.Context, *, search_term=""):
         if self.loaded is False:
             return  # type: ignore
-        divisions = await self.parliament.search_for_commons_divisions(search_term)
+        divisions = await self.parliament.search_for_commons_divisions(
+            search_term, result_limit=30
+        )
         if len(divisions) == 0:
             await embed_maker.message(
                 ctx,
@@ -943,7 +958,10 @@ class UK(commands.Cog):
     async def division_lords_search(self, ctx: commands.Context, *, search_term=""):
         if self.loaded is False:
             return  # type: ignore
-        divisions = await self.parliament.search_for_lords_divisions(search_term)
+        divisions = await self.parliament.search_for_lords_divisions(
+            search_term, result_limit=30
+        )
+
         if len(divisions) == 0:
             await embed_maker.message(
                 ctx,

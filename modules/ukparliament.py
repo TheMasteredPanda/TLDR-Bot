@@ -31,25 +31,38 @@ import configparser
 
 
 class UKParliamentConfig:
-    def __init__(self):
+    def __init__(self, guild_id: int):
         """
-        Wrapper class for a .ini config file. Used soley to store the ids of channels
-        assigned to each tracker.
+        Utility/handler class to interface with the collection containing the channel ids for each tracker.
+        Used soley to store the ids of channel assigned to each tracker.
         """
-        self.config = configparser.ConfigParser()
+        self.db = database.get_connection()
+        self.settings = self.db.get_guild_settings(guild_id)
+        self.guild_id = guild_id
+        if "modules" not in self.settings.keys():
+            self.db.guild_settings.update_one(
+                {"guild_id": guild_id}, {"$set": {"modules": {}}}
+            )
+            self.settings = self.db.get_guild_settings(guild_id)
 
-        if os.path.exists("static/ukparliament.ini"):
-            self.config.read("static/ukparliament.ini")
-        else:
-            self.config["CHANNELS"] = {  # type: ignore
-                "RoyalAssent": 0,
-                "LordsDivisions": 0,
-                "CommonsDivisions": 0,
-                "Publications": 0,
-                "Feed": 0,
-            }
-
-            self.save()
+        if "ukparliament" not in self.settings["modules"].keys():
+            self.db.guild_settings.update_one(
+                {"guild_id": guild_id},
+                {
+                    "$set": {
+                        "modules": {
+                            "ukparliament": {
+                                "royal_assent": 0,
+                                "lords_divisions": 0,
+                                "commons_divisions": 0,
+                                "publications": 0,
+                                "feed": 0,
+                            }
+                        }
+                    }
+                },
+            )
+            self.settings = self.db.get_guild_settings(guild_id)
 
     def set_channel(self, tracker_name: str, channel_id: int):
         """
@@ -62,16 +75,13 @@ class UKParliamentConfig:
         channel_id: :class:`int`
             The id of the text channel.
         """
-        if tracker_name not in self.config["CHANNELS"]:
-            return
-        self.config["CHANNELS"][tracker_name] = str(channel_id)
+        if tracker_name not in self.settings["modules"]["ukparliament"].keys():
+            raise Exception(
+                f"Tracker name {tracker_name} is not a key for a channel id."
+            )
 
-    def save(self):
-        """
-        Saves the config to the .ini file.
-        """
-        with open("static/ukparliament.ini", "w") as config_file:
-            self.config.write(config_file)
+        self.settings["modules"]["ukparliament"][tracker_name] = channel_id
+        self.db.guild_settings.save(self.settings)
 
     def get_channel_id(self, tracker_id):
         """
@@ -88,7 +98,14 @@ class UKParliamentConfig:
         :class:`int`
             The id of the text channel or 0
         """
-        return self.config["CHANNELS"][tracker_id]
+
+        if tracker_id not in self.settings["modules"]["ukparliament"].keys():
+            raise Exception(f"Tracker name {tracker_id} is not a key for a channel id.")
+
+        return self.settings["modules"]["ukparliament"][tracker_id]
+
+    def get_channel_ids(self):
+        return self.settings["modules"]["ukparliament"]
 
 
 class PartyColour(BetterEnum):
@@ -349,7 +366,6 @@ class ConfirmManager:
 class UKParliamentModule:
     def __init__(self, bot: TLDR):
         self._bot = bot
-        self.config = UKParliamentConfig()
         self._divisions_storage = DivisionMongoStorage()
         self._bills_storage = BillsMongoStorage()
         self.confirm_manager = ConfirmManager()
@@ -361,6 +377,7 @@ class UKParliamentModule:
 
         """
         self.tracker_status = {
+            "loop": False,
             "lordsdivisions": {"started": False, "confirmed": False},
             "commonsdivisions": {"started": False, "confirmed": False},
             "royalassent": {"started": False, "confirmed": False},
@@ -380,56 +397,54 @@ class UKParliamentModule:
         wasn't for this impediment.
 
         """
+        self.config = UKParliamentConfig(self._guild.id)
         self.aiohttp_session = getattr(self._bot.http, "_HTTPClient__session")
         self.parliament = UKParliament(self.aiohttp_session)
         await self.parliament.load()
-        await self.load_trackers()
+        self._bot.logger.info("UKParliament Legislative Module has been initiated.")
 
-    async def load_trackers(self):
+    def load_trackers(self):
         """
         A function used to load the various trackers and listeners.
         """
-        config = self.config.config
+        channels = self.config.get_channel_ids()
 
         if (
-            config["CHANNELS"]["lordsdivisions"] != 0
-            or config["CHANNELS"]["commonsdivisions"] != 0
-            or config["CHANNELS"]["royaalassent"]
-            or config["CHANNELS"]["feed"]
+            channels["lords_divisions"] != 0
+            or channels["commons_divisions"] != 0
+            or channels["royal_assent"] != 0
+            or channels["feed"] != 0
         ):
             self.parliament.start_bills_tracker(self._bills_storage)
 
-            if config["CHANNELS"]["feed"] != 0:
+            if channels["feed"] != 0:
                 self.parliament.get_bills_tracker().register(
                     self.on_feed_update, [Conditions.ALL]
                 )
                 self.tracker_status["feed"]["started"] = True
 
-            if config["CHANNELS"]["royalassent"]:
+            if channels["royal_assent"]:
                 self.parliament.get_bills_tracker().register(
                     self.on_royal_assent_update, [Conditions.ROYAL_ASSENT]
                 )
                 self.tracker_status["royalassent"]["started"] = True
 
-        if (
-            config["CHANNELS"]["lordsdivisions"] != 0
-            or config["CHANNELS"]["commonsdivisions"] != 0
-        ):
+        if channels["lords_divisions"] != 0 or channels["commons_divisions"] != 0:
             self.parliament.start_divisions_tracker(self._divisions_storage)
-            if config["CHANNELS"]["commonsdivisions"] != 0:
+            if channels["commons_divisions"] != 0:
                 self.parliament.get_divisions_tracker().register(
                     self.on_commons_division
                 )
                 self.tracker_status["commonsdivisions"]["started"] = True
 
-            if config["CHANNELS"]["lordsdivisions"] != 0:
+            if channels["lords_divisions"] != 0:
                 self.parliament.get_divisions_tracker().register(
                     self.on_lords_division, False
                 )
                 self.tracker_status["lordsdivisions"]["started"] = True
 
         if (
-            config["CHANNELS"]["publications"] != 0
+            channels["publications"] != 0
             and self.parliament.get_bills_tracker() is not None
         ):
             b_tracker = self.parliament.get_bills_tracker()
@@ -443,11 +458,11 @@ class UKParliamentModule:
 
     @tasks.loop(seconds=60)
     async def tracker_event_loop(self):
-        print("Tracker event loop trigger.")
         division_listener = (
             self.tracker_status["lordsdivisions"]["started"]
             or self.tracker_status["commonsdivisions"]["started"]
         )
+        self.tracker_status["loop"] = True
         feed_listener = self.tracker_status["feed"]["started"]
         royal_assent_listener = self.tracker_status["royalassent"]["started"]
         publications_listener = self.tracker_status["publications"]["started"]
@@ -490,7 +505,7 @@ class UKParliamentModule:
 
     async def on_royal_assent_update(self, feed: Feed, update: FeedUpdate):
         channel = self._guild.get_channel(
-            int(self.config.get_channel_id("royalassent"))
+            int(self.config.get_channel_id("royal_assent"))
         )
         if channel is None:
             return
@@ -507,16 +522,12 @@ class UKParliamentModule:
         await channel.send(embed=embed)
 
     async def on_commons_division(self, division: CommonsDivision, bill: Bill):
-        if self.config is None:
-            print("Config is none")
-            exit(0)
-
         channel = self._guild.get_channel(
-            int(self.config.get_channel_id("commonsdivisions"))
+            int(self.config.get_channel_id("commons_divisions"))
         )
         if channel is None:
             return
-        division_bytes = await self.generate_division_image(self.parliament, division)
+        division_file = await self.generate_division_image(self.parliament, division)
         embed = Embed(
             color=discord.Colour.from_rgb(84, 174, 51), timestamp=datetime.now()
         )
@@ -541,17 +552,17 @@ class UKParliamentModule:
         embed.set_image(url="attachment://divisionimage.png")
         self.tracker_status["commonsdivisions"]["confirmed"] = True
         await channel.send(
-            file=discord.File(fp=division_bytes, filename="divisionimage.png"),
+            file=division_file,
             embed=embed,
         )
 
     async def on_lords_division(self, division: LordsDivision, bill: Bill):
         channel = self._guild.get_channel(
-            int(self.config.get_channel_id("lordsdivisions"))
+            int(self.config.get_channel_id("lords_divisions"))
         )
         if channel is None:
             return
-        division_buffer = await self.generate_division_image(self.parliament, division)
+        division_file = await self.generate_division_image(self.parliament, division)
         embed = Embed(
             color=discord.Colour.from_rgb(166, 42, 22), timestamp=datetime.now()
         )
@@ -576,8 +587,9 @@ class UKParliamentModule:
             )
         embed.description = description
         self.tracker_status["lordsdivisions"]["confirmed"] = True
+        embed.set_image(url="attachment://divisionimage.png")
         await channel.send(
-            file=discord.File(fp=division_buffer, filename="divisionimage.png"),
+            file=division_file,
             embed=embed,
         )
 

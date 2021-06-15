@@ -33,7 +33,7 @@ class Events(commands.Cog):
         await self.bot.ukparl_module.load()
         self.bot.get_cog("UK").load()
         self.bot.logger.info(f"{self.bot.user} is ready")
-        await self.bot.ukparl_module.load_trackers()
+        self.bot.ukparl_module.load_trackers()
 
     async def check_left_members(self):
         self.bot.logger.info(f"Checking Guilds for left members.")
