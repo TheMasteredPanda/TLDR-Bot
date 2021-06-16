@@ -34,6 +34,7 @@ class Events(commands.Cog):
         self.bot.get_cog("UK").load()
         self.bot.logger.info(f"{self.bot.user} is ready")
         self.bot.ukparl_module.load_trackers()
+        self.bot.ukparl_module.tracker_event_loop.start()
 
     async def check_left_members(self):
         self.bot.logger.info(f"Checking Guilds for left members.")
