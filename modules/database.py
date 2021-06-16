@@ -166,6 +166,19 @@ class Connection:
                 'guild_id': :class:`int`,
                 'mute_role_id': :class:`int`
             }
+    bills_tracker: :class:`pymongo.collection.Collection`
+        The bills tracker collection:
+            {
+                'bill_id': :class:`int`,
+                'stage': :class:`str`,
+                'timestamp': :class:`str`
+            }
+    divisions_tarcker: :class:`pymongo.collection.Collection`
+        The divisions tracker collection:
+            {
+                'bill_id': :class:`int`
+                'division_id': :class:`int`
+            }
     """
 
     def __init__(self):
