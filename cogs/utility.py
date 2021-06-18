@@ -649,7 +649,7 @@ class Utility(commands.Cog):
                 cog = help_object[cog_name]
                 embed.add_field(
                     name=f'>{cog_name}',
-                    value=r" \| ".join([f'`{command}`' for command in cog]), inline=False
+                    value=r" \| ".join(sorted([f'`{command}`' for command in cog])), inline=False
                 )
 
             return await ctx.send(embed=embed)
