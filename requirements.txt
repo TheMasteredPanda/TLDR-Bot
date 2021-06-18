@@ -147,3 +147,5 @@ urllib3==1.26.5
 webencodings==0.5.1
 Werkzeug==2.0.1
 yarl==1.6.3
+iso-639
+googletrans==4.0.0rc1
