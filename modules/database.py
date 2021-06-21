@@ -126,10 +126,11 @@ class Connection:
             {
                 "name" : :class:`str`,
                 "response" : :class:`str`,
-                "clearance" : :class:`str`,
-                "role" : :class:`int`,
-                "response_channel" : :class:`int`,
-                "command_channels" : List[:class:`int`],
+                "clearance-groups" : :class:`list`,
+                "clearance-roles" : :class:`list`,
+                "clearance-users" : :class:`list`,
+                "response-channel" : :class:`int`,
+                "command-channels" : List[:class:`int`],
                 "reactions" : List[:class:`str`],
                 "python" : :class:`str`,
                 "pre" : :class:`str`,
@@ -263,14 +264,12 @@ class Connection:
 
         return leveling_data
 
-    def get_command_data(self, guild_id: int, command_name: str, *, insert: bool = False) -> dict:
+    def get_command_data(self, command_name: str, *, insert: bool = False) -> dict:
         """
-        Get data on a command from the database, if command isn't in the database, it will be added, if insert is True.
+        Get data on a command from the database.
 
         Parameters
         ----------------
-        guild_id: :class:`int`
-            ID of command's guild.
         command_name: :class:`int`
             Name of the command
         insert: Optional[:class:`bool`]
@@ -281,14 +280,11 @@ class Connection:
         :class:`dict`
             The command data.
         """
-        command_data = self.commands.find_one({'guild_id': guild_id, 'command_name': command_name})
+        command_data = self.commands.find_one({'command_name': command_name})
         if command_data is None:
             command_data = {
-                'guild_id': guild_id,
                 'command_name': command_name,
                 'disabled': 0,
-                'user_access': {},
-                'role_access': {}
             }
             if insert:
                 self.commands.insert_one(command_data)
@@ -339,44 +335,6 @@ class Connection:
             automember = leveling_data['automember']
 
         return automember
-
-    def add_case(self, guild_id: int, type: str, reason: str, member: discord.member, moderator: discord.Member) -> dict:
-        """
-        Adds a case to the database.
-
-        Parameters
-        ----------------
-        guild_id: :class:`int`
-            ID of the guild.
-        type: :class:`str`
-            Type of the case. Eg. mute, ban etc etc
-        reason: :class:`str`
-            Reason behind the case.
-        member: :class:`discord.Member`
-            Member who had the action taken upon.
-        moderator: :class:`discord.Member`
-            Member who took action on member.
-
-        Returns
-        -------
-        :class:`dict`
-            The case's data.
-        """
-        case_number = self.cases.find({'guild_id': guild_id, 'user_id': member.id, 'type': type}).count() + 1
-
-        case_data = {
-            'guild_id': guild_id,
-            'user_id': member.id,
-            'type': type,
-            'reason': reason,
-            'created_at': time.time(),
-            'moderator': moderator.id,
-            'case_number': case_number
-        }
-        result = self.cases.insert_one(case_data)
-        case_data['_id'] = result.inserted_id
-
-        return case_data
 
     def get_cases(self, guild_id: int, **kwargs) -> list:
         """

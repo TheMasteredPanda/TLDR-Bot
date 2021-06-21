@@ -2,14 +2,16 @@ import config
 import discord
 
 from modules.utils import get_member
-from modules import cls, embed_maker, database
+from modules import commands, embed_maker, database
 from datetime import datetime, date
-from discord.ext import commands
+from discord.ext.commands import Cog, command, Context
 
 db = database.get_connection()
 
+# TODO: command to check how much time until mute ends
 
-class PrivateMessages(commands.Cog):
+
+class PrivateMessages(Cog):
     def __init__(self, bot):
         self.bot = bot
         # when get __getattribute__ is called, instead of people needing to call pm_help, they can call help
@@ -26,7 +28,7 @@ class PrivateMessages(commands.Cog):
                 return await self.pm_help(ctx, args)
 
     @staticmethod
-    def parse_msg(ctx: commands.Context):
+    def parse_msg(ctx: Context):
         content = ctx.message.content
         content_list = content.split(' ')
 
@@ -35,14 +37,14 @@ class PrivateMessages(commands.Cog):
 
         return cmd, args
 
-    @commands.command(
+    @command(
         dm_only=True,
         help='get some pm help smh. Displays all pm commands or info about a specific pm command',
         usage='pm_help (command)',
         examples=['pm_help', 'pm_help report'],
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def pm_help(self, ctx: commands.Context, help_cmd: str = None):
+    async def pm_help(self, ctx: Context, help_cmd: str = None):
         embed_colour = config.EMBED_COLOUR
         all_commands = self.commands
 
@@ -61,10 +63,11 @@ class PrivateMessages(commands.Cog):
         else:
             if help_cmd in all_commands:
                 cmd = getattr(self, help_cmd)
-                examples = f' | '.join(cmd.docs.examples)
+                cmd_help = cmd.get_help(ctx.author)
+                examples = f' | '.join(cmd_help.examples)
                 cmd_help = f"""
-                        **Description:** {cmd.docs.help}
-                        **Usage:** {cmd.docs.usage}
+                        **Description:** {cmd_help.help}
+                        **Usage:** {cmd_help.usage}
                         **Examples:** {examples}
                         """
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=cmd_help)
@@ -75,7 +78,7 @@ class PrivateMessages(commands.Cog):
                 embed = discord.Embed(colour=embed_colour, timestamp=datetime.now(), description=f'{help_cmd} is not a valid command')
                 return await ctx.author.send(embed=embed)
 
-    async def _open_ticket(self, ctx: commands.Context, issue: str = None):
+    async def _open_ticket(self, ctx: Context, issue: str = None):
         if not issue:
             command = ctx.command
             examples_str = '\n'.join(command.docs.examples)
@@ -107,28 +110,28 @@ class PrivateMessages(commands.Cog):
 
         return await self.send_ticket_embed(ctx, main_guild, ticket_embed, content=content, files=files)
 
-    @commands.command(
+    @command(
         dm_only=True,
         help='Report an issue you have with the server or with a user',
         usage='report_issue [issue]',
         examples=['report_issue member hattyot is breaking cg1'],
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def report_issue(self, ctx: commands.Context, issue: str = None, _=None):
+    async def report_issue(self, ctx: Context, issue: str = None, _=None):
         return await self._open_ticket(ctx, issue)
 
-    @commands.command(
+    @command(
         dm_only=True,
         help='Open a ticket and forward it to the mods.',
         usage='open_ticket [issue]',
         examples=['open_ticket member hattyot is breaking cg 1.1'],
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def open_ticket(self, ctx: commands.Context, issue: str = None, _=None):
+    async def open_ticket(self, ctx: Context, issue: str = None, _=None):
         return await self._open_ticket(ctx, issue)
 
     @staticmethod
-    async def send_ticket_embed(ctx: commands.Context, guild: discord.Guild, embed: discord.Embed, content: str = None, files: list = None):
+    async def send_ticket_embed(ctx: Context, guild: discord.Guild, embed: discord.Embed, content: str = None, files: list = None):
         ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', guild.categories)
 
         if ticket_category is None:
@@ -159,14 +162,13 @@ class PrivateMessages(commands.Cog):
         }
         db.tickets.insert_one(ticket_doc)
 
-    @commands.command(
+    @command(
         help='Closes the current ticket',
         usage='close_ticket',
         examples=['close_ticket'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def close_ticket(self, ctx: commands.Context):
+    async def close_ticket(self, ctx: Context):
         ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
         if ctx.channel.category == ticket_category:
             await ctx.channel.delete()
@@ -174,14 +176,13 @@ class PrivateMessages(commands.Cog):
         else:
             return await embed_maker.error(ctx, 'Invalid ticket channel')
 
-    @commands.command(
+    @command(
         help='get user who reported issue into channel',
         usage='get_reporter',
         examples=['get_reporter'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def get_reporter(self, ctx: commands.Context):
+    async def get_reporter(self, ctx: Context):
         ticket_category = discord.utils.find(lambda c: c.name == 'Open Tickets', ctx.guild.categories)
         if ctx.channel.category != ticket_category:
             return await embed_maker.error(ctx, 'Invalid ticket channel')
@@ -203,14 +204,13 @@ class PrivateMessages(commands.Cog):
         await ctx.channel.set_permissions(member, read_messages=True, send_messages=True, read_message_history=True)
         return await ctx.channel.send(f'<@{member.id}>')
 
-    @commands.command(
+    @command(
         help='Give user access to ticket',
         usage='get_user [user]',
         examples=['get_user hattyot'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def get_user(self, ctx: commands.Context, *, member: str = None):
+    async def get_user(self, ctx: Context, *, member: str = None):
         if member is None:
             return await embed_maker.command_error(ctx)
 

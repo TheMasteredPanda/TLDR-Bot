@@ -9,23 +9,22 @@ import asyncio
 import discord
 
 from modules.utils import get_member
-from modules import cls, embed_maker
-from discord.ext import commands
+from modules import commands, embed_maker
+from discord.ext.commands import Cog, command, Context
 from io import BytesIO
 
 
-class Fun(commands.Cog):
+class Fun(Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @commands.command(
+    @command(
         help='put they gay pride flag on a picture',
         usage='pride',
         examples=['pride'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def pride(self, ctx: commands.Context, *, source: str = None):
+    async def pride(self, ctx: Context, *, source: str = None):
         url = None
 
         # check for attachments
@@ -61,7 +60,7 @@ class Fun(commands.Cog):
                 content = await image_task
 
             if not content:
-                return await embed_maker.error(ctx, 'Error getting image', colour='red')
+                return await embed_maker.error(ctx, 'Error getting image')
 
             image = BytesIO(content)
             image.seek(0)
@@ -83,15 +82,14 @@ class Fun(commands.Cog):
         embed.set_image(url=f'attachment://pride.{extension}')
         return await ctx.send(file=discord.File(fp=image, filename=f'pride.{extension}'), embed=embed)
 
-    @commands.command(
+    @command(
         help='Get an image of an animal. Choices: Cat, Dog, Lizard, Bunny, Duck, Bird, Fox, Koala, Panda',
         usage='animal [type of animal]',
         examples=['animal dog', 'a cat'],
-        clearance='User',
         aliases=['a'],
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def animal(self, ctx: commands.Context, animal: str = None):
+    async def animal(self, ctx: Context, animal: str = None):
         animals = {
             'cat': ('https://api.thecatapi.com/v1/images/search', lambda response: response.json()[0]['url']),
             'dog': ('https://dog.ceo/api/breeds/image/random', lambda response: response.json()['message']),
@@ -117,14 +115,13 @@ class Fun(commands.Cog):
 
         return await ctx.send(func(response))
 
-    @commands.command(
+    @command(
         help='Gets a random dad joke',
         usage='dadjoke',
         examples=['dadjoke'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dadjoke(self, ctx: commands.Context):
+    async def dadjoke(self, ctx: Context):
         url = "https://icanhazdadjoke.com/"
         response = requests.get(url, headers={"Accept": "text/plain"})
         joke = response.text.encode("ascii", "ignore").decode("ascii")

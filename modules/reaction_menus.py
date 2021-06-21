@@ -40,6 +40,11 @@ class ReactionMenus:
         """
         self.menus[menu.message.id] = menu
 
+    async def _on_message_delete(self, message: discord.Message):
+        """If the message gets deleted, delete the menu from the dict"""
+        if message.id in self.menus:
+            del self.menus[message.id]
+
     async def _on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
         """Event listener that handles reactions."""
         if user.bot:

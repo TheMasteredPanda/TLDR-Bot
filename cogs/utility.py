@@ -4,8 +4,6 @@ import time
 import config
 import os
 import inspect
-import copy
-import requests
 import pytz
 import bs4
 
@@ -15,31 +13,29 @@ from emoji.unicode_codes.en import EMOJI_UNICODE_ENGLISH, EMOJI_ALIAS_UNICODE_EN
 from timezonefinder import TimezoneFinder
 from typing import Union
 from bson import ObjectId
-from modules import cls, database, embed_maker, format_time
+from modules import commands, database, embed_maker, format_time
 from modules.utils import (
-    get_user_clearance,
     get_member,
     ParseArgs,
     get_custom_emote
 )
-from discord.ext import commands
+from discord.ext.commands import Cog, command, Context
 from bot import TLDR
 
 db = database.get_connection()
 
 
-class Utility(commands.Cog):
+class Utility(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
 
-    @commands.command(
+    @command(
         help='Translate text to english',
         usage='translate [text]',
         examples=['translate tere'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def translate(self, ctx: commands.Context, *, text: str = None):
+    async def translate(self, ctx: Context, *, text: str = None):
         if text is None:
             return await embed_maker.command_error(ctx)
 
@@ -88,14 +84,13 @@ class Utility(commands.Cog):
 
             return self.cg_to_string(cg_list, asked_for)
 
-    @commands.command(
+    @command(
         help='command to get any community guideline',
         usage='cg [cg]',
         examples=['cg 1', 'cg 1.5.1'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def cg(self, ctx: commands.Context, guideline: str = None):
+    async def cg(self, ctx: Context, guideline: str = None):
         cg_link = "https://tldrnews.co.uk/discord-community-guidelines/"
         if guideline is None:
             return await embed_maker.message(
@@ -116,15 +111,14 @@ class Utility(commands.Cog):
             send=True
         )
 
-    @commands.command(
+    @command(
         name='time',
         help='See time in any location in the world',
         usage='time [location]',
         examples=['time london'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def time_in(self, ctx: commands.Context, *, location_str: str = None):
+    async def time_in(self, ctx: Context, *, location_str: str = None):
         if location_str is None:
             return await embed_maker.command_error(ctx)
 
@@ -149,7 +143,7 @@ class Utility(commands.Cog):
             google_maps_link = f'https://www.google.com/maps/search/?api=1&query={location["lat"]},{location["lng"]}'
             return await embed_maker.message(ctx, description=f'Time at [{location["name"]}, {location["countryName"]}]({google_maps_link}) is: `{time_at_str}`', send=True)
 
-    @commands.command(
+    @command(
         help='Create an anonymous poll similar to regular poll. after x amount of time (default 5 minutes), results are displayed\n'
              'Poll can be restricted to a specific role. An update interval can be set, every x amount of time results are updated',
         usage='anon_poll [args]',
@@ -166,10 +160,9 @@ class Utility(commands.Cog):
             (('--pick_count', '-p', str), '[Optional] How many options users can pick, defaults to 1'),
             (('--role', '-r', str), '[Optional] The role the poll will be restricted to')
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def anon_poll(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def anon_poll(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if not args:
             return await embed_maker.command_error(ctx)
 
@@ -264,7 +257,7 @@ class Utility(commands.Cog):
             }
         )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_anon_poll_timer_over(self, timer):
         message_id = timer['extras']['message_id']
         channel_id = timer['extras']['channel_id']
@@ -396,7 +389,7 @@ class Utility(commands.Cog):
 
         return emote_options
 
-    @commands.command(
+    @command(
         help='Create a poll, without custom emotes, adds numbers as reactions',
         usage='poll [args]',
         examples=[
@@ -407,10 +400,9 @@ class Utility(commands.Cog):
             (('--question', '-q', str), 'The question for the poll'),
             (('--option', '-o', list), 'Option for the poll'),
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def poll(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def poll(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if not args:
             return await embed_maker.command_error(ctx)
 
@@ -440,13 +432,13 @@ class Utility(commands.Cog):
         for e in emote_options.keys():
             await poll_msg.add_reaction(e)
 
-    @commands.command(
+    @command(
         help='See the list of your current reminders or remove some reminders',
         usage='reminders (action) (reminder index)',
         examples=['reminders', 'reminders remove 1'],
-        clearance='User', cls=cls.Command
+        cls=commands.Command
     )
-    async def reminders(self, ctx: commands.Context, action: str = None, *, index: str = None):
+    async def reminders(self, ctx: Context, action: str = None, *, index: str = None):
         user_reminders = sorted([r for r in db.timers.find({'guild_id': ctx.guild.id, 'event': 'reminder', 'extras.member_id': ctx.author.id})], key=lambda r: r['expires'])
         if action is None:
             if not user_reminders:
@@ -473,14 +465,13 @@ class Utility(commands.Cog):
                 send=True
             )
 
-    @commands.command(
+    @command(
         help='Create a reminder',
         usage='remindme [time] [reminder]',
         examples=['remindme 24h rep hattyot', 'remindme 30m slay demons', 'remindme 10h 30m 10s stay alive'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def remindme(self, ctx: commands.Context, *, reminder: str = None):
+    async def remindme(self, ctx: Context, *, reminder: str = None):
         if reminder is None:
             return await embed_maker.command_error(ctx)
 
@@ -503,7 +494,7 @@ class Utility(commands.Cog):
             send=True
         )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_reminder_timer_over(self, timer):
         guild_id = timer['guild_id']
         guild = self.bot.get_guild(int(guild_id))
@@ -527,27 +518,25 @@ class Utility(commands.Cog):
             bot_channel = self.bot.get_channel(config.BOT_CHANNEL_ID)
             return await bot_channel.send(f'I wasn\'t able to dm you, so here\'s the reminder <@{member.id}>', embed=embed)
 
-    @commands.command(
+    @command(
         help='Get bot\'s latency',
         usage='ping',
         examples=['ping'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def ping(self, ctx: commands.Context):
+    async def ping(self, ctx: Context):
         message_created_at = ctx.message.created_at
         message = await ctx.send("Pong")
         ping = (datetime.datetime.utcnow() - message_created_at) * 1000
         await message.edit(content=f"\U0001f3d3 Pong   |   {int(ping.total_seconds())}ms")
 
-    @commands.command(
+    @command(
         help='See someones profile picture',
         usage='pfp (user)',
         examples=['pfp', 'pfp @Hattyot', 'pfp hattyot'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def pfp(self, ctx: commands.Context, *, member: str = None):
+    async def pfp(self, ctx: Context, *, member: str = None):
         if not member:
             member = ctx.author
         else:
@@ -560,14 +549,13 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
-    @commands.command(
+    @command(
         help='See info about a user',
         usage='userinfo (user)',
         examples=['userinfo', 'userinfo Hattyot'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def userinfo(self, ctx: commands.Context, *, user: str = None):
+    async def userinfo(self, ctx: Context, *, user: str = None):
         if user is None:
             member = ctx.author
         else:
@@ -587,7 +575,7 @@ class Utility(commands.Cog):
         embed.add_field(name='ID', value=member.id, inline=False)
 
         created_at = datetime.datetime.now() - member.created_at
-        created_at_seconds = created_at.total_seconds()
+        created_at_seconds = int(created_at.total_seconds())
         embed.add_field(
             name='Account Created',
             value=f'{member.created_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(created_at_seconds, accuracy=10)} Ago',
@@ -595,7 +583,7 @@ class Utility(commands.Cog):
         )
 
         joined_at = datetime.datetime.now() - member.joined_at
-        joined_at_seconds = joined_at.total_seconds()
+        joined_at_seconds = int(joined_at.total_seconds())
         embed.add_field(
             name='Joined Server',
             value=f'{member.joined_at.strftime("%b %d %Y %H:%M")}\n{format_time.seconds(joined_at_seconds, accuracy=10)} Ago',
@@ -607,41 +595,41 @@ class Utility(commands.Cog):
 
         return await ctx.send(embed=embed)
 
-    @commands.command(
+    @command(
         help='Get help smh',
         usage='help (command)',
         examples=['help', 'help ping'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def help(self, ctx: commands.Context, *, command: str = None):
-        user_clearance = get_user_clearance(ctx.author)
-
+    async def help(self, ctx: Context, *, command_name: str = None):
         # compile help_object to include all the categories as keys and commands as values
         help_object = {}
-        for cmd in self.bot.commands:
-            # create copy of original command so we don't modify the original when adding docs or other values
-            cmd = copy.copy(cmd)
-            cmd.docs = cmd.get_help(ctx.author)
-            if not cmd.docs.can_run:
+        for command in self.bot.commands:
+            if not command.can_use(ctx.author):
                 continue
 
-            cog_name = 'Special Access' if cmd.docs.access_given else cmd.cog_name
+            cog_name = 'Special Access' if command.access_given(ctx.author) else command.cog_name
+
+            if cog_name == 'PrivateMessages':
+                cog_name = 'Private Messages'
 
             if cog_name not in help_object:
-                help_object[cog_name] = [cmd]
+                help_object[cog_name] = [command]
             else:
-                help_object[cog_name].append(cmd)
+                help_object[cog_name].append(command)
 
         # if user didnt ask for a specific command, display all the available categories and commands to the user
-        if command is None:
+        if command_name is None:
+            member_clearance = self.bot.clearance.member_clearance(ctx.author)
+            highest_member_clearance = self.bot.clearance.highest_member_clearance(member_clearance)
+
             embed = await embed_maker.message(
                 ctx,
                 description=f'**Prefix** : `{ctx.prefix}`\nFor additional info on a command, type `{ctx.prefix}help [command]`',
-                author={'name': f'Help - {user_clearance[-1]}'}
+                author={'name': f'Help - {highest_member_clearance}'}
             )
 
-            sorted_cog_names = ['Leveling', 'Utility', 'Fun', 'Mod', 'Settings', 'Dev', 'Special Access']
+            sorted_cog_names = ['Leveling', 'Utility', 'Private Messages', 'Fun', 'Mod', 'Settings', 'Admin', 'Dev', 'Special Access']
             for cog_name in sorted_cog_names:
                 if cog_name not in help_object:
                     continue
@@ -649,15 +637,17 @@ class Utility(commands.Cog):
                 cog = help_object[cog_name]
                 embed.add_field(
                     name=f'>{cog_name}',
-                    value=r" \| ".join(sorted([f'`{command}`' for command in cog])), inline=False
+                    value=r" \| ".join(sorted([f'`{cmd}`' for cmd in cog])), inline=False
                 )
 
             return await ctx.send(embed=embed)
-        elif command:
-            if self.bot.get_command(command) is None:
-                return await embed_maker.error(ctx, f"Couldn't find a command by the name: `{command}`")
+        elif command_name:
+            command = self.bot.get_command(command_name)
+            if command is None:
+                return await embed_maker.error(ctx, f"Couldn't find a command by the name: `{command_name}`")
 
-            command = self.bot.get_command(command, member=ctx.author)
+            command_help = command.get_help(ctx.author)
+
             if command.cog_name not in help_object:
                 return
 
@@ -668,38 +658,34 @@ class Utility(commands.Cog):
             if not command and command not in command_list:
                 return
 
-            if not command:
-                return await embed_maker.message(ctx, description=f'{command} is not a valid command', send=True)
-
-            examples = f'\n'.join(command.docs.examples)
-            cmd_help = f"**Description:** {command.docs.help}\n" \
-                       f"**Usage:** {command.docs.usage}\n" \
+            examples = f'\n'.join(command_help.examples)
+            cmd_help = f"**Description:** {command_help.help}\n" \
+                       f"**Usage:** {command_help.usage}\n" \
                        f"**Examples:**\n{examples}"
 
-            if type(command) == cls.Group and command.all_commands:
-                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc for sc in command.all_commands.keys())
+            if type(command) == commands.Group and command.all_commands:
+                sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc.name for sc in command.sub_commands())
                 sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
                 cmd_help += sub_commands_str
 
-            if command.docs.command_args:
+            if command_help.command_args:
                 command_args_str = '**\nCommand Args:**\n```' + \
-                                   '\n\n'.join(f'{f"{arg[0]}" + (f", {arg[1]}" if type(arg[1]) == str else "")} - {description}' for arg, description in command.docs.command_args) + '```'
+                                   '\n\n'.join(f'{f"{arg[0]}" + (f", {arg[1]}" if type(arg[1]) == str else "")} - {description}' for arg, description in command_help.command_args) + '```'
                 cmd_help += command_args_str
 
             author_name = f'Help: {command}'
-            if command.special_help:
-                author_name += f' - {command.docs.clearance}'
+            if command.special_help_group:
+                author_name += f' - {command_help.clearance}'
 
             return await embed_maker.message(ctx, description=cmd_help, author={'name': author_name}, send=True)
         else:
             return await embed_maker.message(ctx, description='{command} is not a valid command', send=True)
 
-    @commands.command(
+    @command(
         help='View source code of any command',
         usage='source (command)',
         examples=['source', 'source pfp'],
-        clearance='Dev',
-        cls=cls.Command
+        cls=commands.Command
     )
     async def source(self, ctx, *, command=None):
         u = '\u200b'
