@@ -83,8 +83,7 @@ class Dev(Cog):
         msg.channel = ctx.channel
         msg.author = member
         msg.content = config.PREFIX + cmd
-        new_ctx = await self.bot.get_context(msg, cls=type(ctx))
-        await self.bot.invoke(new_ctx)
+        await self.bot.process_command(msg)
 
     @command(
         help='Reload an extension, so you dont have to restart the bot',

@@ -618,9 +618,9 @@ class Utility(Cog):
             else:
                 help_object[cog_name].append(command)
 
+        member_clearance = self.bot.clearance.member_clearance(ctx.author)
         # if user didnt ask for a specific command, display all the available categories and commands to the user
         if command_name is None:
-            member_clearance = self.bot.clearance.member_clearance(ctx.author)
             highest_member_clearance = self.bot.clearance.highest_member_clearance(member_clearance)
 
             embed = await embed_maker.message(
@@ -645,6 +645,9 @@ class Utility(Cog):
             command = self.bot.get_command(command_name)
             if command is None:
                 return await embed_maker.error(ctx, f"Couldn't find a command by the name: `{command_name}`")
+
+            if not command.can_use(member_clearance):
+                return
 
             command_help = command.get_help(ctx.author)
 
