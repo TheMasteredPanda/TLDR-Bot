@@ -646,7 +646,7 @@ class Utility(Cog):
             if command is None:
                 return await embed_maker.error(ctx, f"Couldn't find a command by the name: `{command_name}`")
 
-            if not command.can_use(member_clearance):
+            if not command.can_use(ctx.author):
                 return
 
             command_help = command.get_help(ctx.author)
