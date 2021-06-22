@@ -37,7 +37,7 @@ class Admin(Cog):
         cls=commands.Command
     )
     async def clearance_refresh(self, ctx: Context):
-        self.bot.clearance.refresh_data()
+        await self.bot.clearance.refresh_data()
         return await embed_maker.message(ctx, description='Clearance data has been refreshed', send=True, colour='green')
 
     @clearance.command(
