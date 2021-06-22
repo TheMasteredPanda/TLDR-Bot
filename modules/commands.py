@@ -53,7 +53,7 @@ class Clearance:
             self.roles[role_name] = role_id
 
         # parse groups
-        for row in self.clearance_spreadsheet['Groups'][1:]:
+        for row in self.clearance_spreadsheet['Role Groups'][1:]:
             group_name = row[0]
             roles = row[1]
 
