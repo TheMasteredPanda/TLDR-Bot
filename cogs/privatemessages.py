@@ -118,7 +118,7 @@ class PrivateMessages(Cog):
         cls=commands.Command
     )
     async def report_issue(self, ctx: Context, issue: str = None, _=None):
-        if issue is None:
+        if not issue:
             return await embed_maker.command_error(ctx)
 
         return await self._open_ticket(ctx, issue)
@@ -131,7 +131,7 @@ class PrivateMessages(Cog):
         cls=commands.Command
     )
     async def open_ticket(self, ctx: Context, issue: str = None, _=None):
-        if issue is None:
+        if not issue:
             return await embed_maker.command_error(ctx)
 
         return await self._open_ticket(ctx, issue)
