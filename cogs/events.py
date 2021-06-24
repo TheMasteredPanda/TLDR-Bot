@@ -32,6 +32,7 @@ class Events(Cog):
         await self.bot.timers.run_old()
         await self.bot.invite_logger.initialize_invites()
         await self.bot.clearance.parse_clearance_spreadsheet()
+        await self.bot.channels.apply_permissions()
         self.bot.leveling_system.initialise_guilds()
 
         self.bot.logger.info(f'{self.bot.user} is ready')

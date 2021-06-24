@@ -618,10 +618,10 @@ class Utility(Cog):
             else:
                 help_object[cog_name].append(command)
 
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
+        member_clearance = self.bot.command_system.member_clearance(ctx.author)
         # if user didnt ask for a specific command, display all the available categories and commands to the user
         if command_name is None:
-            highest_member_clearance = self.bot.clearance.highest_member_clearance(member_clearance)
+            highest_member_clearance = self.bot.command_system.highest_member_clearance(member_clearance)
 
             embed = await embed_maker.message(
                 ctx,

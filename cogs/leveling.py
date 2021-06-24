@@ -817,7 +817,7 @@ class Leveling(Cog):
         leveling_member = await self.bot.leveling_system.get_member(guild.id, author.id)
 
         # level parliamentary route
-        if not self.pp_cooldown.user_cooldown(guild.id, author.id):
+        if not self.pp_cooldown.user_cooldown(guild.id, author.id) and self.bot.channels.p_leveling(message.channel):
             pp_add = randint(15, 25)
             await leveling_member.add_points('parliamentary', pp_add)
 
@@ -829,7 +829,7 @@ class Leveling(Cog):
                 await leveling_member.level_up_message(message, leveling_member.parliamentary, current_role, roles_up)
 
         # level honours route
-        if message.channel.id in leveling_member.guild.honours_channels and not self.hp_cooldown.user_cooldown(guild.id, author.id):
+        if not self.hp_cooldown.user_cooldown(guild.id, author.id) and self.bot.channels.h_leveling(message.channel):
             hp_add = randint(7, 12)
             await leveling_member.add_points('honours', hp_add)
 

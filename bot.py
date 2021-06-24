@@ -15,9 +15,11 @@ import modules.custom_commands
 import modules.invite_logger
 import modules.moderation
 import modules.commands
+import modules.clearance
+import modules.channels
 
 from datetime import datetime
-from discord.ext.commands import when_mentioned_or, Cog, Bot
+from discord.ext.commands import when_mentioned_or, Bot
 
 intents = discord.Intents.all()
 db = modules.database.get_connection()
@@ -50,7 +52,8 @@ class TLDR(Bot):
         self.leveling_system = modules.leveling.LevelingSystem(self)
         self.invite_logger = modules.invite_logger.InviteLogger(self)
         self.moderation = modules.moderation.ModerationSystem(self)
-        self.clearance = modules.commands.Clearance(self)
+        self.clearance = modules.clearance.Clearance(self)
+        self.channels = modules.channels.Channels(self)
 
         self.first_ready = False
 
@@ -180,7 +183,7 @@ class TLDR(Bot):
                             await message.add_reaction(reaction)
 
                 # execute python script if use has dev clearance
-                member_clearance = self.clearance.member_clearance(ctx.author)
+                member_clearance = self.command_system.member_clearance(ctx.author)
                 if 'Developers' in member_clearance['groups'] and custom_command['python']:
                     dev_cog = self.get_cog('Dev')
                     await dev_cog.eval(ctx, cmd=custom_command['python'])

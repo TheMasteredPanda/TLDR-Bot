@@ -407,8 +407,8 @@ class Admin(Cog):
         else:
             custom_commands_str = 'Currently no custom commands have been created'
 
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
-        highest_member_clearance = self.bot.clearance.highest_member_clearance(member_clearance)
+        member_clearance = self.bot.command_system.member_clearance(ctx.author)
+        highest_member_clearance = self.bot.command_system.highest_member_clearance(member_clearance)
         return await embed_maker.message(
             ctx,
             description=custom_commands_str,
@@ -478,7 +478,7 @@ class Admin(Cog):
         if not args['name'] and not edit:
             return await embed_maker.error(ctx, "A name needs to be given to the custom command.")
 
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
+        member_clearance = self.bot.command_system.member_clearance(ctx.author)
         # check for existing custom command with the same name
         existing = db.custom_commands.find_one({'guild_id': ctx.guild.id, 'name': args['name']})
         if existing:

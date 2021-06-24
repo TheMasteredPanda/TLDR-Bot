@@ -212,13 +212,13 @@ class CustomCommands:
         # if command is restricted to channel(s), check if command was called in that channel
         channel = ctx.channel.id in command_channels if command_channels else True
         # check if user has clearance for the command
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
+        member_clearance = self.bot.command_system.member_clearance(ctx.author)
         command_clearance = {
             'groups': command['clearance-groups'],
             'roles': command['clearance-roles'],
             'users': command['clearance-users']
         }
-        can_use = self.bot.clearance.member_has_clearance(member_clearance, command_clearance) and channel
+        can_use = self.bot.command_system.member_has_clearance(member_clearance, command_clearance) and channel
 
         return can_use
 
