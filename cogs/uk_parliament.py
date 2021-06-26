@@ -1,3 +1,4 @@
+from datetime import datetime
 import functools
 from io import BytesIO
 import math
@@ -17,6 +18,7 @@ from modules.utils import ParseArgs
 from discord.ext import commands
 from discord.ext.commands import Context
 from ukparliament.bills import SearchBillsBuilder, SearchBillsSortOrder
+from ukparliament.utils import URL_BILLS
 
 
 class UK(commands.Cog):
@@ -45,13 +47,16 @@ class UK(commands.Cog):
         next_line = "\n"
         for i, bill in enumerate(bills[page_limit * (page - 1) : page_limit * page]):
             bill_title = bill.get_title()
-            description = bill.get_long_title()[0:160] + "..."
+            description = None
+            if bill.get_long_title() is not None:
+                description = bill.get_long_title()[0:160] + "..."
+
             bill_id = bill.get_bill_id()
             bill_url = f"https://bills.parliament.uk/bills/{bill.get_bill_id()}"
-            bits.append(
-                f"**{(i + 1) + (page_limit * (page - 1))}. [{bill_title}]({bill_url}) | ID: {bill_id}**{next_line}"
-                f"**Description:** {description}"
-            )
+            entry = f"**{(i + 1) + (page_limit * (page - 1))}. [{bill_title}]({bill_url}) | ID: {bill_id}**{next_line}"
+            if description is not None:
+                entry = entry + f"**Description:** {description}"
+            bits.append(entry)
 
         embed = await embed_maker.message(
             ctx,
@@ -311,11 +316,41 @@ class UK(commands.Cog):
             "loop",
             "dbclear",
             "dbastats",
+            "ping",
         ],
         cls=cls.Group,
     )
     async def mod_cmd_tracker(self, ctx: commands.Context):
         return await embed_maker.command_error(ctx)
+
+    @mod_commands.command(
+        name="ping",
+        help="Pings an endpoint on the REST api and returns the latency between the bot and a REST request.",
+        usage="uk mod ping",
+        examples=["uk mod ping"],
+        clearance="Mod",
+        cls=cls.Command,
+    )
+    async def mod_cmd_ping(self, ctx: commands.Context):
+        if self.loaded is False:
+            return
+
+        start = datetime.now()
+
+        async with self.ukparl_module.get_aiohttp_session().get(
+            f"{URL_BILLS}/BillTypes"
+        ) as resp:
+            if resp.status != 200:
+                return await embed_maker.message(
+                    ctx=ctx,
+                    description=f"Couldn't get ping, status: {resp.status}",
+                    send=True,
+                )
+            end = datetime.now()
+            difference = end - start
+            await embed_maker.message(
+                ctx=ctx, description=f"{difference.microseconds / 1000} ms", send=True
+            )
 
     @mod_cmd_tracker.command(
         name="dbclear",
@@ -536,6 +571,13 @@ class UK(commands.Cog):
     ):
         if self.loaded is False:
             return  # type: ignore
+
+        if tracker_id == "":
+            return await embed_maker.command_error(ctx, "tracker_id")
+
+        if channel == "":
+            return await embed_maker.command_error(ctx, "channel_id/mention")
+
         config = self.bot.ukparl_module.config
         channels = config.get_channel_ids()
 
@@ -723,7 +765,7 @@ class UK(commands.Cog):
         if member is None:
             await embed_maker.message(
                 ctx,
-                description="Couldn't find" + arg_name
+                description="Couldn't find " + arg_name
                 if args["pre"] is not None or args["name"] is not None
                 else "of borough" + args["borough"] + ".",
                 send=True,
@@ -841,9 +883,14 @@ class UK(commands.Cog):
         clearence="User",
         cls=cls.Command,
     )
-    async def division_lord_info(self, ctx: commands.Context, division_id: int):
+    async def division_lord_info(self, ctx: commands.Context, division_id: int = -1):
         if self.loaded is False:
             return  # type: ignore
+
+        if division_id == -1:
+            await embed_maker.command_error(ctx, "division_id")
+            return
+
         division = await self.parliament.get_lords_division(division_id)
         if division is None:
             await embed_maker.message(
@@ -888,7 +935,7 @@ class UK(commands.Cog):
                 send=True,
             )
 
-        image_file = self.bot.get_parliament_module().generate_division_image(
+        image_file = self.ukparl_module.generate_division_image(
             self.parliament, division
         )
         next_line = "\n"
@@ -1065,9 +1112,14 @@ class UK(commands.Cog):
         ],
         cls=cls.Command,
     )
-    async def bills_search(self, ctx: commands.Context, *, args: ParseArgs = None):
+    async def bills_search(
+        self, ctx: commands.Context, *, args: Union[ParseArgs, str] = ""
+    ):
         if self.loaded is False:
             return  # type: ignore
+
+        if args == "":
+            return await embed_maker.command_error(ctx)
         builder = SearchBillsBuilder.builder()
 
         if args is None:

@@ -403,6 +403,9 @@ class UKParliamentModule:
         await self.parliament.load()
         self._bot.logger.info("UKParliament Legislative Module has been initiated.")
 
+    def get_aiohttp_session(self):
+        return self.aiohttp_session
+
     def load_trackers(self):
         """
         A function used to load the various trackers and listeners.
