@@ -8,16 +8,16 @@ import sys
 
 from logging import handlers
 from typing import Tuple, Union, Optional
-from modules import embed_maker, database, cls
-from discord.ext import commands
+from modules import embed_maker, database, commands
+from discord.ext.commands import Context, Converter
 
 db = database.get_connection()
 log_session = None
 
 
-class Command(commands.Converter):
+class Command(Converter):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
-    async def convert(self, ctx: commands.Context, argument: str = '') -> Optional[Union[cls.Command, cls.Group]]:
+    async def convert(self, ctx: Context, argument: str = '') -> Optional[Union[commands.Command, commands.Group]]:
         """
         Converts provided argument to command
 
@@ -36,9 +36,9 @@ class Command(commands.Converter):
         return ctx.bot.get_command(argument, member=ctx.author)
 
 
-class ParseArgs(commands.Converter, dict):
+class ParseArgs(Converter, dict):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
-    async def convert(self, ctx: commands.Context, argument: str = '') -> dict:
+    async def convert(self, ctx: Context, argument: str = '') -> dict:
         """
         Converts provided argument to dictionary of command args and their values.
         Command args are gotten from ctx.command.docs.command_args.
@@ -70,12 +70,14 @@ class ParseArgs(commands.Converter, dict):
                 args[long[2:]] = data_type
 
                 if type(short) == str:
-                    argument = re.sub(rf'(?:\s|^)({short})(?:\s|$)', long, argument)
+                    matches = re.findall(rf'(\s|^)({short})(\s|$)', argument)
+                    for match in matches:
+                        argument = re.sub(''.join(match), match[0] + long + match[2], argument)
 
                 result[long[2:]] = None
 
             # create regex to match command args
-            regex = rf'--({"|".join(long for long in args.keys())})'
+            regex = rf'(?:\s|^)--({"|".join(long for long in args.keys())})(?:\s|^)'
             # split argument with regex
             split_argument = re.split(regex, argument)
             # anything before the first arg is put into result['pre']
@@ -121,7 +123,7 @@ def id_match(identifier: str, extra: str) -> re.Match:
     return id_regex.match(identifier) or additional_regex.match(identifier)
 
 
-def get_custom_emote(ctx: commands.Context, emote: str) -> Optional[discord.Emoji]:
+def get_custom_emote(ctx: Context, emote: str) -> Optional[discord.Emoji]:
     """
     Look up custom emote by id or by name
 
@@ -185,30 +187,7 @@ async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional
     return role
 
 
-def get_user_clearance(member: discord.Member) -> list:
-    """
-    Get member's clearance levels.
-
-    Parameters
-    ----------------
-    member: :class:`discord.Member`
-        Member's whose clearance levels will be returned
-
-    Returns
-    -------
-    :class:`list`
-        List of member's clearance levels.
-    """
-    member_clearance = []
-
-    for clearance in config.CLEARANCE:
-        if config.CLEARANCE[clearance](member):
-            member_clearance.append(clearance)
-
-    return member_clearance
-
-
-async def get_member_from_string(ctx: commands.Context, string: str) -> Tuple[Optional[discord.Member], str]:
+async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[discord.Member], str]:
     """
     Get member from the first part of the string and return the remaining string.
 
@@ -276,7 +255,7 @@ async def get_member_by_id(guild: discord.Guild, member_id: int) -> Optional[dis
     return member
 
 
-async def get_member(ctx: commands.Context, source, *, multi: bool = True, return_message: bool = True) -> Optional[Union[discord.Member, discord.Message, list]]:
+async def get_member(ctx: Context, source, *, multi: bool = True, return_message: bool = True) -> Optional[Union[discord.Member, discord.Message, list]]:
     """
     Get member from given source. Source could be id or name.
     Member could also be a mention, so ctx.message.mentions are checked.

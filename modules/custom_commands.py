@@ -4,9 +4,8 @@ import config
 import copy
 
 from typing import Optional
-from discord.ext import commands
+from discord.ext.commands import Context, MemberConverter, RoleConverter, TextChannelConverter
 from modules import database
-from modules.utils import get_user_clearance
 
 db = database.get_connection()
 
@@ -59,7 +58,7 @@ class Guild:
         ID of the guild.
     name: :class:`str`
         Name of the guild.
-    avatar: :class:`str`
+    icon: :class:`str`
         Icon url of the user.
     """
     def __init__(self, guild: discord.Guild):
@@ -192,8 +191,7 @@ class CustomCommands:
             if re.findall(cc['name'], message.content):
                 return cc
 
-    @staticmethod
-    async def can_run(ctx: commands.Context, command: dict):
+    async def can_use(self, ctx: Context, command: dict):
         """
         Checks if ctx.author can run custom command.
 
@@ -209,19 +207,22 @@ class CustomCommands:
         :class:`dict`
             True if ctx.author can run command, False if not.
         """
-        command_channels = command['command_channels'] if command['command_channels'] else []
-        roles = command['role'] if command['role'] else []
+        command_channels = command['command-channels'] if command['command-channels'] else []
 
         # if command is restricted to channel(s), check if command was called in that channel
         channel = ctx.channel.id in command_channels if command_channels else True
-        # if command is restricted to role(s), check if author has one of those roles
-        role = bool(set(roles) & set([r.id for r in ctx.author.roles])) if roles else True
         # check if user has clearance for the command
-        clearance = command['clearance'] in get_user_clearance(ctx.author)
+        member_clearance = self.bot.clearance.member_clearance(ctx.author)
+        command_clearance = {
+            'groups': command['clearance-groups'],
+            'roles': command['clearance-roles'],
+            'users': command['clearance-users']
+        }
+        can_use = self.bot.clearance.member_has_clearance(member_clearance, command_clearance) and channel
 
-        return channel and role and clearance
+        return can_use
 
-    async def get_response(self, ctx: commands.Context, command: dict) -> Optional[str]:
+    async def get_response(self, ctx: Context, command: dict) -> Optional[str]:
         """
         Replaces all the variables and groups in command response with relevant data.
 
@@ -263,19 +264,19 @@ class CustomCommands:
                 if value.startswith('%'):
                     user_identifier = value.split('.')[0]
                     if user_identifier not in values:
-                        user = await commands.MemberConverter().convert(ctx, user_identifier[1:])
+                        user = await MemberConverter().convert(ctx, user_identifier[1:])
                         values[user_identifier] = User(user)
                 # if specific channel is called for in variable, add the channel to values dict
                 elif value.startswith('*'):
                     channel_identifier = value.split('.')[0]
                     if channel_identifier not in values:
-                        channel = await commands.TextChannelConverter().convert(ctx, channel_identifier[1:])
+                        channel = await TextChannelConverter().convert(ctx, channel_identifier[1:])
                         values[channel_identifier] = Channel(channel)
                 # if specific role is called for in variable, add the role to values dict
                 elif value.startswith('&'):
                     role_identifier = value.split('.')[0]
                     if role_identifier not in values:
-                        role = await commands.RoleConverter().convert(ctx, role_identifier[1:])
+                        role = await RoleConverter().convert(ctx, role_identifier[1:])
                         values[role_identifier] = Role(role)
                 # if variable is for command, run that command
                 elif value.startswith('>'):

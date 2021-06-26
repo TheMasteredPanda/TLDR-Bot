@@ -14,13 +14,12 @@ import modules.ukparliament
 import modules.google_drive
 import modules.reaction_menus
 import modules.custom_commands
-import modules.cls
 import modules.invite_logger
 import modules.moderation
+import modules.commands
 
 from datetime import datetime
-from discord.ext import commands
-from typing import Union, Optional
+from discord.ext.commands import when_mentioned_or, Cog, Bot
 
 
 intents = discord.Intents.all()
@@ -28,10 +27,10 @@ db = modules.database.get_connection()
 
 
 async def get_prefix(bot, message):
-    return commands.when_mentioned_or(config.PREFIX)(bot, message)
+    return when_mentioned_or(config.PREFIX)(bot, message)
 
 
-class TLDR(commands.Bot):
+class TLDR(Bot):
     def __init__(self):
         super().__init__(
             command_prefix=get_prefix,
@@ -42,6 +41,7 @@ class TLDR(commands.Bot):
         )
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
+        self.command_system = modules.commands.CommandSystem(self)
 
         # Load Cogs
         for filename in os.listdir("./cogs"):
@@ -57,6 +57,47 @@ class TLDR(commands.Bot):
         self.invite_logger = modules.invite_logger.InviteLogger(self)
         self.moderation = modules.moderation.ModerationSystem(self)
         self.ukparl_module = modules.ukparliament.UKParliamentModule(self)
+        self.clearance = modules.commands.Clearance(self)
+
+        self.first_ready = False
+
+    def add_cog(self, cog):
+        """Overwrites the orginal add_cog method to add a line for the commandSystem"""
+        self.command_system.initialize_cog(cog)
+        super().add_cog(cog)
+
+    async def critical_error(self, error: str):
+        """
+        For errors which would cause the bot not to function.
+        When called the bot will send a message to the error channel and shutdown.
+
+        Parameters
+        ----------
+        error: :class:`str`
+            The critical error.
+        """
+        self.logger.critical(error)
+        # send error message to certain channel in a guild if error happens during bot runtime
+        guild = self.get_guild(config.ERROR_SERVER)
+        if guild is None:
+            return self.logger.exception("Invalid error server ID")
+
+        channel = self.get_channel(config.ERROR_CHANNEL)
+        if channel is None:
+            return self.logger.exception("Invalid error channel ID")
+
+        embed = discord.Embed(
+            colour=discord.Colour.red(),
+            timestamp=datetime.now(),
+            description=f"```py\n{error}```",
+        )
+        embed.set_author(
+            name=f"Critical Error - Shutting down", icon_url=guild.icon_url
+        )
+        await channel.send(
+            embed=embed, content="<@&685230896466755585>"
+        )  # @ the technicians
+        await self.close()
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
         """Overwritten internal method to send event errors to :func:`on_event_error` with the exception instead
@@ -93,39 +134,13 @@ class TLDR(commands.Bot):
         embed = discord.Embed(
             colour=config.EMBED_COLOUR,
             timestamp=datetime.now(),
-            description=f"```{exception}\n{traceback_text}```",
+            description=f"```py\n{exception}\n{traceback_text}```",
         )
         embed.set_author(name=f"Event Error - {event_method}", icon_url=guild.icon_url)
         embed.add_field(name="args", value=str(args))
         embed.add_field(name="kwargs", value=str(kwarg))
 
         return await channel.send(embed=embed)
-
-    def get_command(
-        self, name: str, *, member: discord.Member = None
-    ) -> Optional[Union[modules.cls.Command, modules.cls.Group]]:
-        """Overwrites internal method to attach help object to command."""
-        if " " not in name:
-            command = self.all_commands.get(name)
-        else:
-            names = name.split()
-            if not names:
-                return None
-
-            command = self.all_commands.get(names[0])
-            if isinstance(command, commands.GroupMixin):
-                for name in names[1:]:
-                    try:
-                        command = command.all_commands[name]
-                    except (AttributeError, KeyError):
-                        return None
-
-        # create copy so original values arent modifies
-        command = copy.copy(command)
-        # add docs value
-        command.docs = command.get_help(member)
-
-        return command
 
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
@@ -161,14 +176,14 @@ class TLDR(commands.Bot):
             # get ctx
             ctx = await self.get_context(message)
             # check if user can run the custom command
-            can_run = await self.custom_commands.can_run(ctx, custom_command)
+            can_run = await self.custom_commands.can_use(ctx, custom_command)
             if can_run:
                 # get response for the custom command
                 response = await self.custom_commands.get_response(ctx, custom_command)
                 if response:
                     # if command channel has set response channel, send response there, otherwise send to channel where command was called
-                    if custom_command["response_channel"]:
-                        channel = self.get_channel(custom_command["response_channel"])
+                    if custom_command["response-channel"]:
+                        channel = self.get_channel(custom_command["response-channel"])
                         message = await channel.send(response)
                     else:
                         message = await ctx.send(response)
@@ -179,8 +194,9 @@ class TLDR(commands.Bot):
                             await message.add_reaction(reaction)
 
                 # execute python script if use has dev clearance
+                member_clearance = self.clearance.member_clearance(ctx.author)
                 if (
-                    "Dev" in modules.utils.get_user_clearance(ctx.author)
+                    "Developers" in member_clearance["groups"]
                     and custom_command["python"]
                 ):
                     dev_cog = self.get_cog("Dev")
@@ -199,20 +215,14 @@ class TLDR(commands.Bot):
         ctx.command.docs = ctx.command.get_help(ctx.author)
 
         # check if command has been disabled
-        if ctx.command.docs.disabled:
+        if ctx.command.disabled:
             return await modules.embed_maker.error(
                 ctx, "This command has been disabled"
             )
 
         # return if user doesnt have clearance for command
-        if not ctx.command.docs.can_run:
+        if not ctx.command.can_use(ctx.author):
             return
-
-        # return error if user's access to command has been taken away
-        if ctx.command.docs.access_taken:
-            return await modules.embed_maker.error(
-                ctx, f"Your access to this command has been taken away"
-            )
 
         await self.invoke(ctx)
 

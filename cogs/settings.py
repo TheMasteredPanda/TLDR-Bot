@@ -2,18 +2,18 @@ import discord
 import config
 
 from bot import TLDR
-from discord.ext import commands
-from modules import database, cls, embed_maker, utils
+from discord.ext.commands import Cog, command, Context
+from modules import database, commands, embed_maker, utils
 from datetime import datetime
 
 db = database.get_connection()
 
 
-class Settings(commands.Cog):
+class Settings(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
 
-    @commands.command(
+    @command(
         help="Set the mute role",
         usage="setmuterole [role]",
         examples=[
@@ -21,10 +21,9 @@ class Settings(commands.Cog):
             "setmuterole Muted",
             "setmuterole @Muted",
         ],
-        clearance="Mod",
-        cls=cls.Command,
+        cls=commands.Command,
     )
-    async def setmuterole(self, ctx: commands.Context, *, role_identifier: str = None):
+    async def setmuterole(self, ctx: Context, *, role_identifier: str = None):
         guild_settings = db.get_guild_settings(ctx.guild.id)
         current_mute_role_id = guild_settings["mute_role_id"]
 
@@ -83,15 +82,14 @@ class Settings(commands.Cog):
                     await member.add_roles(role)
                     await member.remove_roles(old_mute_role)
 
-    @commands.command(
+    @command(
         help="Change the channel where invite logger messages are sent",
         usage="invite_logger_channel [#channel]",
         examples=["invite_logger_channel #bots"],
-        clearance="Mod",
-        cls=cls.Command,
+        cls=commands.Command,
     )
     async def invite_logger_channel(
-        self, ctx: commands.Context, channel: discord.TextChannel = None
+        self, ctx: Context, channel: discord.TextChannel = None
     ):
         leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
         current_channel_id = leveling_guild.invite_logger_channel
@@ -141,16 +139,13 @@ class Settings(commands.Cog):
         else:
             return await embed_maker.command_error(ctx, "[#channel]")
 
-    @commands.command(
+    @command(
         help="Change the channel where level up messages are sent",
         usage="level_up_channel [#channel]",
         examples=["level_up_channel #bots"],
-        clearance="Mod",
-        cls=cls.Command,
+        cls=commands.Command,
     )
-    async def level_up_channel(
-        self, ctx: commands.Context, channel: discord.TextChannel = None
-    ):
+    async def level_up_channel(self, ctx: Context, channel: discord.TextChannel = None):
         leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
         current_channel_id = leveling_guild.level_up_channel
 

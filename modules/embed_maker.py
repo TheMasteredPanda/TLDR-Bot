@@ -1,7 +1,7 @@
 import discord
 import config
 
-from modules import cls
+from modules import commands
 from typing import Union
 from datetime import datetime
 from discord.ext.commands import Context
@@ -118,7 +118,6 @@ async def command_error(ctx, bad_arg: str = None):
     :class:`discord.Message`
         Will return message
     """
-
     examples_str = "\n".join(ctx.command.docs.examples)
     if bad_arg is None:
         embed_colour = get_colour("orange")
@@ -127,9 +126,9 @@ async def command_error(ctx, bad_arg: str = None):
         embed_colour = get_colour("red")
         description = f"**Invalid Argument:** {bad_arg}\n\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}"
 
-    if type(ctx.command) == cls.Group and ctx.command.all_commands:
+    if type(ctx.command) == commands.Group and ctx.command.all_commands:
         sub_commands_str = "**\nSub Commands:** " + " | ".join(
-            sc for sc in ctx.command.all_commands.keys()
+            sc.name for sc in ctx.command.sub_commands()
         )
         sub_commands_str += f"\nTo view more info about sub commands, type `{ctx.prefix}help {ctx.command.name} [sub command]`"
         description += sub_commands_str

@@ -7,14 +7,13 @@ import re
 from bot import TLDR
 from modules.utils import (
     ParseArgs,
-    get_user_clearance,
     get_member,
     get_member_from_string
 )
 from typing import Union, Optional
-from modules import embed_maker, cls, database, format_time, leveling
+from modules import embed_maker, commands, database, format_time, leveling
 from random import randint
-from discord.ext import commands
+from discord.ext.commands import Cog, command, Context, group
 from modules.reaction_menus import BookMenu
 db = database.get_connection()
 
@@ -50,7 +49,7 @@ class Cooldown:
         return int(cooldown_time)
 
 
-class Leveling(commands.Cog):
+class Leveling(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
 
@@ -58,15 +57,14 @@ class Leveling(commands.Cog):
         self.pp_cooldown = Cooldown()
         self.hp_cooldown = Cooldown()
 
-    @commands.command(
+    @command(
         help='Show someone you respect them by giving them a reputation point',
         usage='rep [member] [reason for the rep]',
         examples=['rep @Hattyot for being an excellent example in this text'],
-        clearance='User',
-        cls=cls.Command,
+        cls=commands.Command,
         aliases=['reputation']
     )
-    async def rep(self, ctx: commands.Context, *, member_reason: str = None):
+    async def rep(self, ctx: Context, *, member_reason: str = None):
         # check if user has been in server for more than 7 days
         now_datetime = datetime.datetime.now()
         joined_at = ctx.author.joined_at
@@ -157,10 +155,10 @@ class Leveling(commands.Cog):
             expires = round(time.time()) + (3600 * 6)
 
         # give boost to to receiving leveling member
-        giving_leveling_member.boosts.rep.expires = expires
-        giving_leveling_member.boosts.rep.multiplier = 0.1
+        receiving_leveling_member.boosts.rep.expires = expires
+        receiving_leveling_member.boosts.rep.multiplier = 0.1
 
-    @commands.group(
+    @group(
         invoke_without_command=True,
         help='See current leveling routes',
         usage='leveling_routes (branch <parliamentary/honours>)',
@@ -169,17 +167,15 @@ class Leveling(commands.Cog):
             'ranks parliamentary',
             'ranks honours'
         ],
-        clearance='User',
-
-        Admin=cls.Help(
+        Admins=commands.Help(
             help='See current leveling routes or add, remove or edit roles',
             usage='ranks (branch) (sub command) (args)',
             examples=['ranks', 'ranks honours'],
         ),
 
-        cls=cls.Group
+        cls=commands.Group
     )
-    async def ranks(self, ctx: commands.Context, branch: str = 'parliamentary'):
+    async def ranks(self, ctx: Context, branch: str = 'parliamentary'):
         if ctx.subcommand_passed is None and branch:
             leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
             branch = leveling_guild.get_leveling_route(branch)
@@ -211,10 +207,9 @@ class Leveling(commands.Cog):
         help='Add a role to parliamentary or honours route',
         usage='ranks add [branch] [role name]',
         examples=['ranks add honours Pro', 'ranks add honours Knight 2'],
-        clearance='admin',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def ranks_add(self, ctx: commands.Context, branch: str = None, *, role_name: str = None):
+    async def ranks_add(self, ctx: Context, branch: str = None, *, role_name: str = None):
         if branch is None:
             return await embed_maker.command_error(ctx)
 
@@ -249,10 +244,9 @@ class Leveling(commands.Cog):
         help='Remove a role from the list of parliamentary or honours roles',
         usage='ranks remove [branch] [role name]',
         examples=['ranks remove honours Knight'],
-        clearance='admin',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def ranks_remove(self, ctx: commands.Context, branch: str = None, *, role: str):
+    async def ranks_remove(self, ctx: Context, branch: str = None, *, role: str):
         if not branch or type(branch) == int:
             return await embed_maker.command_error(ctx)
 
@@ -278,22 +272,20 @@ class Leveling(commands.Cog):
         ctx.invoked_subcommand = ''
         return await self.ranks(ctx, branch.name)
 
-    @commands.group(
+    @group(
         invoke_without_command=True,
         help='See all the perks that a role has to offer',
         usage='perks (role name)',
         examples=['perks', 'perks Party Member'],
-        clearance='User',
-
-        Mod=cls.Help(
+        Moderators=commands.Help(
             help='See all the perks that a role has to offer or add or remove them',
             usage='perks (<sub command/role name>) (args)',
             examples=['perks', 'perks Party Member'],
         ),
 
-        cls=cls.Group
+        cls=commands.Group
     )
-    async def perks(self, ctx: commands.Context, *, role: str = None):
+    async def perks(self, ctx: Context, *, role: str = None):
         if ctx.subcommand_passed is None:
             leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
 
@@ -341,10 +333,7 @@ class Leveling(commands.Cog):
                     send=True
                 )
 
-            if 'Mod' in get_user_clearance(ctx.author):
-                return await embed_maker.error(ctx, 'Invalid sub command')
-
-    async def modify_perks(self, ctx: commands.Context, command: str, args: dict, message: str) -> Optional[Union[dict, discord.Message]]:
+    async def modify_perks(self, ctx: Context, command: str, args: dict, message: str) -> Optional[Union[dict, discord.Message]]:
         if args is None:
             return await embed_maker.command_error(ctx)
 
@@ -398,10 +387,9 @@ class Leveling(commands.Cog):
             (('--role', '-r', str), 'The name of the role you want to set the perks for'),
             (('--perk', '-p', list), 'Perk for the role')
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def perks_set(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def perks_set(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         return await self.modify_perks(ctx, 'set', args, 'New perks have been set for role `{role.name}`')
 
     @perks.command(
@@ -413,10 +401,9 @@ class Leveling(commands.Cog):
             (('--role', '-r', str), 'The name of the role you want to add the perks to'),
             (('--perk', '-p', list), 'Perk for the role')
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def perks_add(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def perks_add(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         return await self.modify_perks(ctx, 'add', args, 'New perks have been added for role `{role.name}`')
 
     @perks.command(
@@ -431,59 +418,85 @@ class Leveling(commands.Cog):
             (('--role', '-r', str), 'The name of the role you want to remove perks from'),
             (('--perk', '-p', list), 'Index of the perk you want to remove, can be seen by doing >perks [role]')
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def perks_remove(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def perks_remove(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         return await self.modify_perks(ctx, 'remove', args, 'Perks have been removed from role `{role.name}`')
 
-    @commands.command(
-        help='See all the honours channels or add or remove a channel from the list of honours channels',
-        usage='honours_channel (action - <add/remove>) [#channel]',
-        examples=['honours_channels', 'honours_channels add #court', 'honours_channels remove #Mods'],
-        clearance='Mod',
-        cls=cls.Command
-    )
-    async def honours_channels(self, ctx, action: str = None, channel: discord.TextChannel = None):
-        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+    @group(
+        invoke_without_command=True,
+        help='See all the honours channels',
+        usage='honours_channel',
+        examples=['honours_channels'],
 
-        if action is None:
+        Admins=commands.Help(
+            help='See current honours channels or add or remove them',
+            usage='honours_channel (action - <add/remove>) [#channel]',
+            examples=['honours_channels', 'honours_channels add #court', 'honours_channels remove #Mods'],
+        ),
+        cls=commands.Group
+    )
+    async def honours_channels(self, ctx: Context):
+        if ctx.subcommand_passed is None:
+            leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+
             # display list of honours channels
             channel_list_str = ', '.join(f'<#{channel}>' for channel in leveling_guild.honours_channels) if leveling_guild.honours_channels else 'None'
             return await embed_maker.message(ctx, description=channel_list_str, send=True)
 
-        if action not in ['add', 'remove']:
-            return await embed_maker.command_error(ctx, '[action - <add/remove>]')
+    @honours_channels.command(
+        name='add',
+        help='Add an honours channel',
+        usage='honours_channels add [#channel]',
+        examples=['honours_channels add #Tech-Lobby'],
+        cls=commands.Command
+    )
+    async def honours_channels_add(self, ctx: Context, channel=None):
+        if channel is None:
+            return await embed_maker.command_error(ctx)
 
         if not channel:
             return await embed_maker.command_error(ctx, '[#channel]')
 
-        msg = ''
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
 
-        if action == 'add':
-            if channel.id in leveling_guild.honours_channels:
-                return await embed_maker.message(ctx, description='That channel is already on the list', colour='red', send=True)
+        if channel.id not in leveling_guild.honours_channels:
+            return await embed_maker.message(ctx, description='That channel is not on the list', colour='red', send=True)
 
-            leveling_guild.honours_channels.append(channel.id)
-            msg = f'<#{channel.id}> has been added to the list of honours channels'
-
-        if action == 'remove':
-            if channel.id not in leveling_guild.honours_channels:
-                return await embed_maker.message(ctx, description='That channel is not on the list', colour='red', send=True)
-
-            leveling_guild.honours_channels.remove(channel.id)
-            msg = f'<#{channel.id}> has been removed from the list of honours channels'
-
+        leveling_guild.honours_channels.remove(channel.id)
+        msg = f'<#{channel.id}> has been removed from the list of honours channels'
         return await embed_maker.message(ctx, description=msg, colour='green', send=True)
 
-    @commands.command(
+    @honours_channels.command(
+        name='remove',
+        help='Remove an honours channel',
+        usage='honours_channels remove [#channel]',
+        examples=['honours_channels remove #Tech-Lobby'],
+        cls=commands.Command
+    )
+    async def honours_channels_remove(self, ctx: Context, channel=None):
+        if channel is None:
+            return await embed_maker.command_error(ctx)
+
+        if not channel:
+            return await embed_maker.command_error(ctx, '[#channel]')
+
+        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
+
+        if channel.id in leveling_guild.honours_channels:
+            return await embed_maker.message(ctx, description='That channel is already on the list', colour='red', send=True)
+
+        leveling_guild.honours_channels.append(channel.id)
+        msg = f'<#{channel.id}> has been added to the list of honours channels'
+        return await embed_maker.message(ctx, description=msg, colour='green', send=True)
+
+    @command(
         help='See how many messages you need to send to level up and rank up or see how many messages until you reach a level (dont forget about the 60s cooldown)',
         usage='mlu (level)',
         examples=['mlu', 'mlu 60'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def mlu(self, ctx: commands.Context, level: Union[float, str] = None):
+    async def mlu(self, ctx: Context, level: Union[float, str] = None):
         # incase somebody typed something that isnt a level
         if type(level) == str:
             level = None
@@ -518,7 +531,7 @@ class Leveling(commands.Cog):
             send=True
         )
 
-    async def construct_lb_str(self, ctx: commands.Context, branch: leveling.LevelingRoute, sorted_users: list, index: int, your_pos: bool = False):
+    async def construct_lb_str(self, ctx: Context, branch: leveling.LevelingRoute, sorted_users: list, index: int, your_pos: bool = False):
         lb_str = ''
         for i, leveling_user in enumerate(sorted_users):
             leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, leveling_user['user_id'])
@@ -550,7 +563,7 @@ class Leveling(commands.Cog):
 
         return lb_str
 
-    async def construct_lb_embed(self, ctx: commands.Context, branch: leveling.LevelingRoute, user_index: int, sorted_users: list, page_size_limit: int, max_page_num: int, *, page: int):
+    async def construct_lb_embed(self, ctx: Context, branch: leveling.LevelingRoute, user_index: int, sorted_users: list, page_size_limit: int, max_page_num: int, *, page: int):
         sorted_users_page = sorted_users[page_size_limit * (page - 1):page_size_limit * page]
         leaderboard_str = await self.construct_lb_str(ctx, branch, sorted_users_page, index=page_size_limit * (page - 1))
         description = 'Damn, this place is empty' if not leaderboard_str else leaderboard_str
@@ -570,15 +583,14 @@ class Leveling(commands.Cog):
 
         return leaderboard_embed
 
-    @commands.command(
+    @command(
         help='Shows the leveling leaderboards (parliamentary(p)/honours(h)) on the server',
         usage='leaderboard (branch)',
         aliases=['lb'],
-        clearance='User',
         examples=['leaderboard parliamentary', 'lb honours'],
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def leaderboard(self, ctx: commands.Context, branch: str = 'parliamentary', page: int = 1):
+    async def leaderboard(self, ctx: Context, branch: str = 'parliamentary', page: int = 1):
         leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
         leveling_routes = leveling_guild.leveling_routes
 
@@ -685,14 +697,13 @@ class Leveling(commands.Cog):
 
         return rep_str
 
-    @commands.command(
+    @command(
         help='Shows your (or someone else\'s) rank and level, add -v too see all the data',
         usage='rank (member) (-v)',
         examples=['rank', 'rank @Hattyot', 'rank Hattyot -v'],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def rank(self, ctx: commands.Context, *, user_input: str = ''):
+    async def rank(self, ctx: Context, *, user_input: str = ''):
         verbose = bool(re.findall(r'(?:\s|^)(-v)(?:\s|$)', user_input))
 
         user_input = re.sub(r'((\s|^)-v(\s|$))', '', user_input)
@@ -758,15 +769,14 @@ class Leveling(commands.Cog):
 
         return await ctx.send(embed=rank_embed)
 
-    @commands.command(
+    @command(
         help='Toggle the different leveling settings.',
         usage='settings (setting)',
         examples=["settings @me", "settings rep@"],
-        clearance='User',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def settings(self, ctx: commands.Context, *, setting: str = None):
-        embed = await embed_maker.message(ctx, description=f"To toggle settings type `{ctx.prefix}settings [setting]`", author={'name': 'Settings'})
+    async def settings(self, ctx: Context, *, setting: str = None):
+        embed = await embed_maker.message(ctx, description=f"To toggle a setting, type `{ctx.prefix}settings [setting]`", author={'name': 'Settings'})
 
         leveling_member = await self.bot.leveling_system.get_member(ctx.guild.id, ctx.author.id)
         if setting is None:

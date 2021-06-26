@@ -13,8 +13,6 @@ from modules.utils import get_guild_role, get_member_by_id
 
 db = database.get_connection()
 
-# TODO: do this sort of thing for commands too
-
 
 class DatabaseList(list):
     """
@@ -710,7 +708,6 @@ class LevelingGuild(LevelingData):
         return channel
 
 
-# TODO: add ability to create LevelingMember with leveling data instead of pulling it in __init__
 class LevelingMember(LevelingUser):
     """Represents a Leveling Member to a :class:`LevelingGuild`.
 

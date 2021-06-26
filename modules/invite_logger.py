@@ -1,8 +1,8 @@
 import discord
 import config
-import time
 
 from datetime import datetime
+
 
 class InviteLogger:
     def __init__(self, bot):

@@ -1,39 +1,33 @@
 import datetime
 import math
-import re
 import time
-import config
 import dateparser
 import discord
-import asyncio
 import functools
 
-from io import StringIO
 from bson import ObjectId
 from modules.reaction_menus import BookMenu
-from discord.ext import commands
+from discord.ext.commands import Cog, command, Context, group
 from typing import Union
 from bot import TLDR
-from cogs import utility
-from modules import cls, database, embed_maker
+from modules import commands, database, embed_maker, format_time, reaction_menus
 from modules.utils import (
     ParseArgs,
-    Command,
-    get_custom_emote,
     get_guild_role,
     get_member,
-    get_user_clearance
+    get_member_from_string,
+    get_member_by_id
 )
 
 db = database.get_connection()
 
 
-class Mod(commands.Cog):
+class Mod(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
 
     @staticmethod
-    async def construct_cases_embed(ctx: commands.Context, member: discord.Member, cases: dict, case_type: str,
+    async def construct_cases_embed(ctx: Context, member: discord.Member, cases: dict, case_type: str,
                                     max_page_num: int, page_size_limit: int, *, page: int):
         thirty_days_ago = time.time() - (30 * 24 * 60)
         # cases in the past 30 days
@@ -78,7 +72,7 @@ class Mod(commands.Cog):
             footer={'text': f'Page {page}/{max_page_num}'}
         )
 
-    async def cases_menu(self, ctx: commands.Context, member: discord.Member, case_type: str, page: int = 1):
+    async def cases_menu(self, ctx: Context, member: discord.Member, case_type: str, page: int = 1):
         member_cases = self.bot.moderation.cases.get_cases(ctx.guild.id, member_id=member.id, type=case_type)
 
         page_size_limit = 5
@@ -112,19 +106,18 @@ class Mod(commands.Cog):
 
         self.bot.reaction_menus.add(menu)
 
-    @commands.command(
+    @command(
         help='See the cases (warn/mute/ban) issued to a user',
         usage='cases [member] [case type] (page)',
         examples=['cases hattyot warn', 'warns hattyot ban 2'],
         aliases=['case'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def cases(self, ctx: commands.Context, member_and_case_type: str = None):
+    async def cases(self, ctx: Context, member_and_case_type: str = None):
         if member_and_case_type is None:
             return await embed_maker.command_error(ctx)
 
-        member, case_type = await utils.get_member_from_string(ctx, member_and_case_type)
+        member, case_type = await get_member_from_string(ctx, member_and_case_type)
 
         # get page number, if any has been provided
         split_member = case_type.split()
@@ -144,19 +137,18 @@ class Mod(commands.Cog):
 
         return await self.cases_menu(ctx, member, case_type, page)
 
-    @commands.command(
+    @command(
         help='Give a member a warning',
         usage='warn [member] [reason]',
         examples=['warn hattyot broke cg 10 several times'],
         aliases=['warning'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def warn(self, ctx: commands.Context, *, member_and_reason: str = None):
+    async def warn(self, ctx: Context, *, member_and_reason: str = None):
         if member_and_reason is None:
             return await embed_maker.command_error(ctx)
 
-        member, reason = await utils.get_member_from_string(ctx, member_and_reason)
+        member, reason = await get_member_from_string(ctx, member_and_reason)
 
         if member is None:
             return await embed_maker.error(ctx, 'Unable to find member.')
@@ -193,14 +185,13 @@ class Mod(commands.Cog):
         # add case to the database
         self.bot.moderation.cases.add_case(ctx.guild.id, 'warn', reason, member, ctx.author)
 
-    @commands.command(
+    @command(
         help='Unmute a member',
         usage='unmute [member] [reason]',
         examples=['unmute hattyot accidental mute'],
-        clearance='Dev',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def unmute(self, ctx: commands.Context, *, member_and_reason: str = None):
+    async def unmute(self, ctx: Context, *, member_and_reason: str = None):
         if member_and_reason is None:
             return await embed_maker.command_error(ctx)
 
@@ -213,7 +204,7 @@ class Mod(commands.Cog):
                 send=True
             )
 
-        member, reason = await utils.get_member_from_string(ctx, member_and_reason)
+        member, reason = await get_member_from_string(ctx, member_and_reason)
 
         if member is None:
             return await embed_maker.error(ctx, 'Unable to find member.')
@@ -250,14 +241,13 @@ class Mod(commands.Cog):
             send=True
         )
 
-    @commands.command(
+    @command(
         help='Mute a member',
         usage='mute [member] [duration] [reason]',
         examples=['mute hattyot 7d 5h 10m 50s abused the bot'],
-        clearance='Dev',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def mute(self, ctx: commands.Context, *, member_and_duration_and_reason: str = None):
+    async def mute(self, ctx: Context, *, member_and_duration_and_reason: str = None):
         if member_and_duration_and_reason is None:
             return await embed_maker.command_error(ctx)
 
@@ -270,7 +260,7 @@ class Mod(commands.Cog):
                 send=True
             )
 
-        member, duration_and_reason = await utils.get_member_from_string(ctx, member_and_duration_and_reason)
+        member, duration_and_reason = await get_member_from_string(ctx, member_and_duration_and_reason)
         duration, reason = format_time.parse(duration_and_reason, return_string=True)
 
         if member is None:
@@ -328,7 +318,7 @@ class Mod(commands.Cog):
                                            extra={'duration': duration})
 
         # add mute role to user
-        mute_role = await utils.get_guild_role(ctx.guild, str(guild_settings['mute_role_id']))
+        mute_role = await get_guild_role(ctx.guild, str(guild_settings['mute_role_id']))
         if mute_role is None:
             return await embed_maker.error(ctx, 'Current mute role is not valid.')
         else:
@@ -346,7 +336,7 @@ class Mod(commands.Cog):
 
     async def unmute_user(self, guild_id: int, member_id: int, reason: str):
         guild = self.bot.get_guild(guild_id)
-        member = await utils.get_member_by_id(guild, member_id)
+        member = await get_member_by_id(guild, member_id)
 
         # send user message that they have been unmuted
         text = f"**{guild.name}** - You have been unmuted.:loud_sound:\n**Reason**: {reason}"
@@ -357,7 +347,7 @@ class Mod(commands.Cog):
         if mute_role_id is None:
             return
 
-        mute_role = await utils.get_guild_role(guild, str(mute_role_id))
+        mute_role = await get_guild_role(guild, str(mute_role_id))
         if mute_role is None:
             return
 
@@ -366,24 +356,23 @@ class Mod(commands.Cog):
         # remove mute timer
         db.timers.delete_one({'guild_id': guild.id, 'event': 'automatic_unmute', 'extras': {'member_id': member.id}})
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_automatic_unmute_timer_over(self, timer: dict):
         guild_id = timer['guild_id']
         member_id = timer['extras']['member_id']
         return await self.unmute_user(guild_id, member_id, 'Mute expired.')
 
-    @commands.command(
+    @command(
         help='Ban a member, their leveling data will be erased',
         usage='ban [member] [reason]',
         examples=['ban hattyot completely ignore cg'],
-        clearance='Dev',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def ban(self, ctx: commands.Context, *, member_and_reason: str = None):
+    async def ban(self, ctx: Context, *, member_and_reason: str = None):
         if member_and_reason is None:
             return await embed_maker.command_error(ctx)
 
-        member, reason = await utils.get_member_from_string(ctx, member_and_reason)
+        member, reason = await get_member_from_string(ctx, member_and_reason)
 
         if member is None:
             return await embed_maker.error(ctx, 'Unable to find member.')
@@ -422,346 +411,15 @@ class Mod(commands.Cog):
         # add case to the database
         self.bot.moderation.cases.add_case(ctx.guild.id, 'ban', reason, member, ctx.author)
 
-    @staticmethod
-    async def construct_cc_embed(ctx: commands.Context, custom_commands: dict, max_page_num: int, page_size_limit: int, *, page: int):
-        if custom_commands:
-            custom_commands_str = ''
-            for i, command in enumerate(custom_commands[page_size_limit * (page - 1):page_size_limit * page]):
-                if i == 10:
-                    break
-
-                custom_commands_str += f'**#{i + 1}:** `/{command["name"]}/`\n'
-        else:
-            custom_commands_str = 'Currently no custom commands have been created'
-
-        return await embed_maker.message(
-            ctx,
-            description=custom_commands_str,
-            author={'name': f'Custom Commands - {get_user_clearance(ctx.author)[-1]}'},
-            footer={'text': f'Page {page}/{max_page_num}'}
-        )
-
-    @commands.group(
-        invoke_without_command=True,
-        name='customcommands',
-        help='Manage the servers custom commands',
-        usage='customcommands (sub command) (args)',
-        examples=['customcommands', 'customcommands 1'],
-        clearance='Mod',
-        aliases=['cc'],
-        cls=cls.Group
-    )
-    async def customcommands(self, ctx: commands.Context, index: Union[int, str] = None):
-        if not ctx.subcommand_passed:
-            custom_commands = [*db.custom_commands.find({'guild_id': ctx.guild.id})]
-            if index is None:
-                page = 1
-                page_size_limit = 20
-
-                # calculate max page number
-                max_page_num = math.ceil(len(custom_commands) / page_size_limit)
-                if max_page_num == 0:
-                    max_page_num = 1
-
-                if page > max_page_num:
-                    return await embed_maker.error(ctx, 'Exceeded maximum page number')
-
-                page_constructor = functools.partial(
-                    self.construct_cc_embed,
-                    ctx,
-                    custom_commands,
-                    max_page_num,
-                    page_size_limit,
-                )
-
-                embed = await page_constructor(page=page)
-                cc_message = await ctx.send(embed=embed)
-
-                menu = BookMenu(
-                    cc_message,
-                    author=ctx.author,
-                    page=page,
-                    max_page_num=max_page_num,
-                    page_constructor=page_constructor,
-                )
-
-                self.bot.reaction_menus.add(menu)
-            elif type(index) == int:
-                command = {i: c for i, c in enumerate(custom_commands)}.get(index - 1, None)
-                if not command:
-                    return await embed_maker.error(ctx, 'Invalid command index')
-
-                return await embed_maker.message(
-                    ctx,
-                    description=self.custom_command_args_to_string(command),
-                    author={'name': command['name']},
-                    send=True
-                )
-            else:
-                return await embed_maker.error(ctx, 'Invalid command index')
-
-    async def validate_custom_command_args(self, ctx: commands.Context, args: dict, *, edit: bool = False):
-        if not args['name'] and not edit:
-            return await embed_maker.error(ctx, "A name needs to be given to the command.")
-
-        # check for existing custom command with the same name
-        existing = db.custom_commands.find_one({'guild_id': ctx.guild.id, 'name': args['name']})
-        if existing:
-            return await embed_maker.error(ctx, f"A custom command with the name `{args['name']}` already exists")
-
-        if not args['response'] and not edit and not args['python']:
-            return await embed_maker.error(ctx, "Missing response arg")
-
-        if args['python'] and 'Dev' not in get_user_clearance(ctx.author):
-            return await embed_maker.error(ctx, f'Only devs can {"add" if not edit else "edit"} the python arg')
-
-        # convert roles to ids
-        if args['role']:
-            for i, role_identifier in enumerate(args['role']):
-                try:
-                    role = await commands.RoleConverter().convert(ctx, role_identifier)
-                    args['role'][i] = role.id
-                except:
-                    return await embed_maker.error(ctx, f'Invalid role arg: `{role_identifier}`')
-
-        # convert response_channel to id
-        if args['response_channel']:
-            try:
-                response_channel = await commands.TextChannelConverter().convert(ctx, args['response_channel'])
-                args['response_channel'] = response_channel.id
-            except commands.ChannelNotFound:
-                return await embed_maker.error(ctx, f'Invalid response_channel arg: `{args["response_channel"]}`')
-
-        # convert command_channels to ids
-        if args['command_channels']:
-            args['command_channels'] = args['command_channels'].split()
-            for i, channel in enumerate(args['command_channels']):
-                try:
-                    command_channel = await commands.TextChannelConverter().convert(ctx, channel)
-                    args['command_channels'][i] = command_channel.id
-                except commands.ChannelNotFound:
-                    return await embed_maker.error(ctx, f'Invalid command_channel arg: `{channel}`')
-
-        # split reactions into list
-        args['reactions'] = args['reactions'].split() if args['reactions'] else []
-        # replace surrounding ``` and newline char in response
-        if args['response']:
-            args['response'] = re.findall(r'^(?:```\n)?(.*)(?:(?:\n```)$)?', args['response'], re.MULTILINE)[0]
-
-        # check if clearance is valid
-        if args['clearance'] and args['clearance'] not in [*config.CLEARANCE.keys()]:
-            return await embed_maker.error(ctx, f'Clearance needs to be one of these: {" | ".join(config.CLEARANCE.keys())}')
-        # default clearance to User
-        elif not args['clearance']:
-            args['clearance'] = 'User'
-
-        # set clearance to Dev if python arg is defined
-        if args['python']:
-            args['clearance'] = 'Dev'
-
-        # check if set clearance is higher than user clearance
-        clearances = [*config.CLEARANCE.keys()]
-        if args['clearance'] not in get_user_clearance(ctx.author):
-            return await embed_maker.error(ctx, 'You cant create a custom command with higher clearance than you have.')
-
-        if args['response']:
-            # validate command calls in response and check if command has higher clearance than custom command
-            command_matches = re.findall(r'{>(\w+)', args['response'])
-            for command_name in command_matches:
-                command = self.bot.get_command(command_name, member=ctx.author)
-                if not command:
-                    return await embed_maker.error(ctx, f'Invalid command: `>{command_name}`')
-                if clearances.index(command.docs.clearance) > clearances.index(args['clearance']):
-                    return await embed_maker.error(ctx, f'Command called in variable cant have higher clearance than custom command clearance: `>{command_name}`')
-        return args
-
-    @staticmethod
-    def custom_command_arg_value_to_string(key: str, value: Union[list, str]) -> str:
-        # if value is a list, first convert ids into mentions
-        if type(value) == list:
-            if key == 'command_channels':
-                value = [f'<#{c}>' for c in value]
-            elif key == 'role':
-                value = [f'<@&{r}>' for r in value]
-
-            value = ' '.join(value)
-        # convert response channel id to channel mention
-        elif key == 'response_channel':
-            value = f'<#{value}>'
-
-        return value
-
-    def custom_command_args_to_string(self, args: dict, *, old: dict = None) -> str:
-        attributes_str = ''
-        for key, value in args.items():
-            # check if value exists key isnt in list of values that dont need to be presented
-            if value and key not in ['pre', 'guild_id', '_id']:
-                value = self.custom_command_arg_value_to_string(key, value)
-                # replace underscore with space and make key into title
-                if old is None:
-                    key = key.replace('_', ' ').title()
-                    attributes_str += f'**{key}**: `{value}`\n'
-                else:
-                    old_value = self.custom_command_arg_value_to_string(key, old[key])
-                    key = key.replace('_', ' ').title()
-                    attributes_str += f'**{key}**: `{old_value}` --> `{value}`\n'
-
-        return attributes_str
-
-    @customcommands.command(
-        name='add',
-        help='Add a custom command',
-        usage='customcommands add (args)',
-        examples=[
-            'customcommands add -n ^Suggestion:(.*) -r Suggestion By {user.mention}: $g1 -c User -rl Member -rl 697184342614474785 -rc suggestion-voting -cc daily-debate-suggestions 696345548453707857 -rs 👍 👎'
-        ],
-        command_args=[
-            (('--name', '-n', str), 'The name given to the command, matched with regex.'),
-            (('--response', '-r', str), r'Response that will be sent when custom command is called, If you want to do multiline response, please put response between \`\`\`'),
-            (('--clearance', '-c', str), f'[Optional] Restrict who can run the command by clearance, {" | ".join([*config.CLEARANCE.keys()])}, Defaults to User'),
-            (('--role', '-rl', list), '[Optional] Restrict custom command to role(s)'),
-            (('--response_channel', '-rc', str), '[Optional] When set, response will be sent in given channel instead of where custom command was called'),
-            (('--command_channels', '-cc', str), '[Optional] Restrict custom command to give channel(s)'),
-            (('--reactions', '-rs', str), '[Optional] Reactions that will be added to response, emotes only ofc.'),
-            (('--python', '-p', str), r'[Dev only] Run a python script when custom command is called, please put code between \`\`\`'),
-        ],
-        clearance='Mod',
-        cls=cls.Command
-    )
-    async def customcommands_add(self, ctx: commands.Context, *, args: ParseArgs = None):
-        if args is None:
-            return await embed_maker.command_error(ctx)
-
-        # TODO: embed responses
-
-        # validate args
-        args = await self.validate_custom_command_args(ctx, args)
-        # return value is a message if an error has occured
-        if type(args) == discord.Message:
-            return
-
-        # add guild id to args
-        args['guild_id'] = ctx.guild.id
-        # insert into database
-        db.custom_commands.insert(args)
-
-        # convert args into string that can be presented to user who created the command
-        attributes_str = self.custom_command_args_to_string(args)
-
-        return await embed_maker.message(
-            ctx,
-            description=f'A new custom command has been added with these attributes:\n{attributes_str}',
-            colour='green',
-            send=True
-        )
-
-    @customcommands.command(
-        name='edit',
-        help='Edit a custom command',
-        usage='customcommands edit [command name] [args]',
-        examples=[],
-        command_args=[
-            (('--name', '-n', str), 'The name given to the command, matched with regex.'),
-            (('--response', '-r', str), r'Response that will be sent when custom command is called, If you want to do multiline response, please put response between \`\`\`'),
-            (('--clearance', '-c', str), f'[Optional] Restrict who can run the command by clearance, {" | ".join([*config.CLEARANCE.keys()])}, Defaults to User'),
-            (('--role', '-rl', list), '[Optional] Restrict custom command to role(s)'),
-            (('--response_channel', '-rc', str), '[Optional] When set, response will be sent in given channel instead of where custom command was called'),
-            (('--command_channels', '-cc', str), '[Optional] Restrict custom command to give channel(s)'),
-            (('--reactions', '-rs', str), '[Optional] Reactions that will be added to response, emotes only ofc.'),
-            (('--python', '-p', str), r'[Dev only] Run a python script when custom command is called, please put code between \`\`\`'),
-        ],
-        clearance='Mod',
-        cls=cls.Command
-    )
-    async def customcommands_edit(self, ctx: commands.Context, *, args: ParseArgs = None):
-        if args is None:
-            return await embed_maker.command_error(ctx)
-
-        old_command_name = args['pre']
-
-        # check if command user wants to edit actually exists
-        existing = db.custom_commands.find_one({'guild_id': ctx.guild.id, 'name': old_command_name})
-        if not existing:
-            return await embed_maker.error(ctx, f'A command with the name `{old_command_name}` doesn\'t exist')
-
-        # validate args
-        args = await self.validate_custom_command_args(ctx, args, edit=True)
-        # return value is a message if an error has occurred
-        if type(args) == discord.Message:
-            return
-
-        # add guild id to args
-        args['guild_id'] = ctx.guild.id
-
-        # filter out args that have not been defined
-        args = {key: value for key, value in args.items() if value and value != existing[key]}
-        # insert into database
-        db.custom_commands.update_one({'guild_id': ctx.guild.id, 'name': old_command_name}, {'$set': args})
-
-        # convert args into string that can be presented to user who created the command
-        attributes_str = self.custom_command_args_to_string(args, old=existing)
-
-        return await embed_maker.message(
-            ctx,
-            description=f'Custom command `{old_command_name}` has been edited:\n{attributes_str}',
-            colour='green',
-            send=True
-        )
-
-    @customcommands.command(
-        name='remove',
-        help=f'Remove a custom command by its index, can be seen by calling `{config.PREFIX}customcommands`',
-        usage='customcommands remove [command index]',
-        examples=[],
-        clearance='Mod',
-        cls=cls.Command
-    )
-    async def customcommands_remove(self, ctx: commands.Context, index: Union[int, str] = None):
-        if index is None:
-            return await embed_maker.command_error(ctx)
-
-        if type(index) != int:
-            return await embed_maker.error(ctx, 'Invalid index')
-
-        custom_commands = [*db.custom_commands.find({'guild_id': ctx.guild.id})]
-        command = {i: c for i, c in enumerate(custom_commands)}.get(index - 1, None)
-
-        # check if command user wants to edit actually exists
-        if not command:
-            return await embed_maker.error(ctx, 'Invalid index')
-
-        db.custom_commands.delete_one({'guild_id': ctx.guild.id, 'name': command['name']})
-
-        return await embed_maker.message(
-            ctx,
-            description=f'Custom command `{command["name"]}` has been deleted.',
-            colour='green',
-            send=True
-        )
-
-    @customcommands.command(
-        name='variables',
-        help='List all the variables that can be used in custom command responses or scripts',
-        usage='customcommands variables',
-        examples=['customcommands variables'],
-        aliases=['vars'],
-        clearance='Mod',
-        cls=cls.Command
-    )
-    async def customcommands_variables(self, ctx: commands.Context):
-        with open('static/custom_commands_variables.txt', 'r') as file:
-            return await embed_maker.message(ctx, description=f'```{file.read()}```', author={'name': 'Custom Command Variables'}, send=True)
-
-    @commands.group(
+    @group(
         invoke_without_command=True,
         name='watchlist',
         help='Manage the watchlist, which logs all the users message to a channel',
         usage='watchlist (sub command) (args)',
         examples=['watchlist'],
-        clearance='Mod',
-        cls=cls.Group
+        cls=commands.Group
     )
-    async def watchlist(self, ctx: commands.Context):
+    async def watchlist(self, ctx: Context):
         if ctx.subcommand_passed is None:
             users_on_list = [d for d in db.watchlist.distinct('user_id', {'guild_id': ctx.guild.id})]
 
@@ -799,10 +457,9 @@ class Mod(commands.Cog):
         command_args=[
             (('--filter', '-f', list), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def watchlist_add(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def watchlist_add(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if not args:
             return await embed_maker.command_error(ctx)
 
@@ -854,10 +511,9 @@ class Mod(commands.Cog):
         help='remove a user from the watchlist',
         usage='watchlist remove [user]',
         examples=['watchlist remove hattyot'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def watchlist_remove(self, ctx: commands.Context, *, user: str = None):
+    async def watchlist_remove(self, ctx: Context, *, user: str = None):
         if user is None:
             return await embed_maker.command_error(ctx)
 
@@ -893,10 +549,9 @@ class Mod(commands.Cog):
         command_args=[
             (('--filter', '-f', list), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def watchlist_add_filters(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def watchlist_add_filters(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if not args:
             return await embed_maker.command_error(ctx)
 
@@ -931,7 +586,7 @@ class Mod(commands.Cog):
         )
 
     @staticmethod
-    async def construct_dd_embed(ctx: commands.Context, daily_debates_data: dict, max_page_num: int, page_size_limit: int, topics: list, *, page: int):
+    async def construct_dd_embed(ctx: Context, daily_debates_data: dict, max_page_num: int, page_size_limit: int, topics: list, *, page: int):
         if not topics:
             topics_str = f'Currently there are no debate topics set up'
         else:
@@ -979,16 +634,15 @@ class Mod(commands.Cog):
         )
         return embed
 
-    @commands.group(
+    @group(
         invoke_without_command=True,
         help='Daily debate scheduler/manager',
         usage='dailydebates (sub command) (arg(s))',
-        clearance='Mod',
         aliases=['dd', 'dailydebate'],
         examples=['dailydebates'],
-        cls=cls.Group,
+        cls=commands.Group,
     )
-    async def dailydebates(self, ctx: commands.Context, page: str = 1):
+    async def dailydebates(self, ctx: Context, page: str = 1):
         if ctx.subcommand_passed is None:
             daily_debates_data = db.get_daily_debates(ctx.guild.id)
 
@@ -1037,10 +691,9 @@ class Mod(commands.Cog):
         help='Disable the daily debates system, time will be set to 0',
         usage='dailydebates disable',
         examples=['dailydebates disable'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_disable(self, ctx: commands.Context):
+    async def dailydebates_disable(self, ctx: Context):
         db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$set': {'time': 0}})
 
         # cancel timer if active
@@ -1063,10 +716,9 @@ class Mod(commands.Cog):
         command_args=[
             (('--option', '-o', list), 'Option for the poll'),
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_set_poll_options(self, ctx: commands.Context, index: str = None, *, args: Union[ParseArgs, dict] = None):
+    async def dailydebates_set_poll_options(self, ctx: Context, index: str = None, *, args: Union[ParseArgs, dict] = None):
         if index is None:
             return await embed_maker.command_error(ctx)
 
@@ -1078,7 +730,8 @@ class Mod(commands.Cog):
         if not options:
             return await embed_maker.error(ctx, 'Missing options')
 
-        emote_options = await utility.Utility.parse_poll_options(ctx, options)
+        utility_cog = self.bot.get_cog('Utility')
+        emote_options = await utility_cog.parse_poll_options(ctx, options)
         if type(emote_options) == discord.Message:
             return
 
@@ -1116,10 +769,9 @@ class Mod(commands.Cog):
             (('--topic_author', '-ta', str), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
             (('--option', '-o', list), 'Option for the poll'),
         ],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_add(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def dailydebates_add(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if args is None:
             return await embed_maker.command_error(ctx)
 
@@ -1157,14 +809,13 @@ class Mod(commands.Cog):
         help='insert a topic into the first place on the list of topics along with optional options and topic author',
         usage='dailydebates insert [topic] (args)',
         examples=['dailydebates insert is ross mega cool? -ta hattyot -o yes | double yes | triple yes'],
-        clearance='Mod',
         command_args=[
             (('--topic_author', '-ta', str), 'Original author of the topic, that will be mentioned when the dd is sent, they will also be given a 15% boost for 6 hours'),
             (('--option', '-o', list), 'Option for the poll'),
         ],
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def _dailydebates_insert(self, ctx: commands.Context, *, args: Union[ParseArgs, dict] = None):
+    async def _dailydebates_insert(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if args is None:
             return await embed_maker.command_error(ctx)
 
@@ -1205,10 +856,9 @@ class Mod(commands.Cog):
         help='remove a topic from the topic list',
         usage='dailydebates remove [topic index]',
         examples=['dailydebates remove 2'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_remove(self, ctx: commands.Context, index: str = None):
+    async def dailydebates_remove(self, ctx: Context, index: str = None):
         if index is None:
             return await embed_maker.command_error(ctx)
 
@@ -1239,10 +889,9 @@ class Mod(commands.Cog):
         help='set the time when topics are announced',
         usage='dailydebates set_time [time]',
         examples=['dailydebates set_time 14:00 GMT+1'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_set_time(self, ctx: commands.Context, *, time_str: str = None):
+    async def dailydebates_set_time(self, ctx: Context, *, time_str: str = None):
         if time_str is None:
             return await embed_maker.command_error(ctx)
 
@@ -1277,10 +926,9 @@ class Mod(commands.Cog):
         help=f'set the channel where topics are announced',
         usage='dailydebates set_channel [#set_channel]',
         examples=['dailydebates set_channel #daily-debates'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_set_channel(self, ctx: commands.Context, channel: discord.TextChannel = None):
+    async def dailydebates_set_channel(self, ctx: Context, channel: discord.TextChannel = None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
@@ -1296,10 +944,9 @@ class Mod(commands.Cog):
         help=f'set the role that will be @\'d when topics are announced, disable @\'s by setting the role to `None`',
         usage='dailydebates set_role [role]',
         examples=['dailydebates set_role Debater'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_set_role(self, ctx: commands.Context, *, role: Union[discord.Role, str] = None):
+    async def dailydebates_set_role(self, ctx: Context, *, role: Union[discord.Role, str] = None):
         if role is None:
             return await embed_maker.command_error(ctx)
 
@@ -1321,10 +968,9 @@ class Mod(commands.Cog):
         help=f'Set the poll channel where polls will be sent, disable polls by setting poll channel to `None``',
         usage='dailydebates set_poll_channel [#channel]',
         examples=['dailydebates set_poll_channel #daily_debate_polls'],
-        clearance='Mod',
-        cls=cls.Command
+        cls=commands.Command
     )
-    async def dailydebates_set_poll_channel(self, ctx: commands.Context, channel: Union[discord.TextChannel, str] = None):
+    async def dailydebates_set_poll_channel(self, ctx: Context, channel: Union[discord.TextChannel, str] = None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
@@ -1339,12 +985,12 @@ class Mod(commands.Cog):
             send=True
         )
 
-    @staticmethod
-    async def parse_dd_args(ctx: commands.Context, args: dict):
+    async def parse_dd_args(self, ctx: Context, args: dict):
         if not args['pre']:
             return await embed_maker.error(ctx, 'Missing topic')
 
-        args['option'] = await utility.Utility.parse_poll_options(ctx, args['option']) if args['option'] else ''
+        utility_cog = self.bot.get_cog('Utility')
+        args['option'] = await utility_cog.parse_poll_options(ctx, args['option']) if args['option'] else ''
         if type(args['option']) == discord.Message:
             return
 
@@ -1373,551 +1019,6 @@ class Mod(commands.Cog):
         # -1h so mods can be warned when there are no daily debate topics set up
         timer_expires = round(time.time()) + time_diff_seconds - 3600  # one hour
         self.bot.timers.create(guild_id=guild_id, expires=timer_expires, event='daily_debate', extras={})
-
-    @commands.group(
-        invoke_without_command=True,
-        help='Grant users access to commands that aren\'t available to users or take away their access to a command',
-        usage='command_access [<member/role>/sub command] (args)',
-        clearance='Admin',
-        examples=[
-            'command_access Hatty',
-            'command_access Mayor'
-        ],
-        cls=cls.Group
-    )
-    async def command_access(self, ctx: commands.Context, user_input: Union[discord.Role, str] = None):
-        if user_input is None:
-            return await embed_maker.command_error(ctx)
-
-        if ctx.subcommand_passed is None:
-            return
-
-        if type(user_input) == str:
-            # check if user input is member
-            user_input = await get_member(ctx, user_input)
-            if type(user_input) == discord.Message:
-                return
-
-        if type(user_input) == discord.Role:
-            access_type = 'role'
-        elif type(user_input) == discord.Member:
-            access_type = 'user'
-
-        special_access = [c for c in db.commands.find(
-            {'guild_id': ctx.guild.id, f'{access_type}_access.{user_input.id}': {'$exists': True}}
-        )]
-
-        access_given = [a['command_name'] for a in special_access if a[f'{access_type}_access'][f'{user_input.id}'] == 'give']
-        access_taken = [a['command_name'] for a in special_access if a[f'{access_type}_access'][f'{user_input.id}'] == 'take']
-
-        access_given_str = ' |'.join([f' `{c}`' for c in access_given])
-        access_taken_str = ' |'.join([f' `{c}`' for c in access_taken])
-
-        if not access_given_str:
-            access_given_str = f'{access_type.title()} has no special access to commands'
-        if not access_taken_str:
-            access_taken_str = f'No commands have been taken away from this {access_type.title()}'
-
-        embed = await embed_maker.message(
-            ctx,
-            author={'name': f'Command Access - {user_input}'}
-        )
-
-        embed.add_field(name='>Access Given', value=access_given_str, inline=False)
-        embed.add_field(name='>Access Taken', value=access_taken_str, inline=False)
-
-        return await ctx.send(embed=embed)
-
-    @staticmethod
-    async def command_access_check(
-            ctx: commands.Context,
-            command: cls.Command,
-            user_input: Union[discord.Role, str],
-            change: str
-    ):
-        if type(user_input) == str:
-            # check if user input is member
-            user_input = await get_member(ctx, user_input)
-            if type(user_input) == discord.Message:
-                return
-
-        if command is None:
-            return await embed_maker.command_error(ctx)
-
-        if user_input is None:
-            return await embed_maker.error(ctx, '[user/role]')
-
-        command_data = db.get_command_data(ctx.guild.id, command.name, insert=True)
-
-        if command.docs.clearance in ['Dev', 'Admin']:
-            return await embed_maker.error(ctx, 'You can not manage access of admin or dev commands')
-
-        can_access_command = True
-
-        if type(user_input) == discord.Role:
-            access_type = 'role'
-        elif type(user_input) == discord.Member:
-            access_type = 'user'
-
-        if access_type == 'user':
-            author_perms = ctx.author.guild_permissions
-            member_perms = user_input.guild_permissions
-            if author_perms <= member_perms:
-                return await embed_maker.error(
-                    ctx,
-                    'You can not manage command access of people who have the same or more permissions as you'
-                )
-
-            # can user run command
-            can_access_command = command.docs.can_run
-
-        elif access_type == 'role':
-            top_author_role = ctx.author.roles[-1]
-            top_author_role_perms = top_author_role.permissions
-            role_perms = user_input.permissions
-            if top_author_role_perms <= role_perms:
-                return await embed_maker.error(
-                    ctx,
-                    'You can not manage command access of a role which has the same or more permissions as you'
-                )
-
-            access = command_data[f'role_access']
-            can_access_command = str(user_input.id) in access and access[str(user_input.id)] == 'give'
-
-        if can_access_command and change == 'give':
-            return await embed_maker.error(ctx, f'{user_input} already has access to that command')
-
-        if not can_access_command and change == 'take':
-            return await embed_maker.error(ctx, f"{user_input} already doesn't have access to that command")
-
-        return access_type, user_input
-
-    @command_access.command(
-        name='give',
-        help='Grant a users or a role access to commands that aren\'t available them usually',
-        usage='command_access give [command] [user/role]',
-        clearance='Admin',
-        examples=[
-            'command_access give anon_poll Hattyot',
-            'command_access give daily_debates Mayor'
-        ],
-        cls=cls.Command
-    )
-    async def command_access_give(self, ctx: commands.Context, command: Union[Command, cls.Command, str] = None,
-                                  *, user_input: Union[discord.Role, str] = None):
-        if command is None:
-            return await embed_maker.command_error(ctx)
-
-        if type(command) == str:
-            return await embed_maker.message(ctx, description=f'Unable to find a command by the name: `{command}`', send=True)
-
-        data = await self.command_access_check(ctx, command, user_input, change='give')
-        if type(data) == discord.Message:
-            return
-
-        access_type, user_input = data
-
-        db.commands.update_one(
-            {'guild_id': ctx.guild.id, 'command_name': command.name},
-            {'$set': {f'{access_type}_access.{user_input.id}': 'give'}}
-        )
-
-        return await embed_maker.message(
-            ctx,
-            description=f'{user_input} has been granted access to: `{command.name}`',
-            send=True
-        )
-
-    @command_access.command(
-        name='take',
-        help="'Take away user's or role's access to a command",
-        usage='command_access take [command] [user/role]',
-        clearance='Admin',
-        examples=[
-            'command_access take anon_poll Hattyot',
-            'command_access take daily_debates Mayor'
-        ],
-        cls=cls.Command
-    )
-    async def command_access_take(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
-                                  *, user_input: Union[discord.Role, str] = None):
-        if command is None:
-            return await embed_maker.command_error(ctx)
-
-        if type(command) == str:
-            return await embed_maker.message(ctx, description=f'Unable to find a command by the name: `{command}`', send=True)
-
-        data = await self.command_access_check(ctx, command, user_input, change='take')
-        if type(data) == discord.Message:
-            return
-
-        access_type, user_input = data
-
-        db.commands.update_one(
-            {'guild_id': ctx.guild.id, 'command_name': command.name},
-            {'$set': {f'{access_type}_access.{user_input.id}': 'take'}}
-        )
-
-        return await embed_maker.message(
-            ctx,
-            description=f'{user_input} access has been taken away from: `{command.name}`',
-            send=True
-        )
-
-    @command_access.command(
-        name='default',
-        help="Sets role's or user's access to a command back to default",
-        usage='command_access default [command] [user/role]',
-        clearance='Admin',
-        examples=[
-            'command_access default anon_poll Hattyot',
-            'command_access default daily_debates Mayor'
-        ],
-        cls=cls.Command
-    )
-    async def command_access_default(self, ctx: commands.Context, command: Union[Command, cls.Command] = None,
-                                     user_input: Union[discord.Role, str] = None):
-        if command is None:
-            return await embed_maker.command_error(ctx)
-
-        if type(command) == str:
-            return await embed_maker.message(ctx, description=f'Unable to find a command by the name: `{command}`', send=True)
-
-        data = await self.command_access_check(ctx, command, user_input, change='default')
-        if type(data) == discord.Message:
-            return
-
-        access_type, user_input = data
-
-        db.commands.update_one(
-            {'guild_id': ctx.guild.id, 'command_name': command.name},
-            {'$unset': {f'{access_type}_access.{user_input.id}': 1}}
-        )
-
-        return await embed_maker.message(
-            ctx,
-            description=f'{user_input} access has been set to default for: `{command.name}`',
-            send=True
-        )
-
-    @commands.command(
-        help='see what roles are whitelisted for an emote or what emotes are whitelisted for a role',
-        usage='emote_roles [emote/role]',
-        examples=[
-            'emote_roles :TldrNewsUK:',
-            'emote_roles Mayor'
-        ],
-        clearance='Mod',
-        cls=cls.Command
-    )
-    async def emote_roles(self, ctx, user_input: str = None):
-        if user_input is None:
-            return await embed_maker.command_error(ctx)
-
-        # check if user_input is emote
-        role = None
-
-        emote = get_custom_emote(ctx, user_input)
-        if not emote:
-            role = await get_guild_role(ctx.guild, user_input)
-
-        if emote:
-            if emote.roles:
-                return await embed_maker.message(
-                    ctx,
-                    description=f'This emote is restricted to: {", ".join([f"<@&{r.id}>" for r in emote.roles])}',
-                    send=True
-                )
-            else:
-                return await embed_maker.message(ctx, description='This emote is available to everyone', send=True)
-        elif role:
-            emotes = []
-            for emote in ctx.guild.emojis:
-                if role in emote.roles:
-                    emotes.append(emote)
-
-            if emotes:
-                return await embed_maker.message(
-                    ctx,
-                    description=f'This role has access to: {", ".join([f"<:{emote.name}:{emote.name}> " for emote in emotes])}',
-                    send=True
-                )
-            else:
-                return await embed_maker.message(
-                    ctx,
-                    description='This role doesn\'t have special access to any emotes',
-                    send=True
-                )
-
-    @commands.command(
-        help='restrict an emote to specific role(s)',
-        usage='emote_role (action) [args]',
-        examples=[
-            'emote_role',
-            'emote_role add -r Mayor -e :TldrNewsUK:',
-            'emote_role remove -r Mayor -e :TldrNewsUK: :TldrNewsUS: :TldrNewsEU:'
-        ],
-        command_args=[
-            (('--role', '-r', str), 'The role you want to add the emote to'),
-            (('--emotes', '-e', str), 'The emotes you want to be added to the role'),
-        ],
-        clearance='Mod',
-        cls=cls.Command
-    )
-    async def emote_role(self, ctx: commands.Context, action: str = None, *, args: Union[ParseArgs, dict] = None):
-        if action and action.isdigit():
-            page = int(action)
-        else:
-            page = 1
-
-        if action not in ['add', 'remove']:
-            emotes = ctx.guild.emojis
-            max_pages = math.ceil(len(emotes) / 10)
-
-            if page > max_pages or page < 1:
-                return await embed_maker.error(ctx, 'Invalid page number given')
-
-            emotes = emotes[10 * (page - 1):10 * page]
-
-            description = ''
-            index = 0
-            for emote in emotes:
-                if not emote.roles:
-                    continue
-
-                emote_roles = " | ".join(f'<@&{role.id}>' for role in emote.roles)
-                description += f'\n<:{emote.name}:{emote.id}> -> {emote_roles}'
-                index += 1
-
-                if index == 10:
-                    break
-
-            return await embed_maker.message(
-                ctx,
-                description=description,
-                send=True,
-                footer={'text': f'Page {page}/{max_pages}'}
-            )
-
-        # return error if required variables are not given
-        if 'r' not in args or not args['r']:
-            return await embed_maker.error(ctx, "Missing role arg")
-
-        if 'e' not in args or not args['e']:
-            return await embed_maker.error(ctx, "Missing emotes arg")
-
-        role = await get_guild_role(ctx.guild, args['r'][0])
-        emotes = args['e'][0]
-
-        if emotes is None:
-            return await embed_maker.command_error(ctx, '[emotes]')
-
-        if role is None:
-            return await embed_maker.command_error(ctx, '[role]')
-
-        emote_list = [*filter(lambda e: e is not None, [get_custom_emote(ctx, emote) for emote in emotes.split(' ')])]
-        if not emote_list:
-            return await embed_maker.command_error(ctx, '[emotes]')
-
-        msg = None
-        for emote in emote_list:
-            emote_roles = emote.roles
-
-            if action == 'add':
-                emote_roles.append(role)
-                # add bot role to emote_roles
-                if ctx.guild.self_role not in emote_roles:
-                    emote_roles.append(ctx.guild.self_role)
-
-                emote_roles = [*set(emote_roles)]
-
-                await emote.edit(roles=emote_roles)
-
-            elif action == 'remove':
-                for i, r in enumerate(emote_roles):
-                    if r.id == role.id:
-                        emote_roles.pop(i)
-                        await emote.edit(roles=emote_roles)
-                else:
-                    msg = f'<@&{role.id}> is not whitelisted for emote {emote}'
-                    break
-
-        if not msg:
-            if action == 'add':
-                msg = f'<@&{role.id}> has been added to whitelisted roles of emotes {emotes}'
-            elif action == 'remove':
-                msg = f'<@&{role.id}> has been removed from whitelisted roles of emotes {emotes}'
-
-        return await embed_maker.message(ctx, description=msg, colour='green', send=True)
-
-    @commands.command(
-        help='Archive a ticket channel. Every message will be recorded and put in a google doc',
-        usage='archive_channel',
-        clearance='Mod',
-        examples=['archive_channel'],
-        cls=cls.Command
-    )
-    async def archive_channel(self, ctx: commands.Context):
-        # ask the user if they actually want to start the process of archiving a channel
-        confirm_message = await embed_maker.message(
-            ctx,
-            description='React with 👍 if you are sure you want to archive this channel.',
-            colour='red',
-            send=True
-        )
-
-        def check(reaction: discord.Reaction, user: discord.User):
-            return user == ctx.author and str(reaction.emoji) == '👍'
-
-        try:
-            await ctx.bot.wait_for('reaction_add', timeout=60, check=check)
-        except asyncio.TimeoutError:
-            await confirm_message.delete()
-            return await ctx.message.delete()
-
-        # get embed that confirms users reaction
-        confirmed_embed = await embed_maker.message(
-            ctx,
-            description='Starting archive process, this might take a while, please wait.',
-            colour='green',
-        )
-
-        # edit original message
-        await confirm_message.edit(embed=confirmed_embed)
-
-        # get all the messages for channel and reverse the list
-        channel_history = await ctx.channel.history(limit=None).flatten()
-        channel_history = channel_history[::-1]
-
-        channel_history_string = await self.history_into_string(ctx.guild, channel_history)
-
-        if config.SERVICE_ACCOUNT_FILE:
-            try:
-                file_url = self.bot.google_drive.upload(channel_history_string, f'{ctx.channel.name} - archive.txt', 'channel archives')
-                error = not bool(file_url)
-            except Exception as e:
-                self.bot.logger.exception(str(e))
-                error = True
-
-            if error:
-                await embed_maker.error(ctx, 'Error uploading archive file to google drive')
-            else:
-                return await embed_maker.message(ctx, description=f'File has been been uploaded to google drive: {file_url}', send=True)
-
-        # send file containing archive
-        return await ctx.send(file=discord.File(StringIO(channel_history_string), filename='archive.txt'))
-
-    @staticmethod
-    def embed_message_to_text(message: discord.Message):
-        embed = message.embeds[0]
-
-        # get either title or author
-        title = ''
-        if embed.title:
-            title = embed.title.name if type(embed.title) != str else embed.title
-        elif embed.author:
-            title = embed.author.name if type(embed.author) != str else embed.author
-        # format description
-        description = ('\n' if title else '') + embed.description if embed.description else ''
-
-        # convert fields to text
-        fields = ""
-        for field in embed.fields:
-            if fields or description:
-                fields += '\n'
-
-            fields += f'{field.name}\n{field.value}'
-
-        # convert values to a multi line message
-        text = f"{title}" \
-               f"{description}" \
-               f"{fields}"
-
-        return text
-
-    @staticmethod
-    def replace_mentions(guild: discord.Guild, string):
-        # replace mentions in values with actual names
-        mentions = re.findall(r'(<(@|@&|@!|#)\d+>)', string)
-        for mention in mentions:
-            # get type, ie. @, @&, @! or #
-            mention_type = mention[1]
-            # get id from find
-            mention_id = re.findall(r'(\d+)', mention[0])[0]
-
-            # turn type into iterable
-            iterable_switch = {
-                '@': guild.members,
-                '@!': guild.members,
-                '@&': guild.roles,
-                '#': guild.channels
-            }
-            iterable = iterable_switch.get(mention_type, None)
-            if not iterable:
-                continue
-
-            # get object from id
-            mention_object = discord.utils.find(lambda o: o.id == int(mention_id), iterable)
-            # if object actually exists replace mention in string
-            if mention_object:
-                string = string.replace(f'{mention[0]}', mention_object.name)
-
-        return string
-
-    @commands.command(
-        name='automember',
-        help='Enables or disables giving non-patreon users the member role when they get the citizen role',
-        usage='automember',
-        clearance='Mod',
-        examples=['automember'],
-        cls=cls.Command
-    )
-    async def auto_member(self, ctx: commands.Context):
-        new_automember = db.get_automember(ctx.guild.id)
-
-        if new_automember:
-            msg = 'Disabling automember'
-            colour = 'orange'
-        else:
-            msg = 'Enabling automember'
-            colour = 'green'
-
-        leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
-        leveling_guild.toggle_automember()
-
-        return await embed_maker.message(ctx, description=msg, colour=colour, send=True)
-
-    async def history_into_string(self, guild: discord.Guild, history: list):
-        history_string = ''
-        for i, message in enumerate(history):
-            # fix for a weird error
-            if not message or type(message) == str:
-                continue
-
-            history_string += f"{message.created_at.strftime('%H:%M:%S | %Y-%m-%d')} - {message.author}"
-
-            if message.content:
-                history_string += f'\n"{message.content}"\n'
-
-            # if message has embed, convert the embed to text and add it to channel_history_string
-            if message.embeds:
-                history_string += f'\n"{self.embed_message_to_text(message)}"\n'
-
-            # if message has attachments add them to channel_history_string
-            if message.attachments:
-                # if message has contents it needs to have \n at the end
-                if message.content:
-                    history_string += '\n'
-
-                # gather urls
-                urls = "\n".join([a.url for a in message.attachments])
-                history_string += f'Attachments: {urls}'
-
-            history_string += '\n'
-
-        # convert mentions like "<@93824009823094832098>" into names
-        history_string = self.replace_mentions(guild, history_string)
-        return history_string
 
 
 def setup(bot):

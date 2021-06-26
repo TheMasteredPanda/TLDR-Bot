@@ -10,31 +10,35 @@ import re
 from bson import ObjectId
 from bot import TLDR
 from modules import database, format_time, embed_maker
-from discord.ext import commands
+from discord.ext.commands import Cog, Context
 
 
 db = database.get_connection()
 
 
-class Events(commands.Cog):
+class Events(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_ready(self):
+        if self.bot.first_ready:
+            return
+
         bot_game = discord.Game(f">help")
         await self.bot.change_presence(activity=bot_game)
 
         await self.check_left_members()
         await self.bot.timers.run_old()
         await self.bot.invite_logger.initialize_invites()
+        await self.bot.clearance.parse_clearance_spreadsheet()
         self.bot.leveling_system.initialise_guilds()
         self.bot.ukparl_module.set_guild(self.bot.guilds[0])
         await self.bot.ukparl_module.load()
         self.bot.get_cog("UK").load()
         self.bot.logger.info(f"{self.bot.user} is ready")
+        self.bot.first_ready = True
         self.bot.ukparl_module.load_trackers()
-        self.bot.ukparl_module.tracker_event_loop.start()
 
     async def check_left_members(self):
         self.bot.logger.info(f"Checking Guilds for left members.")
@@ -66,7 +70,7 @@ class Events(commands.Cog):
             f"Left members have been checked - Total {left_member_count} members left guilds."
         )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_message(self, message: discord.Message):
         if (
             message.author.bot
@@ -126,8 +130,8 @@ class Events(commands.Cog):
                 {"guild_id": message.guild.id, "user_id": message.author.id}
             )
 
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx: commands.Context, exception: Exception):
+    @Cog.listener()
+    async def on_command_error(self, ctx: Context, exception: Exception):
         trace = exception.__traceback__
         verbosity = 4
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
@@ -137,8 +141,9 @@ class Events(commands.Cog):
             return
 
         # send error to channel where eval was called
+
         if ctx.command.name == "eval":
-            return await ctx.send(f"```{exception}\n{traceback_text}```")
+            return await ctx.send(f"```py\n{exception}\n{traceback_text}```")
 
         print(traceback_text)
         print(exception)
@@ -164,7 +169,7 @@ class Events(commands.Cog):
 
         return await channel.send(embed=embed)
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_daily_debate_timer_over(self, timer):
         guild_id = timer["guild_id"]
         guild = self.bot.get_guild(int(guild_id))
@@ -195,7 +200,7 @@ class Events(commands.Cog):
                 extras={},
             )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_daily_debate_final_timer_over(self, timer):
         guild_id = timer["guild_id"]
         guild = self.bot.get_guild(int(guild_id))
@@ -333,7 +338,7 @@ class Events(commands.Cog):
         mod_cog = self.bot.get_cog("Mod")
         return await mod_cog.start_daily_debate_timer(guild.id, dd_time)
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_dd_results_timer_over(self, timer):
         poll_channel_id = timer["extras"]["poll_channel_id"]
         poll_id = timer["extras"]["poll_id"]
@@ -371,13 +376,13 @@ class Events(commands.Cog):
         # send results string in dd poll channel
         return await channel.send(results_str)
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_message_edit(self, before, after):
         # re run command if command was edited
         if before.content != after.content and after.content.startswith(config.PREFIX):
             return await self.bot.process_command(after)
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_raw_reaction_add(self, payload):
         guild_id = payload.guild_id
 
@@ -548,7 +553,7 @@ class Events(commands.Cog):
                 },
             )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_delete_temp_poll_timer_over(self, timer):
         channel_id = timer["extras"]["channel_id"]
         message_id = timer["extras"]["message_id"]
@@ -558,7 +563,7 @@ class Events(commands.Cog):
         except:
             return
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_guild_role_update(self, before: discord.Role, after: discord.Role):
         # if name has changed, edit database entry
         if before.name != after.name:
@@ -577,7 +582,7 @@ class Events(commands.Cog):
                             {"$set": {f"{branch.name[0]}_role": after.name}},
                         )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild_id = member.guild.id
         user_id = member.id
@@ -589,8 +594,10 @@ class Events(commands.Cog):
         if left_user:
 
             # transfer back data
-            db.leveling_users.insert_one(left_user)
-            db.left_leveling_users.delete_one(left_user)
+            db.left_leveling_users.delete_many(
+                {"guild_id": guild_id, "user_id": user_id}
+            )
+            db.leveling_users.insert_one({"guild_id": guild_id, "user_id": user_id})
 
             # delete timer
             db.timers.delete_one(
@@ -621,8 +628,9 @@ class Events(commands.Cog):
                         await leveling_member.add_role(role)
 
     def transfer_leveling_data(self, leveling_user):
+        db.leveling_users.delete_many(leveling_user)
+        db.left_leveling_users.delete_many(leveling_user)
         db.left_leveling_users.insert_one(leveling_user)
-        db.leveling_users.delete_one(leveling_user)
 
         data_expires = round(time.time()) + 30 * 24 * 60 * 60  # 30 days
 
@@ -633,7 +641,7 @@ class Events(commands.Cog):
             extras={"user_id": leveling_user["user_id"]},
         )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         leveling_user = db.leveling_users.find_one(
             {"guild_id": member.guild.id, "user_id": member.id}
@@ -644,14 +652,14 @@ class Events(commands.Cog):
 
         self.transfer_leveling_data(leveling_user)
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_leveling_data_expires_timer_over(self, timer: dict):
         # delete user from left_leveling_users
         db.left_leveling_users.delete_one(
             {"guild_id": timer["guild_id"], "user_id": timer["extras"]["user_id"]}
         )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_guild_channel_delete(self, channel):
         ticket = db.tickets.find_one(
             {"guild_id": channel.guild.id, "channel_id": channel.id}
@@ -659,7 +667,7 @@ class Events(commands.Cog):
         if ticket:
             db.tickets.delete_one({"_id": ObjectId(ticket["_id"])})
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_rep_at_timer_over(self, timer: dict):
         guild: discord.Guild = self.bot.get_guild(timer["guild_id"])
         if not guild:
@@ -693,7 +701,7 @@ class Events(commands.Cog):
                 embed=embed, content=f"<@{member.id}>, I wasn't able to dm you"
             )
 
-    @commands.Cog.listener()
+    @Cog.listener()
     async def on_ban(self, member: discord.Member):
         # delete user from leveling_users
         db.leveling_users.delete_one(
