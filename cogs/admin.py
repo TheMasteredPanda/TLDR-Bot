@@ -161,7 +161,7 @@ class Admin(Cog):
         ],
         command_args=[
             (('--role', '-r', str), 'The role you want to add the emote to'),
-            (('--emotes', '-e', str), 'The emotes you want to be added to the role'),
+            (('--emotes', '-e', list), 'The emotes you want to be added to the role'),
         ],
         cls=commands.Command
     )
@@ -207,13 +207,13 @@ class Admin(Cog):
         if 'emotes' not in args or not args['emotes']:
             return await embed_maker.error(ctx, "Missing emotes arg")
 
-        role = await get_guild_role(ctx.guild, args['role'][0])
-        emotes = args['emotes'][0]
+        role = await get_guild_role(ctx.guild, args['role'])
+        emotes = args['emotes']
 
-        if emotes is None:
+        if not emotes:
             return await embed_maker.command_error(ctx, '[emotes]')
 
-        if role is None:
+        if not role:
             return await embed_maker.command_error(ctx, '[role]')
 
         emote_list = [*filter(lambda e: e is not None, [get_custom_emote(ctx, emote) for emote in emotes.split(' ')])]
