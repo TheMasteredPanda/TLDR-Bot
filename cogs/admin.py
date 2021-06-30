@@ -161,7 +161,7 @@ class Admin(Cog):
         ],
         command_args=[
             (('--role', '-r', str), 'The role you want to add the emote to'),
-            (('--emotes', '-e', list), 'The emotes you want to be added to the role'),
+            (('--emotes', '-e', str), 'The emotes you want to be added to the role'),
         ],
         cls=commands.Command
     )
