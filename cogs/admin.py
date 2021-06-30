@@ -201,14 +201,14 @@ class Admin(Cog):
             )
 
         # return error if required variables are not given
-        if 'r' not in args or not args['r']:
+        if 'role' not in args or not args['role']:
             return await embed_maker.error(ctx, "Missing role arg")
 
-        if 'e' not in args or not args['e']:
+        if 'emotes' not in args or not args['emotes']:
             return await embed_maker.error(ctx, "Missing emotes arg")
 
-        role = await get_guild_role(ctx.guild, args['r'][0])
-        emotes = args['e'][0]
+        role = await get_guild_role(ctx.guild, args['role'][0])
+        emotes = args['emotes'][0]
 
         if emotes is None:
             return await embed_maker.command_error(ctx, '[emotes]')
