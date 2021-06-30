@@ -201,14 +201,14 @@ class Admin(Cog):
             )
 
         # return error if required variables are not given
-        if 'r' not in args or not args['r']:
+        if 'role' not in args or not args['role']:
             return await embed_maker.error(ctx, "Missing role arg")
 
-        if 'e' not in args or not args['e']:
+        if 'emotes' not in args or not args['emotes']:
             return await embed_maker.error(ctx, "Missing emotes arg")
 
-        role = await get_guild_role(ctx.guild, args['r'][0])
-        emotes = args['e'][0]
+        role = await get_guild_role(ctx.guild, args['role'][0])
+        emotes = args['emotes'][0]
 
         if emotes is None:
             return await embed_maker.command_error(ctx, '[emotes]')
@@ -407,8 +407,8 @@ class Admin(Cog):
         else:
             custom_commands_str = 'Currently no custom commands have been created'
 
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
-        highest_member_clearance = self.bot.clearance.highest_member_clearance(member_clearance)
+        member_clearance = self.bot.command_system.member_clearance(ctx.author)
+        highest_member_clearance = self.bot.command_system.highest_member_clearance(member_clearance)
         return await embed_maker.message(
             ctx,
             description=custom_commands_str,
@@ -478,7 +478,7 @@ class Admin(Cog):
         if not args['name'] and not edit:
             return await embed_maker.error(ctx, "A name needs to be given to the custom command.")
 
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
+        member_clearance = self.bot.command_system.member_clearance(ctx.author)
         # check for existing custom command with the same name
         existing = db.custom_commands.find_one({'guild_id': ctx.guild.id, 'name': args['name']})
         if existing:
