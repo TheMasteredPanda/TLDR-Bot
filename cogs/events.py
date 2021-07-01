@@ -489,7 +489,8 @@ class Events(Cog):
 
             # transfer back data
             db.left_leveling_users.delete_many({'guild_id': guild_id, 'user_id': user_id})
-            db.leveling_users.insert_one({'guild_id': guild_id, 'user_id': user_id})
+            del left_user['_id']
+            db.leveling_users.insert_one(left_user)
 
             # delete timer
             db.timers.delete_one({
