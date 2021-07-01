@@ -7,13 +7,14 @@ from typing import Union
 from discord.ext.commands.converter import TextChannelConverter
 from discord.file import File
 from modules import database
-from modules.custom_commands import Channel, Guild
+from modules.custom_commands import Guild
 from modules.reaction_menus import BookMenu
 from discord import embeds
 
 from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from bot import TLDR
-from modules import cls, embed_maker
+from modules import embed_maker
+import modules.commands as cls
 from modules.utils import ParseArgs
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -244,7 +245,6 @@ class UK(commands.Cog):
     @commands.group(
         help="To access the commands interfacing the UK Parliament Site.",
         invoke_without_command=True,
-        clearance="User",
         usage="uk [sub command]",
         examples=["uk divisions linfo 1234", "uk mpelection Boris Johnson"],
         Mod=cls.Help(
@@ -270,7 +270,6 @@ class UK(commands.Cog):
         invoke_without_command=True,
         usage="uk bills [sub command]",
         examples=["uk bills search European Withdrawal"],
-        clearance="User",
         sub_commands=["search"],
         cls=cls.Group,
     )
@@ -282,7 +281,6 @@ class UK(commands.Cog):
         invoke_without_command=True,
         usage="uk divisions [sub command]",
         examples=["uk divisions lsearch [args]"],
-        clearance="User",
         sub_commands=["lsearch", "csearch", "linfo", "cinfo"],
         cls=cls.Group,
     )
@@ -295,7 +293,6 @@ class UK(commands.Cog):
         help="Moderator level commands for this feature",
         usage="uk mod [sub command]",
         examples=["uk mod tracker [args]"],
-        clearance="Mod",
         sub_commands=["tracker"],
         cls=cls.Group,
     )
@@ -308,14 +305,13 @@ class UK(commands.Cog):
         help="Commands related to the trackering section of this feature",
         usage="uk mod tracker [sub command]",
         examples=["uk mod tracker channels"],
-        clearance="Mod",
         sub_commands=[
             "channels",
             # "load",
             "statuses",
             "loop",
             "dbclear",
-            "dbastats",
+            "dbstats",
             "ping",
         ],
         cls=cls.Group,
@@ -328,7 +324,6 @@ class UK(commands.Cog):
         help="Pings an endpoint on the REST api and returns the latency between the bot and a REST request.",
         usage="uk mod ping",
         examples=["uk mod ping"],
-        clearance="Mod",
         cls=cls.Command,
     )
     async def mod_cmd_ping(self, ctx: commands.Context):
@@ -360,7 +355,6 @@ class UK(commands.Cog):
         ),
         usage="uk mod tracker dbclear",
         examples=["uk mod tracker dbclear", "uk mod tracker dbclear [auth code]"],
-        clearance="Admin",
         cls=cls.Command,
     )
     async def mod_cmd_tracker_db_clear(self, ctx: commands.Context, code: str = ""):
@@ -422,7 +416,6 @@ class UK(commands.Cog):
         help="Show the status of each tracker",
         usage="uk mod tracker statuses",
         examples=["uk mod tracker statuses"],
-        clearance="Mod",
         cls=cls.Command,
     )
     async def mod_cmd_tracker_statuses(self, ctx: commands.Context):
@@ -456,7 +449,6 @@ class UK(commands.Cog):
         invoke_without_command=True,
         usage="uk mod tracker channels [args]",
         examples=["uk mod tracker channels", "uk mod tracker channels set [args]"],
-        clearance="Mod",
         cls=cls.Group,
     )
     async def mod_cmd_tracker_channels(self, ctx: commands.Context):
@@ -487,7 +479,6 @@ class UK(commands.Cog):
         help="Commands to start and stop the event loop checking the various rss feeds",
         usage="uk mod tracker loop",
         examples=["uk mod tracker loop start", "uk mod tracker loop stop"],
-        clearance="Mod",
         cls=cls.Group,
     )
     async def mod_cmd_tracker_eventloop(self, ctx: commands.Context):
@@ -507,7 +498,6 @@ class UK(commands.Cog):
         help="Start the event loop.",
         usage="uk mod tracker loop start",
         examples=["uk mod tracker loop start"],
-        clearance="Mod",
         cls=cls.Command,
     )
     async def mod_cmd_tracker_eventloop_start(self, ctx: commands.Context):
@@ -540,7 +530,6 @@ class UK(commands.Cog):
         help="Stop the event loop",
         usage="uk mod tracker loop stop",
         examples=["uk mod tracker loop stop"],
-        clearance="Mod",
         cls=cls.Command,
     )
     async def mod_cmd_tracker_eventloop_stop(self, ctx: commands.Context):
@@ -560,7 +549,6 @@ class UK(commands.Cog):
         help="Set a channel to one of the four trackers",
         usage="uk mod tracker channels set [tracker_id] [channel_id or mention]",
         examples=["uk mod tracker channelts set royalassent #royal-assent"],
-        clearance="Mod",
         cls=cls.Command,
     )
     async def mod_cmd_tracker_channels_set(

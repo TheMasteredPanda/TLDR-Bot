@@ -49,7 +49,7 @@ class TLDR(Bot):
                 self.load_extension(f"cogs.{filename[:-3]}")
                 self.logger.info(f"Cog {filename[:-3]} is now loaded.")
 
-        # self.google_drive = modules.google_drive.Drive()
+        self.google_drive = modules.google_drive.Drive()
         self.timers = modules.timers.Timers(self)
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)

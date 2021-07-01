@@ -18,49 +18,58 @@ class Clearance:
         self.roles = {}
         self.command_access = {}
 
-        self.bot.logger.debug(f'Downloading clearance spreadsheet')
-        self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(config.CLEARANCE_SPREADSHEET_ID)
-        self.spreadsheet_link = f'https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}'
-        self.bot.logger.debug(f'Clearance spreadsheet has been downloaded')
-        self.bot.logger.info(f'Clearance module has been initiated')
+        self.bot.logger.debug(f"Downloading clearance spreadsheet")
+        self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(
+            config.CLEARANCE_SPREADSHEET_ID
+        )
+        self.spreadsheet_link = (
+            f"https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
+        )
+        self.bot.logger.debug(f"Clearance spreadsheet has been downloaded")
+        self.bot.logger.info(f"Sheets: {', '.join(self.clearance_spreadsheet.keys())}")
+        self.bot.logger.info(f"Clearance module has been initiated")
 
     @staticmethod
     def split_comma(value: str, *, value_type: Callable = str):
         """Split string of comma separated values into a list."""
-        return [value_type(v.strip()) for v in value.split(',') if v and v.strip() and value_type(v.strip())]
+        return [
+            value_type(v.strip())
+            for v in value.split(",")
+            if v and v.strip() and value_type(v.strip())
+        ]
 
     async def parse_clearance_spreadsheet(self):
         """Function for parsing the clearance spreadsheet and sorting the values in it."""
         guild: discord.Guild = self.bot.get_guild(config.MAIN_SERVER)
         # parse roles
         # ignore the first 2 rows cause they are for users viewing/editing the spreadsheet
-        for row in self.clearance_spreadsheet['Roles'][1:]:
+        for row in self.clearance_spreadsheet["Roles"][1:]:
             if not row:
                 break
 
             role_name = row[0]
             # ignore the default user
-            if role_name == 'User':
+            if role_name == "User":
                 continue
 
             role_id = next((int(value) for value in row[1:] if value.isdigit()), None)
 
             role = discord.utils.find(lambda role: role.id == role_id, guild.roles)
             if not role:
-                error = f'Invalid Role [{role_name}] in the clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}'
+                error = f"Invalid Role [{role_name}] in the clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
             self.roles[role_name] = role_id
 
         # parse groups
-        for row in self.clearance_spreadsheet['Role Groups'][1:]:
+        for row in self.clearance_spreadsheet["Role Groups"][1:]:
             group_name = row[0]
             roles = row[1]
 
             split_roles = self.split_comma(roles)
             for role_name in split_roles:
                 if role_name not in self.roles:
-                    error = f'Invalid role [{role_name}] in group [{group_name}] in clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}'
+                    error = f"Invalid role [{role_name}] in group [{group_name}] in clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                     return await self.bot.critical_error(error)
 
             self.groups[group_name] = split_roles
@@ -73,7 +82,7 @@ class Clearance:
                 continue
 
             if cog_name not in self.clearance_spreadsheet:
-                error = f'Cog {cog_name} not in the clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}'
+                error = f"Cog {cog_name} not in the clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
             for row in self.clearance_spreadsheet[cog_name][1:]:
@@ -81,7 +90,7 @@ class Clearance:
 
                 command = self.bot.get_command(command_name)
                 if not command:
-                    error = f'Invalid command [{command_name}] in clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}'
+                    error = f"Invalid command [{command_name}] in clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                     return await self.bot.critical_error(error)
 
                 groups = self.split_comma(row[2]) if len(row) > 2 else []
@@ -89,29 +98,38 @@ class Clearance:
                 users = self.split_comma(row[4], value_type=int) if len(row) > 4 else []
 
                 self.command_access[command_name] = {
-                    'groups': groups,
-                    'roles': roles,
-                    'users': users
+                    "groups": groups,
+                    "roles": roles,
+                    "users": users,
                 }
 
         # check if any commands are missing from the clearance spreadsheet
         for command_name, command in self.bot.command_system.commands.items():
             if command.root_parent is None and command_name not in self.command_access:
-                error = f'Command [{command_name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}'
+                error = f"Command [{command_name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
             if command.root_parent is None:
                 continue
 
-            if command.root_parent != command and command.root_parent.name not in self.command_access:
-                error = f'Command [{command.root_parent.name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}'
+            if (
+                command.root_parent != command
+                and command.root_parent.name not in self.command_access
+            ):
+                error = f"Command [{command.root_parent.name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
-            if command.root_parent != command and command_name not in self.command_access and command.root_parent.name in self.command_access:
-                self.command_access[command_name] = self.command_access[command.root_parent.name]
+            if (
+                command.root_parent != command
+                and command_name not in self.command_access
+                and command.root_parent.name in self.command_access
+            ):
+                self.command_access[command_name] = self.command_access[
+                    command.root_parent.name
+                ]
                 continue
 
-        self.bot.logger.debug(f'Clearance spreadsheet has been parsed')
+        self.bot.logger.debug(f"Clearance spreadsheet has been parsed")
 
     def member_clearance(self, member: discord.Member):
         """
@@ -127,34 +145,34 @@ class Clearance:
         :class:`dict`
             Clearance info about the user.
         """
-        clearance = {'groups': [], 'roles': ['User'], 'user_id': member.id}
+        clearance = {"groups": [], "roles": ["User"], "user_id": member.id}
         member_role_ids = [role.id for role in member.roles]
 
         # assign roles
         for role_name, role_id in self.roles.items():
             if role_id in member_role_ids:
-                clearance['roles'].append(role_name)
+                clearance["roles"].append(role_name)
 
                 # assign a group in role is in a group
                 for group_name, roles in self.groups.items():
-                    if role_name in roles and group_name not in clearance['groups']:
-                        clearance['groups'].append(group_name)
+                    if role_name in roles and group_name not in clearance["groups"]:
+                        clearance["groups"].append(group_name)
 
         return clearance
 
     @staticmethod
     def highest_member_clearance(member_clearance: dict):
         """Function that returns the highest group or role user has."""
-        highest_group = 'User'
-        if member_clearance['groups']:
-            if member_clearance['groups'][0] != 'Staff':
-                highest_group = member_clearance['groups'][0]
-            elif member_clearance['roles']:
-                highest_group = member_clearance['roles'][0]
+        highest_group = "User"
+        if member_clearance["groups"]:
+            if member_clearance["groups"][0] != "Staff":
+                highest_group = member_clearance["groups"][0]
+            elif member_clearance["roles"]:
+                highest_group = member_clearance["roles"][0]
 
         return highest_group
 
-    def command_clearance(self, command: Union['Group', 'Command']):
+    def command_clearance(self, command: Union["Group", "Command"]):
         """
         Return dict with info about what groups, roles and users have access to command.
 
@@ -173,14 +191,18 @@ class Clearance:
     @staticmethod
     def member_has_clearance(member_clearance: dict, command_clearance: dict):
         """Function for checking id member clearance and command clearance match"""
-        return member_clearance['user_id'] in command_clearance['users'] or \
-                set(command_clearance['roles']) & set(member_clearance['roles']) or \
-                set(command_clearance['groups']) & set(member_clearance['groups'])
+        return (
+            member_clearance["user_id"] in command_clearance["users"]
+            or set(command_clearance["roles"]) & set(member_clearance["roles"])
+            or set(command_clearance["groups"]) & set(member_clearance["groups"])
+        )
 
     async def refresh_data(self):
         """Refreshes data from the spreadsheet"""
-        self.bot.logger.debug(f'Refreshing clearance spreadsheet')
-        self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(config.CLEARANCE_SPREADSHEET_ID)
+        self.bot.logger.debug(f"Refreshing clearance spreadsheet")
+        self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(
+            config.CLEARANCE_SPREADSHEET_ID
+        )
         await self.parse_clearance_spreadsheet()
 
 
@@ -208,11 +230,11 @@ class Help:
     """
 
     def __init__(self, **kwargs):
-        self.help = kwargs.get('help', '')
-        self.examples = kwargs.get('examples', [])
-        self.usage = kwargs.get('usage', '')
-        self.dm_only = kwargs.get('dm_only', False)
-        self.command_args = kwargs.get('command_args', [])
+        self.help = kwargs.get("help", "")
+        self.examples = kwargs.get("examples", [])
+        self.usage = kwargs.get("usage", "")
+        self.dm_only = kwargs.get("dm_only", False)
+        self.command_args = kwargs.get("command_args", [])
         self.clearance = None
 
 
@@ -232,7 +254,9 @@ class Command(discord.ext.commands.Command):
     def __init__(self, func, **kwargs):
         super().__init__(func, **kwargs)
         self.docs = Help(**kwargs)
-        self.special_help_group = next((key for key, value in kwargs.items() if type(value) == Help), None)
+        self.special_help_group = next(
+            (key for key, value in kwargs.items() if type(value) == Help), None
+        )
         self.bot = None
         self.data = {}
         self.initialize_command_data()
@@ -245,7 +269,7 @@ class Command(discord.ext.commands.Command):
     @property
     def disabled(self):
         """Returns True if command has been disabled, otherwise returns False"""
-        return self.data['disabled']
+        return self.data["disabled"]
 
     def initialize_command_data(self):
         """Cache all the command_data in self.data"""
@@ -255,13 +279,15 @@ class Command(discord.ext.commands.Command):
     def access_given(self, member: discord.Member):
         """Return True if member has been given access to command, otherwise return False."""
         command_clearance = self.bot.clearance.command_clearance(self)
-        return member.id in command_clearance['users']
+        return member.id in command_clearance["users"]
 
     def can_use(self, member: discord.Member):
         """Returns True if member can use command, otherwise return False."""
         command_clearance = self.bot.clearance.command_clearance(self)
         member_clearance = self.bot.clearance.member_clearance(member)
-        return self.bot.clearance.member_has_clearance(member_clearance, command_clearance)
+        return self.bot.clearance.member_has_clearance(
+            member_clearance, command_clearance
+        )
 
     def get_help(self, member: discord.Member = None) -> Help:
         """
@@ -286,12 +312,17 @@ class Command(discord.ext.commands.Command):
             return help_object
 
         member_clearance = self.bot.clearance.member_clearance(member)
-        if self.special_help_group and self.special_help_group in member_clearance['groups']:
+        if (
+            self.special_help_group
+            and self.special_help_group in member_clearance["groups"]
+        ):
             help_object = self.__original_kwargs__[self.special_help_group]
             help_object.clearance = self.special_help_group
         else:
             command_clearance = self.bot.clearance.command_clearance(self)
-            help_object.clearance = self.bot.clearance.highest_member_clearance(member_clearance)
+            help_object.clearance = self.bot.clearance.highest_member_clearance(
+                member_clearance
+            )
 
         return help_object
 
@@ -301,6 +332,7 @@ class Command(discord.ext.commands.Command):
 
 class Group(discord.ext.commands.Group, Command):
     """Basically the same as :class:`Command`, but it also sub classes :class:`discord.ext.commands.Group`."""
+
     def __init__(self, func, **kwargs):
         super(Group, self).__init__(func, **kwargs)
         super(Command, self).__init__(func, **kwargs)
@@ -323,13 +355,13 @@ class CommandSystem:
     def __init__(self, bot):
         self.bot = bot
         self.commands: dict[str, [Union[Command, Group]]] = {}
-        self.bot.logger.info('CommandSystem module has been initiated')
+        self.bot.logger.info("CommandSystem module has been initiated")
 
     def initialize_cog(self, cog):
         """Add all the commands of a cog to the dict of commands."""
-        self.bot.logger.info(f'Adding cog {type(cog).__name__} into the CommandSystem')
+        self.bot.logger.info(f"Adding cog {type(cog).__name__} into the CommandSystem")
         for command in cog.__cog_commands__:
             command.bot = self.bot
             self.commands[command.name] = command
 
-        self.bot.logger.debug(f'Added {len(cog.__cog_commands__)} commands')
+        self.bot.logger.debug(f"Added {len(cog.__cog_commands__)} commands")
