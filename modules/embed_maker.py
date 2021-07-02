@@ -10,20 +10,21 @@ from discord.ext.commands import Context
 def get_colour(colour: str):
     """Converts colour name to :class:`discord.Colour` colour"""
     return {
-        'red': discord.Colour.red(),
-        'orange': discord.Colour.orange(),
-        'green': discord.Colour.green(),
+        "red": discord.Colour.red(),
+        "orange": discord.Colour.orange(),
+        "green": discord.Colour.green(),
     }.get(colour, config.EMBED_COLOUR)
 
 
 async def message(
-        ctx: Union[Context, discord.Message], *,
-        description: str = None,
-        author: dict = None,
-        footer: dict = None,
-        colour: str = None,
-        title: str = None,
-        send: bool = False
+    ctx: Union[Context, discord.Message],
+    *,
+    description: str = None,
+    author: dict = None,
+    footer: dict = None,
+    colour: str = None,
+    title: str = None,
+    send: bool = False,
 ) -> Union[discord.Message, discord.Embed]:
     """
     A function to easily create embeds with a certain look.
@@ -58,13 +59,13 @@ async def message(
 
     if author:
         # set icon_url to guild icon if one isn't provided
-        icon_url = author['icon_url'] if 'icon_url' in author else ctx.guild.icon_url
-        embed.set_author(name=author['name'], icon_url=icon_url)
+        icon_url = author["icon_url"] if "icon_url" in author else ctx.guild.icon_url
+        embed.set_author(name=author["name"], icon_url=icon_url)
 
     if footer:
         # set icon_url to None if one isn't provided
-        icon_url = footer['icon_url'] if 'icon_url' in footer else ctx.author.avatar_url
-        embed.set_footer(text=footer['text'], icon_url=icon_url)
+        icon_url = footer["icon_url"] if "icon_url" in footer else ctx.author.avatar_url
+        embed.set_footer(text=footer["text"], icon_url=icon_url)
     else:
         embed.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
 
@@ -96,7 +97,9 @@ async def error(ctx: Context, description, **kwargs):
     :class:`discord.Message`
         Will return message
     """
-    return await message(ctx, description=description, colour='red', send=True, **kwargs)
+    return await message(
+        ctx, description=description, colour="red", send=True, **kwargs
+    )
 
 
 async def command_error(ctx, bad_arg: str = None):
@@ -115,13 +118,13 @@ async def command_error(ctx, bad_arg: str = None):
     :class:`discord.Message`
         Will return message
     """
-    examples_str = '\n'.join(ctx.command.docs.examples)
+    examples_str = "\n".join(ctx.command.docs.examples)
     if bad_arg is None:
-        embed_colour = get_colour('orange')
-        description = f'**Description:** {ctx.command.docs.help}\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}'
+        embed_colour = get_colour("orange")
+        description = f"**Description:** {ctx.command.docs.help}\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}"
     else:
-        embed_colour = get_colour('red')
-        description = f'**Invalid Argument:** {bad_arg}\n\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}'
+        embed_colour = get_colour("red")
+        description = f"**Invalid Argument:** {bad_arg}\n\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}"
 
     if type(ctx.command) == commands.Group and ctx.command.all_commands:
         sub_commands = ctx.command.sub_commands(member=ctx.author)
@@ -131,10 +134,21 @@ async def command_error(ctx, bad_arg: str = None):
             description += sub_commands_str
 
     if ctx.command.docs.command_args:
-        command_args_str = '**\nCommand Args:**\n```' + '\n\n'.join(
-            f'({arg[0]}, {arg[1]}) - {description}' for arg, description in ctx.command.docs.command_args) + '```'
+        command_args_str = (
+            "**\nCommand Args:**\n```"
+            + "\n\n".join(
+                f"({arg[0]}, {arg[1]}) - {description}"
+                for arg, description in ctx.command.docs.command_args
+            )
+            + "```"
+        )
         description += command_args_str
 
-    embed = discord.Embed(colour=embed_colour, description=description, title=f'>{ctx.command.name}', timestamp=datetime.now())
-    embed.set_footer(text=f'{ctx.author}', icon_url=ctx.author.avatar_url)
+    embed = discord.Embed(
+        colour=embed_colour,
+        description=description,
+        title=f">{ctx.command.name}",
+        timestamp=datetime.now(),
+    )
+    embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar_url)
     return await ctx.send(embed=embed)
