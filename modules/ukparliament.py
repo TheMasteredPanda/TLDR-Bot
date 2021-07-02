@@ -459,6 +459,9 @@ class UKParliamentModule:
     def set_guild(self, guild):
         self._guild = guild
 
+    def get_guild(self) -> Union[Guild, None]:
+        return self._guild
+
     @tasks.loop(seconds=60)
     async def tracker_event_loop(self):
         division_listener = (

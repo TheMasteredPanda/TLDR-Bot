@@ -1,1 +1,12 @@
-{"installed":{"client_id":"585114088239-o1neb6ad0s3e157hmhr4v9n8d3pbhc9k.apps.googleusercontent.com","project_id":"tldr-bot-318015","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_secret":"ZE2FDvC8pdmsw3Iy3MMK7ke2","redirect_uris":["urn:ietf:wg:oauth:2.0:oob","http://localhost"]}}
+{
+  "type": "service_account",
+  "project_id": "tldr-bot-318015",
+  "private_key_id": "fc81056a49013c90e17f174c7914f6f6b3895304",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCiFLCY8O8ie4II\nzJoGArh9Mj+7fB6ZYd6tEaGDQnt2VTi2BmsUD1Nk16y2z2xTD1ZpxD7imcdUwSb5\n0OzRWnvKyabU/e45lYcyAh1BvFHk307cTANwCkfQaw+MjpxGTI1iuyc+uklP92+x\nOyEeOLcqb+e8ED916FbIk0+g8QAfnttwvKypnSc6UxC0+fDx9wrG10vTINcg1ITh\n810T2eZA6fk1xE+yz/QymEiPWziVqDZ3ZJz3Ak8cWPESnNbcmk0z6tU2P9AICioF\nHJpPqF5vwgG/ITXKunXHCbcNbw+EsCmsnRFS8gT+JF0zlYqn9+jxBTvBkTSsE7Gf\nMLXRvi8HAgMBAAECggEAF6rxxsOYB+8FJAfMjggjrJSD3frX9QnnnFowvZwdrz/u\nkhYJ2NoMEXO1EtTjOpXIxpUTob9W7jduW5h4nHGcFhawN/YErX/6SAErCIhZZRR+\nzYiED/5QUkzv7lR82X8gPkSaDHzja7v0IWtDAMjDZn0E199/hNYypgNs41GN9Q/f\nj+ZGlCjqEWUX9y69zzf68mkFxJUY+2AIXm3JA5bOZxsmhfnKwf8h2lzn5Jte2H5Y\n0DHFJImSghgxgRzxk/kCcqHM6Mz4mqIfsZvET+DQHDWFVJKZY3i7t8KpP80YZqPH\n5zkC4MPPFGXIExthz4Hia5K3z8Ut284pWVLCtxrCcQKBgQDlLxuSZxqlSxIBp3Ge\nqXTvHCZOjIOhQOk9/tVOStxpwtePwVEb9jksUQm/2CikD+6S/M4pD0wVWafBda0A\niwPl50IjwUlfYuwEnyB9i+iv9Ur74GonP2Yf6IDHajQwCrulvQhFqJCBtC5Z7i2s\nQ8lAl9nArOvBktuzmvaXvZ5WUwKBgQC1C5keQrzDduZ/4MmDE6fEnGhUtM1Rrqvi\nuMtcYKtBlzqnfECtkCIL8n8DFZeaklHCVYy7v4OIXJgokcv5LTECPx3fIVgzjteR\n9UYNXbFzYu9API6O1ixkaICrhOLOQZ090sYDa0kROGPIgPdi1bfxH6BXpnZTWKt4\nEKLe2DfF/QKBgGC4csBkduBPQDgmfFLjXRAUJy57KooBJO4e/9Jc0YxoyCRJB3vv\ne81yHdUy2mPyvVKXEkJNzGQuRBfnG63g/TInWMhSKC7zRnvk1Adn5jlsIcsOuH37\nyZOpwb9m2MN1pB+cGUOcke/LJMybMfdDXEnATAt+brhwy/uOaIc9ZPc1AoGAf3x0\nTRfHnoiqlV/v5oo/uDY/TW6nqh4q0ZM5OIql7aEVX30ielWlc+5FvCFHSURBqGvf\nlxGsCKjTSLYqAQPun9tcKJRtbJjoedJSivTwEQWY3g4GgNSWG/puqNkBcSZJGJDE\neQHiSOsBcN5H1eQTDAsuOKpyZgxpajmkxvFQjO0CgYEAnYaCjGgrQtqfKDvo6rbt\n+ZDEy5cyND22iByiWEiaO7ibwildpByjoyVYfZq919mNQJuIxglwM8f7QRqyyit+\nFUXSfgCR3utldlra1K3lzVWHbQ4w9tLy7f1IskK1mdxmpfVx+GVnB8vL3f6LtWGv\ncVq37nJnwlvh7Gz9MJ/n7VE=\n-----END PRIVATE KEY-----\n",
+  "client_email": "tldr2-394@tldr-bot-318015.iam.gserviceaccount.com",
+  "client_id": "100512144791731708229",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/tldr2-394%40tldr-bot-318015.iam.gserviceaccount.com"
+}
