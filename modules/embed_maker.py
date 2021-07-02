@@ -127,11 +127,11 @@ async def command_error(ctx, bad_arg: str = None):
         description = f"**Invalid Argument:** {bad_arg}\n\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}"
 
     if type(ctx.command) == commands.Group and ctx.command.all_commands:
-        sub_commands_str = "**\nSub Commands:** " + " | ".join(
-            sc.name for sc in ctx.command.sub_commands()
-        )
-        sub_commands_str += f"\nTo view more info about sub commands, type `{ctx.prefix}help {ctx.command.name} [sub command]`"
-        description += sub_commands_str
+        sub_commands = ctx.command.sub_commands(member=ctx.author)
+        if sub_commands:
+            sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc.name for sc in sub_commands)
+            sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {ctx.command.name} [sub command]`'
+            description += sub_commands_str
 
     if ctx.command.docs.command_args:
         command_args_str = (
