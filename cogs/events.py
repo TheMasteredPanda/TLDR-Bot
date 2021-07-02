@@ -33,7 +33,7 @@ class Events(Cog):
         await self.bot.invite_logger.initialize_invites()
         await self.bot.clearance.parse_clearance_spreadsheet()
         self.bot.leveling_system.initialise_guilds()
-        self.bot.ukparl_module.set_guild(self.bot.guilds[0])
+        self.bot.ukparl_module.set_guild(self.bot.get_guild(config.MAIN_SERVER))
         await self.bot.ukparl_module.load()
         self.bot.get_cog("UK").load()
         self.bot.logger.info(f"{self.bot.user} is ready")
