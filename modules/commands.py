@@ -2,8 +2,8 @@ import discord
 import config
 import copy
 
-from discord.ext import commands
-from modules import database
+from discord.ext.commands.core import hooked_wrapped_callback
+from modules import database, embed_maker
 from typing import Callable, Union
 
 db = database.get_connection()
@@ -86,7 +86,7 @@ class Clearance:
                 return await self.bot.critical_error(error)
 
             for row in self.clearance_spreadsheet[cog_name][1:]:
-                command_name = row[0]
+                command_name = row[0].strip()
 
                 command = self.bot.get_command(command_name)
                 if not command:
@@ -104,7 +104,8 @@ class Clearance:
                 }
 
         # check if any commands are missing from the clearance spreadsheet
-        for command_name, command in self.bot.command_system.commands.items():
+        for command in self.bot.command_system.commands.values():
+            command_name = f'{command.full_parent_name} {command.name}'.strip()
             if command.root_parent is None and command_name not in self.command_access:
                 error = f"Command [{command_name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
@@ -112,21 +113,12 @@ class Clearance:
             if command.root_parent is None:
                 continue
 
-            if (
-                command.root_parent != command
-                and command.root_parent.name not in self.command_access
-            ):
+            if command.root_parent != command and command.root_parent.name not in self.command_access:
                 error = f"Command [{command.root_parent.name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
-            if (
-                command.root_parent != command
-                and command_name not in self.command_access
-                and command.root_parent.name in self.command_access
-            ):
-                self.command_access[command_name] = self.command_access[
-                    command.root_parent.name
-                ]
+            if command.root_parent != command and command_name not in self.command_access and command.root_parent.name in self.command_access:
+                self.command_access[command_name] = self.command_access[command.root_parent.name]
                 continue
 
         self.bot.logger.debug(f"Clearance spreadsheet has been parsed")
@@ -186,7 +178,7 @@ class Clearance:
         :class:`dict`
             Clearance info about the command.
         """
-        return self.command_access[command.name]
+        return self.command_access[command.full_name]
 
     @staticmethod
     def member_has_clearance(member_clearance: dict, command_clearance: dict):
@@ -253,6 +245,7 @@ class Command(discord.ext.commands.Command):
 
     def __init__(self, func, **kwargs):
         super().__init__(func, **kwargs)
+        self.full_name = f'{self.full_parent_name} {self.name}'.strip()
         self.docs = Help(**kwargs)
         self.special_help_group = next(
             (key for key, value in kwargs.items() if type(value) == Help), None
@@ -263,7 +256,7 @@ class Command(discord.ext.commands.Command):
 
     def update_command_data(self, guild_id: int):
         """Update command data."""
-        data = db.get_command_data(guild_id, self.name, insert=True)
+        data = db.get_command_data(guild_id, self.full_name, insert=True)
         self.data = data
 
     @property
@@ -273,7 +266,7 @@ class Command(discord.ext.commands.Command):
 
     def initialize_command_data(self):
         """Cache all the command_data in self.data"""
-        data = db.get_command_data(self.name, insert=True)
+        data = db.get_command_data(self.full_name, insert=True)
         self.data = data
 
     def access_given(self, member: discord.Member):
@@ -319,7 +312,6 @@ class Command(discord.ext.commands.Command):
             help_object = self.__original_kwargs__[self.special_help_group]
             help_object.clearance = self.special_help_group
         else:
-            command_clearance = self.bot.clearance.command_clearance(self)
             help_object.clearance = self.bot.clearance.highest_member_clearance(
                 member_clearance
             )
@@ -334,8 +326,8 @@ class Group(discord.ext.commands.Group, Command):
     """Basically the same as :class:`Command`, but it also sub classes :class:`discord.ext.commands.Group`."""
 
     def __init__(self, func, **kwargs):
-        super(Group, self).__init__(func, **kwargs)
         super(Command, self).__init__(func, **kwargs)
+        super(Group, self).__init__(func, **kwargs)
 
     def sub_commands(self, *, member=None):
         """Function for getting all the sub commands of a group command without the aliases."""
@@ -365,6 +357,7 @@ class CommandSystem:
         self.bot.logger.info(f"Adding cog {type(cog).__name__} into the CommandSystem")
         for command in cog.__cog_commands__:
             command.bot = self.bot
-            self.commands[command.name] = command
+            full_name = f'{command.full_parent_name} {command.name}'.strip()
+            self.commands[full_name] = command
 
         self.bot.logger.debug(f"Added {len(cog.__cog_commands__)} commands")

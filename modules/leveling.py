@@ -762,13 +762,11 @@ class LevelingGuild(LevelingData):
             # try to get member from cache
             member = await get_member_by_id(self.guild, member_id)
             if member:
-                member = self.add_member(member)
+                member = await self.add_member(member)
 
         return member
 
-    async def add_member(
-        self, member: discord.Member, *, leveling_user_data: dict = None
-    ) -> LevelingMember:
+    async def add_member(self, member: discord.Member, *, leveling_user_data: dict = None) -> LevelingMember:
         """
         Converts :class:`discord.Member` to :class:`LevelingMember` and adds it to :attr:`members`.
 
@@ -782,37 +780,7 @@ class LevelingGuild(LevelingData):
         :class:`LevelingMember`
             The LevelingMember.
         """
-        leveling_member = LevelingMember(
-            self.bot, self, member, leveling_user_data=leveling_user_data
-        )
-
-        member_role_ids = [r.id for r in leveling_member.member.roles]
-        if leveling_member.parliamentary.level > 0:
-            # add leveling roles to user if missing
-            for branch in leveling_member.guild.leveling_routes:
-                user_branch = (
-                    leveling_member.parliamentary
-                    if branch.name == "parliamentary"
-                    else leveling_member.honours
-                )
-                user_role = next(
-                    (role for role in branch.roles if role.name == user_branch.role),
-                    None,
-                )
-                if user_role:
-                    user_role_index = branch.roles.index(user_role)
-                    up_to_role = branch.roles[: user_role_index + 1]
-                    for role in up_to_role:
-                        if role.id in member_role_ids:
-                            continue
-
-                        await leveling_member.add_role(role)
-
-        # add member role if missing
-        member_role = self.guild.get_role(662036345526419486)
-        if member_role.id not in member_role_ids:
-            await member.add_roles(member_role)
-
+        leveling_member = LevelingMember(self.bot, self, member, leveling_user_data=leveling_user_data)
         self.members.append(leveling_member)
         return leveling_member
 

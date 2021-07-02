@@ -19,7 +19,7 @@ import modules.moderation
 import modules.commands
 
 from datetime import datetime
-from discord.ext.commands import when_mentioned_or, Cog, Bot
+from discord.ext.commands import when_mentioned_or, GroupMixin, Bot
 
 
 intents = discord.Intents.all()
@@ -95,8 +95,8 @@ class TLDR(Bot):
             name=f"Critical Error - Shutting down", icon_url=guild.icon_url
         )
         await channel.send(
-            embed=embed, content="<@&685230896466755585>"
-        )  # @ the technicians
+            embed=embed
+        )
         await self.close()
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
@@ -210,18 +210,31 @@ class TLDR(Bot):
         if ctx.command is None:
             return
 
+        # get the object of the command actually being run, so that can be checked instead of just the parent command
+        # Discord.py invokes the parent command, then it looks for any sub commands and invokes those directly, instead of processing them like commands
+        view = copy.copy(ctx.view)
+        full_command_name = ctx.command.name
+        view.skip_ws()
+        while True:
+            add = view.get_word()
+            if not add:
+                break
+            full_command_name += f' {add}'
+
+        command = self.get_command(full_command_name)
+
         # create copy of original so values of original aren't modified
         ctx.command = copy.copy(ctx.command)
         ctx.command.docs = ctx.command.get_help(ctx.author)
 
         # check if command has been disabled
-        if ctx.command.disabled:
+        if ctx.command.disabled or command.disabled:
             return await modules.embed_maker.error(
                 ctx, "This command has been disabled"
             )
 
         # return if user doesnt have clearance for command
-        if not ctx.command.can_use(ctx.author):
+        if not ctx.command.can_use(ctx.author) or not command.can_use(ctx.author):
             return
 
         await self.invoke(ctx)
