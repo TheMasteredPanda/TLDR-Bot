@@ -927,7 +927,7 @@ class UK(commands.Cog):
                 send=True,
             )
 
-        image_file = self.ukparl_module.generate_division_image(
+        image_file = await self.ukparl_module.generate_division_image(
             self.parliament, division
         )
         next_line = "\n"
