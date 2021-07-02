@@ -663,11 +663,11 @@ class LevelingGuild(LevelingData):
             # try to get member from cache
             member = await get_member_by_id(self.guild, member_id)
             if member:
-                member = self.add_member(member)
+                member = await self.add_member(member)
 
         return member
 
-    def add_member(self, member: discord.Member, *, leveling_user_data: dict = None) -> LevelingMember:
+    async def add_member(self, member: discord.Member, *, leveling_user_data: dict = None) -> LevelingMember:
         """
         Converts :class:`discord.Member` to :class:`LevelingMember` and adds it to :attr:`members`.
 
