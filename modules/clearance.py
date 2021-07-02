@@ -14,6 +14,7 @@ class Clearance:
         self.command_access = {}
         self.channel_perm_levels = {}
         self.channel_access = {}
+        self.channel_defaults = {}
 
         self.bot.logger.debug(f'Downloading clearance spreadsheet')
         self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(config.CLEARANCE_SPREADSHEET_ID)
@@ -24,7 +25,7 @@ class Clearance:
     @staticmethod
     def split_comma(value: str, *, value_type: Callable = str):
         """Split string of comma separated values into a list."""
-        return [value_type(v.strip()) for v in value.split(',') if v and v.strip() and value_type(v.strip())]
+        return [value_type(v.strip()) for v in value.split(', ') if v and v.strip() and value_type(v.strip())]
 
     async def parse_clearance_spreadsheet(self):
         """Function for parsing the clearance spreadsheet and sorting the values in it."""
@@ -37,10 +38,6 @@ class Clearance:
         await self.parse_channel_perm_levels()
         await self.parse_channels(guild)
 
-        print(self.channel_perm_levels)
-        print(self.channel_access)
-        print(self.groups)
-
     async def parse_roles(self, guild: discord.Guild):
         # ignore the first 2 rows cause they are for users viewing/editing the spreadsheet
         for row in self.clearance_spreadsheet['Roles'][1:]:
@@ -50,6 +47,8 @@ class Clearance:
             role_name = row[0]
             # ignore the default user
             if role_name == 'User':
+                guild = self.bot.get_guild(config.MAIN_SERVER)
+                self.roles['User'] = guild.default_role.id
                 continue
 
             role_id = next((int(value) for value in row[1:] if value.isdigit()), None)
@@ -74,13 +73,13 @@ class Clearance:
 
             self.groups[group_name] = split_roles
 
-    def permissions_addition(self, permissions: str, channel_type):
+    def permissions_addition(self, permissions: str, allow_deny: str, channel_type: str):
         split = permissions.split('+')
         if len(split) == 1:
             return self.split_comma(permissions)
 
         base_permissions_level = split[0].strip()
-        base_permissions = self.channel_perm_levels[base_permissions_level][channel_type]
+        base_permissions = self.channel_perm_levels[base_permissions_level][allow_deny][channel_type]
         permissions_split = self.split_comma(split[1])
         return base_permissions + permissions_split
 
@@ -90,19 +89,28 @@ class Clearance:
                 continue
 
             permission_level = row[0]
-            text_permissions = self.permissions_addition(row[1], 'text')
-            voice_permissions = []
-            if len(row) > 2:
-                voice_permissions = self.permissions_addition(row[2], 'voice')
+            if permission_level == 'Rules:':
+                break
 
-            for permission in text_permissions + voice_permissions:
-                if permission not in [*discord.Permissions.VALID_FLAGS.keys()] + ['request_to_speak']:
+            text_allow = self.permissions_addition(row[1], 'allow', 'text') if len(row) > 1 else []
+            voice_allow = self.permissions_addition(row[2], 'allow', 'voice') if len(row) > 2 else []
+            text_deny = self.permissions_addition(row[4], 'deny', 'text') if len(row) > 4 else []
+            voice_deny = self.permissions_addition(row[5], 'deny', 'voice') if len(row) > 5 else []
+
+            for permission in text_allow + voice_allow + text_deny + voice_deny:
+                if permission not in [*discord.Permissions.VALID_FLAGS.keys()]:
                     error = f'Invalid permission [{permission}] in level [{permission_level}] in clearance spreadsheet: {self.spreadsheet_link}'
                     return await self.bot.critical_error(error)
 
             self.channel_perm_levels[permission_level] = {
-                'text': text_permissions,
-                'voice': voice_permissions
+                'allow': {
+                    'text': text_allow,
+                    'voice': voice_allow
+                },
+                'deny': {
+                    'text': text_deny,
+                    'voice': voice_deny
+                }
             }
 
     async def parse_channels(self, guild: discord.Guild):
@@ -111,19 +119,26 @@ class Clearance:
                 continue
 
             channel_name = row[0]
-            if channel_name == 'Rules:':
-                break
-
             channel_id = row[1]
 
-            guild_channel = guild.get_channel(int(channel_id))
-            if not guild_channel:
-                error = f'Invalid channel [{channel_name}] in clearance spreadsheet: {self.spreadsheet_link}'
-                return await self.bot.critical_error(error)
+            if channel_id:
+                guild_channel = guild.get_channel(int(channel_id))
+                if not guild_channel:
+                    error = f'Invalid channel [{channel_name}] in clearance spreadsheet: {self.spreadsheet_link}'
+                    return await self.bot.critical_error(error)
 
             groups = self.split_comma(row[3]) if len(row) > 3 else []
             roles = self.split_comma(row[4]) if len(row) > 4 else []
             users = self.split_comma(row[5]) if len(row) > 5 else []
+
+            if channel_name == 'Defaults':
+                self.channel_defaults = {
+                    'groups': groups,
+                    'roles': roles,
+                    'users': users,
+                }
+                continue
+
             p_leveling = bool(row[6]) if len(row) > 6 else False
             h_leveling = bool(row[7]) if len(row) > 7 else False
 
