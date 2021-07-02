@@ -461,13 +461,16 @@ class UK(commands.Cog):
 
         for key in channels.keys():
             channel_id = channels[key]
-            guild: Guild = self.bot.guilds[0]
-            channel = guild.get_channel(int(channel_id))
-            bits.append(
-                f"- {key}:" f" Couldn't find channel ({channel_id})"
-                if channel is None
-                else f"- {key}: {channel.name}"
-            )
+            guild = self.ukparl_module.get_guild()
+            if guild is not None:
+                channel = guild.get_channel(int(channel_id))
+                bits.append(
+                    f"- {key}:" f" Couldn't find channel ({channel_id})"
+                    if channel is None
+                    else f"- {key}: {channel.name}"
+                )
+            else:
+                bits.append("Couldn't fetch guild.")
 
         next_line = "\n"
         await embed_maker.message(
