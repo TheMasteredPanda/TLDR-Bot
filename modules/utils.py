@@ -77,7 +77,7 @@ class ParseArgs(Converter, dict):
                 result[long[2:]] = None
 
             # create regex to match command args
-            regex = rf'(?:\s|^)--({"|".join(long for long in args.keys())})(?:\s|^)'
+            regex = rf'(?:\s|^)--({"|".join(long for long in args.keys())})(?:\s|$)'
             # split argument with regex
             split_argument = re.split(regex, argument)
             # anything before the first arg is put into result['pre']
