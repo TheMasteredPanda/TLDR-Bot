@@ -693,10 +693,11 @@ class LevelingGuild(LevelingData):
                     user_role_index = branch.roles.index(user_role)
                     up_to_role = branch.roles[:user_role_index + 1]
                     for role in up_to_role:
-                        if role.id in member_role_ids:
+                        guild_role = await role.get_guild_role()
+                        if guild_role.id in member_role_ids:
                             continue
 
-                        await leveling_member.add_role(role)
+                        await leveling_member.add_role(guild_role)
 
         # add member role if missing
         member_role = self.guild.get_role(662036345526419486)
