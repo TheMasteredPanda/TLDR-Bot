@@ -682,6 +682,27 @@ class LevelingGuild(LevelingData):
             The LevelingMember.
         """
         leveling_member = LevelingMember(self.bot, self, member, leveling_user_data=leveling_user_data)
+
+        member_role_ids = [r.id for r in leveling_member.member.roles]
+        if leveling_member.parliamentary.level > 0:
+            # add leveling roles to user if missing
+            for branch in leveling_member.guild.leveling_routes:
+                user_branch = leveling_member.parliamentary if branch.name == 'parliamentary' else leveling_member.honours
+                user_role = next((role for role in branch.roles if role.name == user_branch.role), None)
+                if user_role:
+                    user_role_index = branch.roles.index(user_role)
+                    up_to_role = branch.roles[:user_role_index + 1]
+                    for role in up_to_role:
+                        if role.id in member_role_ids:
+                            continue
+
+                        await leveling_member.add_role(role)
+
+        # add member role if missing
+        member_role = self.guild.get_role(662036345526419486)
+        if member_role.id not in member_role_ids:
+            await member.add_roles(member_role)
+
         self.members.append(leveling_member)
         return leveling_member
 
@@ -750,6 +771,12 @@ class LevelingMember(LevelingUser):
         amount: :class:`int`
             The amount of points to add.
         """
+        patreon_role_id = 644182117051400220
+        member_role_id = 662036345526419486
+        if self.guild.automember and patreon_role_id not in [r.id for r in self.member.roles]:
+            member_role = discord.utils.find(lambda r: r.id == member_role_id, self.guild.guild.roles)
+            await self.member.add_roles(member_role)
+
         if type(branch) == str:
             branch = self.guild.get_leveling_route(branch)
 
@@ -780,15 +807,6 @@ class LevelingMember(LevelingUser):
         """
         # get discord.Role role
         guild_role = await role.get_guild_role()
-
-        automember = db.get_automember(role.guild.id)
-        patreon_role_id = 644182117051400220
-        citizen_role_id = 697184342614474785
-        member_role_id = 662036345526419486
-        if automember and guild_role.id == citizen_role_id and patreon_role_id not in [r.id for r in self.member.roles]:
-            member_role = discord.utils.find(lambda r: r.id == member_role_id, self.guild.guild.roles)
-            await self.member.add_roles(member_role)
-
         # give role to user
         await self.member.add_roles(guild_role)
         return guild_role

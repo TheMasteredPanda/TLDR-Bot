@@ -772,11 +772,11 @@ class Utility(Cog):
             )
 
             if type(command) == commands.Group and command.all_commands:
-                sub_commands_str = "**\nSub Commands:** " + " | ".join(
-                    sc.name for sc in command.sub_commands()
-                )
-                sub_commands_str += f"\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`"
-                cmd_help += sub_commands_str
+                sub_commands = command.sub_commands(member=ctx.author)
+                if sub_commands:
+                    sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc.name for sc in sub_commands)
+                    sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
+                    cmd_help += sub_commands_str
 
             if command_help.command_args:
                 command_args_str = (

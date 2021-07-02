@@ -337,11 +337,14 @@ class Group(discord.ext.commands.Group, Command):
         super(Group, self).__init__(func, **kwargs)
         super(Command, self).__init__(func, **kwargs)
 
-    def sub_commands(self):
+    def sub_commands(self, *, member=None):
         """Function for getting all the sub commands of a group command without the aliases."""
         aliases = []
         sub_commands = []
         for command_name, command in self.all_commands.items():
+            if not command.can_use(member):
+                continue
+
             aliases.append(command.aliases)
             if command_name in aliases:
                 continue
