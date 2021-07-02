@@ -105,6 +105,7 @@ class Clearance:
 
         # check if any commands are missing from the clearance spreadsheet
         for command_name, command in self.bot.command_system.commands.items():
+            command_name = f'{command.full_parent_name} {command_name}'
             if command.root_parent is None and command_name not in self.command_access:
                 error = f"Command [{command_name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
@@ -112,21 +113,12 @@ class Clearance:
             if command.root_parent is None:
                 continue
 
-            if (
-                command.root_parent != command
-                and command.root_parent.name not in self.command_access
-            ):
+            if command.root_parent != command and command.root_parent.name not in self.command_access:
                 error = f"Command [{command.root_parent.name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
-            if (
-                command.root_parent != command
-                and command_name not in self.command_access
-                and command.root_parent.name in self.command_access
-            ):
-                self.command_access[command_name] = self.command_access[
-                    command.root_parent.name
-                ]
+            if command.root_parent != command and command_name not in self.command_access and command.root_parent.name in self.command_access:
+                self.command_access[command_name] = self.command_access[command.root_parent.name]
                 continue
 
         self.bot.logger.debug(f"Clearance spreadsheet has been parsed")
