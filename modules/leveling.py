@@ -750,6 +750,12 @@ class LevelingMember(LevelingUser):
         amount: :class:`int`
             The amount of points to add.
         """
+        patreon_role_id = 644182117051400220
+        member_role_id = 662036345526419486
+        if self.guild.automember and patreon_role_id not in [r.id for r in self.member.roles]:
+            member_role = discord.utils.find(lambda r: r.id == member_role_id, self.guild.guild.roles)
+            await self.member.add_roles(member_role)
+
         if type(branch) == str:
             branch = self.guild.get_leveling_route(branch)
 
@@ -780,15 +786,6 @@ class LevelingMember(LevelingUser):
         """
         # get discord.Role role
         guild_role = await role.get_guild_role()
-
-        automember = db.get_automember(role.guild.id)
-        patreon_role_id = 644182117051400220
-        citizen_role_id = 697184342614474785
-        member_role_id = 662036345526419486
-        if automember and guild_role.id == citizen_role_id and patreon_role_id not in [r.id for r in self.member.roles]:
-            member_role = discord.utils.find(lambda r: r.id == member_role_id, self.guild.guild.roles)
-            await self.member.add_roles(member_role)
-
         # give role to user
         await self.member.add_roles(guild_role)
         return guild_role
