@@ -277,6 +277,7 @@ class UK(commands.Cog):
         return await embed_maker.command_error(ctx)
 
     @uk.group(
+        name="divisions",
         help="For commands relating to divisions",
         invoke_without_command=True,
         usage="uk divisions [sub command]",
@@ -989,6 +990,7 @@ class UK(commands.Cog):
         usage="uk divisions lsearch [search term]",
         examples=["uk divisions lsearch European"],
         clearence="User",
+        cls=cls.Command
     )
     async def division_lords_search(self, ctx: commands.Context, *, search_term=""):
         if self.loaded is False:
