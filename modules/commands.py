@@ -178,7 +178,7 @@ class Clearance:
         :class:`dict`
             Clearance info about the command.
         """
-        return self.command_access[command.name]
+        return self.command_access[command.full_name]
 
     @staticmethod
     def member_has_clearance(member_clearance: dict, command_clearance: dict):
@@ -257,6 +257,11 @@ class Command(discord.ext.commands.Command):
         """Update command data."""
         data = db.get_command_data(guild_id, self.name, insert=True)
         self.data = data
+
+    @property
+    def full_name(self):
+        """Returns full name of command including parent commands."""
+        return f'{self.full_parent_name} {self.name}'.strip()
 
     @property
     def disabled(self):
