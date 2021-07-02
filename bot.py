@@ -95,8 +95,8 @@ class TLDR(Bot):
             name=f"Critical Error - Shutting down", icon_url=guild.icon_url
         )
         await channel.send(
-            embed=embed, content="<@&685230896466755585>"
-        )  # @ the technicians
+            embed=embed
+        )
         await self.close()
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
