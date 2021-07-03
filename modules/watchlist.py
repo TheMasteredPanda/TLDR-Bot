@@ -39,8 +39,11 @@ class Watchlist:
 
         return category
 
-    def get_member(self, member: discord.Member) -> dict:
+    def get_member(self, member: discord.Member) -> Optional[dict]:
         """Get a watchlist member."""
+        if not member.guild:
+            return None
+
         guild_watchlist_data = self.watchlist_data[member.guild.id]
         return guild_watchlist_data[member.id] if member.id in guild_watchlist_data else None
 
