@@ -15,6 +15,7 @@ class Watchlist:
         self.bot.add_listener(self.on_message, 'on_message')
 
     def initialize(self):
+        """Cache all the existing webhook users."""
         for guild in self.bot.guilds:
             self.watchlist_data[guild.id] = {}
             users = db.watchlist.find({"guild_id": guild.id})
@@ -23,6 +24,7 @@ class Watchlist:
 
     @staticmethod
     async def get_watchlist_category(guild: discord.Guild) -> Optional[discord.CategoryChannel]:
+        """Get the watchlist category or create it if it doesn't exist."""
         if guild is None:
             return
 
@@ -38,10 +40,12 @@ class Watchlist:
         return category
 
     def get_member(self, member: discord.Member) -> dict:
+        """Get a watchlist member."""
         guild_watchlist_data = self.watchlist_data[member.guild.id]
         return guild_watchlist_data[member.id] if member.id in guild_watchlist_data else None
 
     async def add_member(self, member: discord.Member, filters: list) -> dict:
+        """Add a watchlist member, creating a channel for them."""
         category = await self.get_watchlist_category(member.guild)
         watchlist_channel = await member.guild.create_text_channel(f'{member.name}', category=category)
         watchlist_doc = {
@@ -55,6 +59,7 @@ class Watchlist:
         return watchlist_doc
 
     async def remove_member(self, member: discord.Member):
+        """Remove watchlist member and delete their channel."""
         watchlist_member = self.get_member(member)
         channel = self.bot.get_channel(int(watchlist_member['channel_id']))
         if channel:
@@ -63,6 +68,7 @@ class Watchlist:
         db.watchlist.delete_one({'guild_id': member.guild.id, 'user_id': member.id})
 
     def add_filters(self, member: discord.Member, filters: list):
+        """Add filters to a watchlist member."""
         watchlist_member = self.get_member(member)
         all_filters = watchlist_member['filters']
         if all_filters:
@@ -71,6 +77,7 @@ class Watchlist:
         db.watchlist.update_one({'guild_id': member.guild.id, 'user_id': member.id}, {'$set': {f'filters': filters}})
 
     async def send_message(self, channel: discord.TextChannel, message: discord.Message):
+        """Send watchlist message with a webhook."""
         embeds = [discord.Embed(description=f'{message.content}\n{message.channel.mention} [link]({message.jump_url})', timestamp=datetime.datetime.now())]
         files = [await attachment.to_file() for attachment in message.attachments]
         await self.bot.webhooks.send(
@@ -83,6 +90,7 @@ class Watchlist:
         )
 
     async def on_message(self, message: discord.Message):
+        """Function run on every message to check if user is on watchlist and send their message."""
         if not self.bot.first_ready:
             return
 
