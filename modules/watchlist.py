@@ -1,3 +1,4 @@
+import datetime
 import discord
 
 from typing import Optional
@@ -70,14 +71,15 @@ class Watchlist:
         db.watchlist.update_one({'guild_id': member.guild.id, 'user_id': member.id}, {'$set': {f'filters': filters}})
 
     async def send_message(self, channel: discord.TextChannel, message: discord.Message):
-        content = message.content + f'\n{message.channel.mention} [Link]({message.jump_url})'
+        embeds = [discord.Embed(description=f'{message.content}\n{message.channel.mention} [link]({message.jump_url})', timestamp=datetime.datetime.now())]
         files = [await attachment.to_file() for attachment in message.attachments]
         await self.bot.webhooks.send(
             channel,
-            content,
+            '',
             username=message.author.name,
             avatar_url=message.author.avatar_url,
-            files=files
+            files=files,
+            embeds=embeds
         )
 
     async def on_message(self, message: discord.Message):
