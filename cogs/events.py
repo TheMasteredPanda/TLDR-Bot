@@ -38,7 +38,7 @@ class Events(Cog):
         self.bot.get_cog("UK").load()
         self.bot.logger.info(f"{self.bot.user} is ready")
         self.bot.first_ready = True
-        self.bot.ukparl_module.load_trackers()
+        # self.bot.ukparl_module.load_trackers()
 
     async def check_left_members(self):
         self.bot.logger.info(f"Checking Guilds for left members.")
@@ -594,8 +594,10 @@ class Events(Cog):
         if left_user:
 
             # transfer back data
-            db.left_leveling_users.delete_many({'guild_id': guild_id, 'user_id': user_id})
-            del left_user['_id']
+            db.left_leveling_users.delete_many(
+                {"guild_id": guild_id, "user_id": user_id}
+            )
+            del left_user["_id"]
             db.leveling_users.insert_one(left_user)
 
             # delete timer
