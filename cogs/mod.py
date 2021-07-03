@@ -501,8 +501,8 @@ class Mod(Cog):
             return
 
         watchlist_user = self.bot.watchlist.get_member(member)
-        if watchlist_user:
-            return await embed_maker.error(ctx, 'User is already on the watchlist')
+        if not watchlist_user:
+            return await embed_maker.error(ctx, 'User is not on the watchlist')
 
         await self.bot.watchlist.remove_member(member)
 
@@ -541,8 +541,8 @@ class Mod(Cog):
             return
 
         watchlist_user = self.bot.watchlist.get_member(member)
-        if watchlist_user:
-            return await embed_maker.error(ctx, 'User is already on the watchlist')
+        if not watchlist_user:
+            return await embed_maker.error(ctx, 'User is not on the watchlist')
 
         self.bot.watchlist.add_filters(member, filters)
 
