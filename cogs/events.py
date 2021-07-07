@@ -322,6 +322,9 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_message_edit(self, before, after):
+        if not self.bot.first_ready:
+            return
+        
         # re run command if command was edited
         if before.content != after.content and after.content.startswith(config.PREFIX):
             return await self.bot.process_command(after)

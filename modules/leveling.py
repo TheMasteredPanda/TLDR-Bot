@@ -1195,6 +1195,9 @@ class LevelingSystem:
 
     async def on_message(self, message: discord.Message):
         """Function called on every message to level up members."""
+        if not self.bot.first_ready:
+            return
+
         if message.author.bot or not message.guild or message.content.startswith(config.PREFIX):
             return
 

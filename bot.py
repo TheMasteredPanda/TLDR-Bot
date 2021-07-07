@@ -148,7 +148,7 @@ class TLDR(Bot):
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
 
-        if not self.left_check.is_set():
+        if not self.first_ready:
             return
 
         # no bots allowed
