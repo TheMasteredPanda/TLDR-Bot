@@ -1,7 +1,6 @@
 import discord
 import re
 import asyncio
-import config
 import logging
 import os
 import sys
@@ -326,10 +325,13 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
     # if can't find direct name match, check for a match with regex
     if not members:
         # checks for regex match
+        special_chars_map = {i: '\\' + chr(i) for i in b'()[]{}?*+-|^$\\.&~#'}
+        safe_source = source.translate(special_chars_map)
+
         members = list(
             filter(
-                lambda m: re.findall(fr'({source.lower()})', str(m).lower()) or  # regex match name and discriminator
-                          re.findall(fr'({source.lower()})', m.display_name.lower()),  # regex match nickname
+                lambda m: re.findall(fr'({safe_source.lower()})', str(m).lower()) or  # regex match name and discriminator
+                          re.findall(fr'({safe_source.lower()})', m.display_name.lower()),  # regex match nickname
                 ctx.guild.members
             )
         )
