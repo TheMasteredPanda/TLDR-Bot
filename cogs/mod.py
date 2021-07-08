@@ -464,41 +464,20 @@ class Mod(Cog):
             return await embed_maker.command_error(ctx)
 
         user_identifier = args['pre']
+        filters = args['filter']
 
         if not user_identifier:
             return await embed_maker.error(ctx, 'Missing user')
-
-        filters = args['filter']
 
         member = await get_member(ctx, user_identifier)
         if type(member) == discord.Message:
             return
 
-        watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': member.id})
+        watchlist_user = self.bot.watchlist.get_member(member)
         if watchlist_user:
             return await embed_maker.error(ctx, 'User is already on the watchlist')
 
-        watchlist_category = discord.utils.find(lambda c: c.name == 'Watchlist', ctx.guild.categories)
-        if watchlist_category is None:
-            # get all staff roles
-            staff_roles = filter(lambda r: r.permissions.manage_messages, ctx.guild.roles)
-
-            # staff roles can read channels in category, users cant
-            overwrites = dict.fromkeys(staff_roles, discord.PermissionOverwrite(read_messages=True, send_messages=True,
-                                                                                read_message_history=True))
-            overwrites[ctx.guild.default_role] = discord.PermissionOverwrite(read_messages=False)
-
-            watchlist_category = await ctx.guild.create_category(name='Watchlist', overwrites=overwrites)
-
-        watchlist_channel = await ctx.guild.create_text_channel(f'{member.name}', category=watchlist_category)
-
-        watchlist_doc = {
-            'guild_id': ctx.guild.id,
-            'user_id': member.id,
-            'filters': filters,
-            'channel_id': watchlist_channel.id
-        }
-        db.watchlist.insert_one(watchlist_doc)
+        await self.bot.watchlist.add_member(member, filters)
 
         msg = f'<@{member.id}> has been added to the watchlist'
         if filters:
@@ -521,18 +500,11 @@ class Mod(Cog):
         if type(member) == discord.Message:
             return
 
-        watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': member.id})
+        watchlist_user = self.bot.watchlist.get_member(member)
+        if not watchlist_user:
+            return await embed_maker.error(ctx, 'User is not on the watchlist')
 
-        if watchlist_user is None:
-            return await embed_maker.error(ctx, 'User is not on the list')
-
-        # remove watchlist channel
-        channel_id = watchlist_user['channel_id']
-        channel = self.bot.get_channel(int(channel_id))
-        if channel:
-            await channel.delete()
-
-        db.watchlist.delete_one({'guild_id': ctx.guild.id, 'user_id': member.id})
+        await self.bot.watchlist.remove_member(member)
 
         return await embed_maker.message(
             ctx,
@@ -568,15 +540,11 @@ class Mod(Cog):
         if type(member) == discord.Message:
             return
 
-        watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': member.id})
-        if watchlist_user is None:
-            return await embed_maker.error(ctx, 'User is not on the list')
+        watchlist_user = self.bot.watchlist.get_member(member)
+        if not watchlist_user:
+            return await embed_maker.error(ctx, 'User is not on the watchlist')
 
-        all_filters = watchlist_user['filters']
-        if all_filters:
-            filters += all_filters
-
-        db.watchlist.update_one({'guild_id': ctx.guild.id, 'user_id': member.id}, {'$set': {f'filters': filters}})
+        self.bot.watchlist.add_filters(member, filters)
 
         return await embed_maker.message(
             ctx,
