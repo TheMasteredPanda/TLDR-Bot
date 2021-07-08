@@ -1,3 +1,4 @@
+import sys
 import discord
 import config
 import copy
@@ -28,6 +29,10 @@ class Clearance:
         self.bot.logger.debug(f"Clearance spreadsheet has been downloaded")
         self.bot.logger.info(f"Sheets: {', '.join(self.clearance_spreadsheet.keys())}")
         self.bot.logger.info(f"Clearance module has been initiated")
+        self.production = True
+
+        if "--dev" in sys.argv:
+            self.production = False
 
     @staticmethod
     def split_comma(value: str, *, value_type: Callable = str):
@@ -56,6 +61,11 @@ class Clearance:
 
             role = discord.utils.find(lambda role: role.id == role_id, guild.roles)
             if not role:
+                if self.production is False:
+                    self.bot.logger.info(
+                        f"[DEV MODE] Couldn't validate role {role_name} as the id was not found."
+                    )
+                    continue
                 error = f"Invalid Role [{role_name}] in the clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
@@ -69,6 +79,11 @@ class Clearance:
             split_roles = self.split_comma(roles)
             for role_name in split_roles:
                 if role_name not in self.roles:
+                    if self.production is False:
+                        self.bot.logger.info(
+                            f"[DEV MODE] Couldn't validate role {role_name} in group {group_name} as id was not found."
+                        )
+                        continue
                     error = f"Invalid role [{role_name}] in group [{group_name}] in clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                     return await self.bot.critical_error(error)
 
@@ -105,7 +120,7 @@ class Clearance:
 
         # check if any commands are missing from the clearance spreadsheet
         for command in self.bot.command_system.commands.values():
-            command_name = f'{command.full_parent_name} {command.name}'.strip()
+            command_name = f"{command.full_parent_name} {command.name}".strip()
             if command.root_parent is None and command_name not in self.command_access:
                 error = f"Command [{command_name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
@@ -113,12 +128,21 @@ class Clearance:
             if command.root_parent is None:
                 continue
 
-            if command.root_parent != command and command.root_parent.name not in self.command_access:
+            if (
+                command.root_parent != command
+                and command.root_parent.name not in self.command_access
+            ):
                 error = f"Command [{command.root_parent.name}] missing from clearance spreadsheet: https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
                 return await self.bot.critical_error(error)
 
-            if command.root_parent != command and command_name not in self.command_access and command.root_parent.name in self.command_access:
-                self.command_access[command_name] = self.command_access[command.root_parent.name]
+            if (
+                command.root_parent != command
+                and command_name not in self.command_access
+                and command.root_parent.name in self.command_access
+            ):
+                self.command_access[command_name] = self.command_access[
+                    command.root_parent.name
+                ]
                 continue
 
         self.bot.logger.debug(f"Clearance spreadsheet has been parsed")
@@ -245,7 +269,7 @@ class Command(discord.ext.commands.Command):
 
     def __init__(self, func, **kwargs):
         super().__init__(func, **kwargs)
-        self.full_name = f'{self.full_parent_name} {self.name}'.strip()
+        self.full_name = f"{self.full_parent_name} {self.name}".strip()
         self.docs = Help(**kwargs)
         self.special_help_group = next(
             (key for key, value in kwargs.items() if type(value) == Help), None
@@ -357,7 +381,7 @@ class CommandSystem:
         self.bot.logger.info(f"Adding cog {type(cog).__name__} into the CommandSystem")
         for command in cog.__cog_commands__:
             command.bot = self.bot
-            full_name = f'{command.full_parent_name} {command.name}'.strip()
+            full_name = f"{command.full_parent_name} {command.name}".strip()
             self.commands[full_name] = command
 
         self.bot.logger.debug(f"Added {len(cog.__cog_commands__)} commands")
