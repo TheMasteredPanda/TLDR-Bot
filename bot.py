@@ -117,6 +117,7 @@ class TLDR(Bot):
 
     async def on_event_error(self, exception: Exception, event_method, *args, **kwarg):
         """Reports all event errors to server and channel given in config."""
+        loop = kwarg.get('loop', None)
         trace = exception.__traceback__
         verbosity = 10
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
@@ -139,9 +140,10 @@ class TLDR(Bot):
             timestamp=datetime.now(),
             description=f"```py\n{exception}\n{traceback_text}```",
         )
-        embed.set_author(name=f"Event Error - {event_method}", icon_url=guild.icon_url)
-        embed.add_field(name="args", value=str(args))
-        embed.add_field(name="kwargs", value=str(kwarg))
+        embed.set_author(name=f"{'Event' if not loop else 'Loop'} Error - {event_method}", icon_url=guild.icon_url)
+        if not loop:
+            embed.add_field(name="args", value=str(args))
+            embed.add_field(name="kwargs", value=str(kwarg))
 
         return await channel.send(embed=embed)
 
