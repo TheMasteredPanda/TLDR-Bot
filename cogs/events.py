@@ -37,8 +37,13 @@ class Events(Cog):
         await self.bot.ukparl_module.load()
         self.bot.get_cog("UK").load()
         self.bot.logger.info(f"{self.bot.user} is ready")
-        self.bot.first_ready = True
         self.bot.ukparl_module.load_trackers()
+        self.bot.webhooks.initialize()
+        self.bot.watchlist.initialize()
+
+        self.bot.ukparl_module.tracker_event_loop.start()
+
+        self.bot.first_ready = True
 
     async def check_left_members(self):
         self.bot.logger.info(f"Checking Guilds for left members.")
@@ -69,66 +74,6 @@ class Events(Cog):
         self.bot.logger.info(
             f"Left members have been checked - Total {left_member_count} members left guilds."
         )
-
-    @Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if (
-            message.author.bot
-            or not message.guild
-            or message.content.startswith(config.PREFIX)
-        ):
-            return
-
-        leveling_cog = self.bot.get_cog("Leveling")
-        asyncio.create_task(leveling_cog.process_message(message))
-
-        watchlist = db.watchlist.find_one(
-            {"guild_id": message.guild.id, "user_id": message.author.id}
-        )
-        watchlist_category = discord.utils.find(
-            lambda c: c.name == "Watchlist", message.guild.categories
-        )
-        if not watchlist or not watchlist_category:
-            return
-
-        channel_id = watchlist["channel_id"]
-        channel = self.bot.get_channel(int(channel_id))
-        if channel:
-            embed = await embed_maker.message(
-                message,
-                description=f"{message.content}\n<#{message.channel.id}> [link]({message.jump_url})",
-                author={
-                    "name": f"{message.author}",
-                    "icon_url": message.author.avatar_url,
-                },
-                footer={
-                    "text": f"message id: {message.id}",
-                    "icon_url": message.guild.icon_url,
-                },
-            )
-
-            filters = watchlist["filters"]
-            content = ""
-            if filters:
-                for f in filters:
-                    match = re.findall(rf"({f})", str(message.content.lower()))
-                    if match:
-                        content = f"<@&{config.MOD_ROLE_ID}> - Filter Match: `{f}`"
-                        break
-
-            # send images sent by user
-            files = []
-            for a in message.attachments:
-                files.append(await a.to_file())
-                content += "\nAttachments:\n"
-
-            await channel.send(embed=embed, content=content, files=files)
-
-        else:
-            # remove from watchlist, since watchlist channel doesnt exist
-            db.watchlist.delete_one(
-                {"guild_id": message.guild.id, "user_id": message.author.id}
-            )
 
     @Cog.listener()
     async def on_command_error(self, ctx: Context, exception: Exception):
@@ -378,6 +323,9 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_message_edit(self, before, after):
+        if not self.bot.first_ready:
+            return
+
         # re run command if command was edited
         if before.content != after.content and after.content.startswith(config.PREFIX):
             return await self.bot.process_command(after)
@@ -594,8 +542,10 @@ class Events(Cog):
         if left_user:
 
             # transfer back data
-            db.left_leveling_users.delete_many({'guild_id': guild_id, 'user_id': user_id})
-            del left_user['_id']
+            db.left_leveling_users.delete_many(
+                {"guild_id": guild_id, "user_id": user_id}
+            )
+            del left_user["_id"]
             db.leveling_users.insert_one(left_user)
 
             # delete timer

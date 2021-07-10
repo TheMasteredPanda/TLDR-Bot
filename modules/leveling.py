@@ -1186,12 +1186,23 @@ class LevelingSystem:
     guilds: :class:`List[:class:`LevelingGuild`]`
         List of the LevelingGuilds attached to the bot.
     """
-
     def __init__(self, bot):
         self.bot = bot
         # list of leveling guilds
         self.guilds = []
+        self.bot.add_listener(self.on_message, 'on_message')
         self.bot.logger.info("LevelingSystem module has been initiated")
+
+    async def on_message(self, message: discord.Message):
+        """Function called on every message to level up members."""
+        if not self.bot.first_ready:
+            return
+
+        if message.author.bot or not message.guild or message.content.startswith(config.PREFIX):
+            return
+
+        leveling_cog = self.bot.get_cog("Leveling")
+        await leveling_cog.process_message(message)
 
     def initialise_guilds(self):
         """Function called in :func:`cogs.events.on_ready` to initialise all the guilds and cache them."""

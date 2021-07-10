@@ -100,6 +100,10 @@ class Dev(Cog):
     async def reload_extension(self, ctx: Context, ext: str):
         if ext in self.bot.extensions.keys():
             self.bot.reload_extension(ext)
+
+            if ext.lower() == "cogs.uk":
+                # Used to accomodate the unique way in which this cog is loaded.
+                self.bot.get_cog("UK").load()
             return await embed_maker.message(
                 ctx, description=f"`{ext}` has been reloaded", colour="green", send=True
             )

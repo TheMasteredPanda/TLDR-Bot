@@ -11,6 +11,8 @@ import modules.leveling
 import modules.embed_maker
 import modules.ukparliament
 import modules.catchpa
+import modules.webhooks
+import modules.watchlist
 import modules.google_drive
 import modules.reaction_menus
 import modules.custom_commands
@@ -19,7 +21,7 @@ import modules.moderation
 import modules.commands
 
 from datetime import datetime
-from discord.ext.commands import when_mentioned_or, GroupMixin, Bot
+from discord.ext.commands import when_mentioned_or, Bot
 
 
 intents = discord.Intents.all()
@@ -50,6 +52,8 @@ class TLDR(Bot):
                 self.logger.info(f"Cog {filename[:-3]} is now loaded.")
 
         self.google_drive = modules.google_drive.Drive()
+        self.webhooks = modules.webhooks.Webhooks(self)
+        self.watchlist = modules.watchlist.Watchlist(self)
         self.timers = modules.timers.Timers(self)
         self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
         self.custom_commands = modules.custom_commands.CustomCommands(self)
@@ -143,7 +147,7 @@ class TLDR(Bot):
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
 
-        if not self.left_check.is_set():
+        if not self.first_ready:
             return
 
         # no bots allowed

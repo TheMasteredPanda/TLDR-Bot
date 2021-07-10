@@ -1,12 +1,9 @@
-from datetime import datetime
-from typing import Union
 import pymongo
 import config
-import time
-import discord
+
 from ukparliament.bills_tracker import FeedUpdate
 from ukparliament.divisions_tracker import LordsDivision, CommonsDivision
-
+from typing import Union
 from bson import ObjectId
 
 active_connection = None
@@ -184,6 +181,11 @@ class Connection:
         The catchpa guilds collection:
             {
                 'guild_id': :class:`int`
+    webhooks: :class:`pymongo.collection.Collection`
+        The webhooks collection
+            {
+                "guild_id" : :class:`int`,
+                'url': :class:`str`
             }
     """
 
@@ -204,6 +206,7 @@ class Connection:
         self.divisions_tracker = self.db["divisions_tracker"]
         self.guild_settings = self.db["guild_settings"]
         self.catchpa_guilds = self.db["catchpa_guilds"]
+        self.webhooks = self.db["webhooks"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
