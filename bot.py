@@ -10,7 +10,7 @@ import modules.database
 import modules.leveling
 import modules.embed_maker
 import modules.ukparliament
-
+import modules.catchpa
 import modules.google_drive
 import modules.reaction_menus
 import modules.custom_commands
@@ -94,9 +94,7 @@ class TLDR(Bot):
         embed.set_author(
             name=f"Critical Error - Shutting down", icon_url=guild.icon_url
         )
-        await channel.send(
-            embed=embed
-        )
+        await channel.send(embed=embed)
         await self.close()
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
@@ -219,7 +217,7 @@ class TLDR(Bot):
             add = view.get_word()
             if not add:
                 break
-            full_command_name += f' {add}'
+            full_command_name += f" {add}"
 
         command = self.get_command(full_command_name)
 

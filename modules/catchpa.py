@@ -1,3 +1,8 @@
+from enum import Enum
+from discord.guild import Guild
+from discord.channel import TextChannel
+import modules.database as database
+
 """
 A Catchpa Gateway System to prevent continuous bot attacks.
 
@@ -40,3 +45,66 @@ Requirements:
                     * [ ] Choosing out six pictures the correct object.
                     * [ ] Typing out what word has squiggled about in a manner no readable by computers.
 """
+
+
+class CatchpaChannel:
+    def __init__(self, guild: Guild, channel: TextChannel):
+        self.guild = guild
+        self.channel = channel
+        self.catchpa = None
+
+
+class DataManager:
+    def __init__(self):
+        self.connection = database.get_connection()
+        self.catchpa_guilds = self.connection.catchpa_guilds
+
+    def add_guild(self, guild_id: int):
+        self.catchpa_guilds.insert_one({"guild_id": guild_id})
+
+    def get_guilds(self) -> list[int]:
+        return list(self.catchpa_guilds.find({}))
+
+
+class GatewayGuild:
+    def __init__(self, bot, data_manager: DataManager, **kwargs):
+        self.bot = bot
+        self.data_manager = data_manager
+        if "guild" in kwargs:
+            self.guild: Guild = kwargs["guild"]
+            self.id: int = self.guild.id
+
+        if "guild_id" in kwargs:
+            self.guild: Guild = bot.get_guild(kwargs["guild_id"])
+            if self.guild is not None:
+                self.id: int = self.guild.id
+
+        if "landing_channel_id" in kwargs:
+            self.landing_channelP: TextChannel = self.guild.get_channel(
+                kwargs["landing_channel"]
+            )
+        else:
+            landing_channel = self.guild.create_text_channel("welcome")
+            # Add welcome message here; make welcome message configurable.
+            self.landing_channel: TextChannel = landing_channel
+
+    async def create_single_use_invite(self, ttl: int = 60):
+        invite = await self.landing_channel.create_invite(max_age=ttl, max_uses=1)
+        return invite
+
+
+class CatchpaModule:
+    def __init__(self, bot):
+        self.gateway_guilds = []
+        self.data_manager = DataManager()
+        self.bot = bot
+
+    async def create_guild(self, name: str) -> GatewayGuild:
+        guild = await self.bot.create_guild(name)
+        self.data_manager.add_guild(guild.id)
+        g_guild = GatewayGuild(self.bot, self.data_manager, guild=guild)
+        self.gateway_guilds.append(g_guild)
+        return g_guild
+
+    def get_gateway_guilds(self) -> list[GatewayGuild]:
+        return self.gateway_guilds

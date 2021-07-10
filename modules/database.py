@@ -180,6 +180,11 @@ class Connection:
                 'bill_id': :class:`int`
                 'division_id': :class:`int`
             }
+    catchpa_guilds: :class:`pymongo.ccollection.Collection`
+        The catchpa guilds collection:
+            {
+                'guild_id': :class:`int`
+            }
     """
 
     def __init__(self):
@@ -198,6 +203,7 @@ class Connection:
         self.bills_tracker = self.db["bills_tracker"]
         self.divisions_tracker = self.db["divisions_tracker"]
         self.guild_settings = self.db["guild_settings"]
+        self.catchpa_guilds = self.db["catchpa_guilds"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
