@@ -59,8 +59,6 @@ class Events(Cog):
         if self.bot.watchlist:
             self.bot.watchlist.initialize()
 
-        self.bot.ukparl_module.tracker_event_loop.start()
-
         self.bot.first_ready = True
 
     async def check_left_members(self):
