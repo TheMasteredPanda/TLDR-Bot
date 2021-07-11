@@ -86,7 +86,8 @@ class Admin(Cog):
         help='Enables or disables giving non-patreon users the member role when they get the citizen role',
         usage='automember',
         examples=['automember'],
-        cls=commands.Command
+        cls=commands.Command,
+        module_dependency=['leveling_system']
     )
     async def auto_member(self, ctx: Context):
         new_automember = db.get_automember(ctx.guild.id)
@@ -255,7 +256,8 @@ class Admin(Cog):
         help='Archive a ticket channel. Every message will be recorded and put in a google doc',
         usage='archive_channel',
         examples=['archive_channel'],
-        cls=commands.Command
+        cls=commands.Command,
+        module_dependency=['google_drive']
     )
     async def archive_channel(self, ctx: Context):
         # ask the user if they actually want to start the process of archiving a channel
@@ -423,7 +425,8 @@ class Admin(Cog):
         usage='customcommands (sub command) (args)',
         examples=['customcommands', 'customcommands 1'],
         aliases=['cc'],
-        cls=commands.Group
+        cls=commands.Group,
+        module_dependency=['reaction_menus']
     )
     async def customcommands(self, ctx: Context, index: Union[int, str] = None):
         if not ctx.subcommand_passed:

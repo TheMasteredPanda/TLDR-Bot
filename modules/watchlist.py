@@ -10,6 +10,11 @@ db = database.get_connection()
 class Watchlist:
     def __init__(self, bot):
         self.bot = bot
+
+        if not self.bot.webhooks:
+            self.bot.watchlist = None
+            raise Exception('Watchlist module depends on google drive module being enabled')
+
         self.members = {}
         self.watchlist_data = {}
         self.bot.add_listener(self.on_message, 'on_message')

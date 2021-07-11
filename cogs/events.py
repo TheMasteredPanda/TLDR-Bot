@@ -28,20 +28,36 @@ class Events(Cog):
         bot_game = discord.Game(f">help")
         await self.bot.change_presence(activity=bot_game)
 
-        await self.check_left_members()
-        await self.bot.timers.run_old()
-        await self.bot.invite_logger.initialize_invites()
-        await self.bot.clearance.parse_clearance_spreadsheet()
-        self.bot.leveling_system.initialise_guilds()
-        self.bot.ukparl_module.set_guild(self.bot.get_guild(config.MAIN_SERVER))
-        await self.bot.ukparl_module.load()
-        self.bot.get_cog("UK").load()
-        self.bot.logger.info(f"{self.bot.user} is ready")
-        self.bot.ukparl_module.load_trackers()
-        self.bot.webhooks.initialize()
-        self.bot.watchlist.initialize()
+        if self.bot.leveling_system:
+            await self.check_left_members()
+        else:
+            self.bot.left_check.set()
 
-        self.bot.ukparl_module.tracker_event_loop.start()
+        if self.bot.timers:
+            await self.bot.timers.run_old()
+
+        if self.bot.invite_logger:
+            await self.bot.invite_logger.initialize_invites()
+
+        if self.bot.clearance:
+            await self.bot.clearance.parse_clearance_spreadsheet()
+
+        if self.bot.leveling_system:
+            self.bot.leveling_system.initialise_guilds()
+
+        if self.bot.ukparl_module:
+            self.bot.ukparl_module.set_guild(self.bot.get_guild(config.MAIN_SERVER))
+            await self.bot.ukparl_module.load()
+            self.bot.get_cog("UK").load()
+            self.bot.ukparl_module.load_trackers()
+            self.bot.ukparl_module.tracker_event_loop.start()
+
+        self.bot.logger.info(f"{self.bot.user} is ready")
+
+        if self.bot.webhooks:
+            self.bot.webhooks.initialize()
+        if self.bot.watchlist:
+            self.bot.watchlist.initialize()
 
         self.bot.first_ready = True
 
@@ -270,7 +286,7 @@ class Events(Cog):
                         await poll_msg.add_reaction(e)
 
         # give topic author boost if there is a topic author
-        if topic_author:
+        if topic_author and self.bot.leveling_system:
             leveling_member = await self.bot.leveling_system.get_member(
                 int(guild_id), topic_author_id
             )
@@ -514,7 +530,7 @@ class Events(Cog):
     @Cog.listener()
     async def on_guild_role_update(self, before: discord.Role, after: discord.Role):
         # if name has changed, edit database entry
-        if before.name != after.name:
+        if before.name != after.name and self.bot.leveling_system:
             leveling_guild = self.bot.leveling_system.get_guild(before.guild.id)
 
             for branch in leveling_guild.leveling_routes:
@@ -557,24 +573,25 @@ class Events(Cog):
                 }
             )
 
-            leveling_member = await self.bot.leveling_system.get_member(
-                member.guild.id, member.id
-            )
-
-            for branch in leveling_member.guild.leveling_routes:
-                user_role = next(
-                    (
-                        role
-                        for role in branch.roles
-                        if role.name == left_user[f"{branch.name[0]}_role"]
-                    ),
-                    None,
+            if self.bot.leveling_system:
+                leveling_member = await self.bot.leveling_system.get_member(
+                    member.guild.id, member.id
                 )
-                if user_role:
-                    user_role_index = branch.roles.index(user_role)
-                    up_to_role = branch.roles[: user_role_index + 1]
-                    for role in up_to_role:
-                        await leveling_member.add_role(role)
+
+                for branch in leveling_member.guild.leveling_routes:
+                    user_role = next(
+                        (
+                            role
+                            for role in branch.roles
+                            if role.name == left_user[f"{branch.name[0]}_role"]
+                        ),
+                        None,
+                    )
+                    if user_role:
+                        user_role_index = branch.roles.index(user_role)
+                        up_to_role = branch.roles[: user_role_index + 1]
+                        for role in up_to_role:
+                            await leveling_member.add_role(role)
 
     def transfer_leveling_data(self, leveling_user):
         db.leveling_users.delete_many(leveling_user)

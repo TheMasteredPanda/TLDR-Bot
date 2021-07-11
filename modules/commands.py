@@ -20,9 +20,15 @@ class Clearance:
         self.command_access = {}
 
         self.bot.logger.debug(f"Downloading clearance spreadsheet")
-        self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(
-            config.CLEARANCE_SPREADSHEET_ID
-        )
+
+        if self.bot.google_drive:
+            self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(
+                config.CLEARANCE_SPREADSHEET_ID
+            )
+        else:
+            self.bot.clearance = None
+            raise Exception('Clearance module depends on google drive module being enabled')
+
         self.spreadsheet_link = (
             f"https://docs.google.com/spreadsheets/d/{config.CLEARANCE_SPREADSHEET_ID}"
         )
@@ -252,6 +258,7 @@ class Help:
         self.dm_only = kwargs.get("dm_only", False)
         self.command_args = kwargs.get("command_args", [])
         self.clearance = None
+        self.module_dependency = kwargs.get('module_dependency', [])
 
 
 class Command(discord.ext.commands.Command):
@@ -297,6 +304,13 @@ class Command(discord.ext.commands.Command):
         """Return True if member has been given access to command, otherwise return False."""
         command_clearance = self.bot.clearance.command_clearance(self)
         return member.id in command_clearance["users"]
+
+    def module_dependency(self):
+        """Returns None if all module dependencies are met, otherwise returns name of missing dependency."""
+        for dependency_name in self.docs.module_dependency:
+            dependency = getattr(self.bot, dependency_name, None)
+            if not dependency:
+                return dependency_name
 
     def can_use(self, member: discord.Member):
         """Returns True if member can use command, otherwise return False."""

@@ -41,6 +41,9 @@ class TLDR(Bot):
             intents=intents,
             chunk_guilds_at_startup=True,
         )
+        self.enabled_modules = config.MODULES
+        self.enabled_cogs = config.COGS
+
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
         self.command_system = modules.commands.CommandSystem(self)
@@ -48,6 +51,7 @@ class TLDR(Bot):
         # Load Cogs
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py") and filename[:-3] != "template_cog":
+<<<<<<< HEAD
                 self.load_extension(f"cogs.{filename[:-3]}")
                 self.logger.info(f"Cog {filename[:-3]} is now loaded.")
 
@@ -63,6 +67,23 @@ class TLDR(Bot):
         self.ukparl_module = modules.ukparliament.UKParliamentModule(self)
         self.catchpa_module = modules.catchpa.CatchpaModule(self)
         self.clearance = modules.commands.Clearance(self)
+=======
+                if filename[:-3] in self.enabled_cogs and self.enabled_cogs[filename[:-3]]:
+                    self.load_extension(f"cogs.{filename[:-3]}")
+                    self.logger.info(f"Cog {filename[:-3]} is now loaded.")
+
+        self.google_drive = modules.google_drive.Drive() if self.enabled_modules['google_drive'] else None
+        self.webhooks = modules.webhooks.Webhooks(self) if self.enabled_modules['webhooks'] else None
+        self.watchlist = modules.watchlist.Watchlist(self) if self.enabled_modules['watchlist'] else None
+        self.timers = modules.timers.Timers(self) if self.enabled_modules['timers'] else None
+        self.reaction_menus = modules.reaction_menus.ReactionMenus(self) if self.enabled_modules['reaction_menus'] else None
+        self.custom_commands = modules.custom_commands.CustomCommands(self) if self.enabled_modules['custom_commands'] else None
+        self.leveling_system = modules.leveling.LevelingSystem(self) if self.enabled_modules['leveling_system'] else None
+        self.invite_logger = modules.invite_logger.InviteLogger(self) if self.enabled_modules['invite_logger'] else None
+        self.moderation = modules.moderation.ModerationSystem(self) if self.enabled_modules['moderation'] else None
+        self.ukparl_module = modules.ukparliament.UKParliamentModule(self) if self.enabled_modules['ukparl_module'] else None
+        self.clearance = modules.commands.Clearance(self) if self.enabled_modules['clearance'] else None
+>>>>>>> 88dba9e3f42fb6549799b62633605ddbe93ef2c7
 
         self.first_ready = False
 
@@ -162,15 +183,13 @@ class TLDR(Bot):
             return await pm_cog.process_pm(ctx)
 
         # check if message matches any custom commands
-        custom_command = await self.check_custom_command(message)
-        if custom_command:
-            return
+        if self.custom_commands:
+            custom_command = await self.check_custom_command(message)
+            if custom_command:
+                return
 
         # invoke command if message starts with prefix
-        if (
-            message.content.startswith(config.PREFIX)
-            and message.content.replace(config.PREFIX, "").strip()
-        ):
+        if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, "").strip():
             return await self.process_command(message)
 
     async def check_custom_command(self, message: discord.Message):
@@ -210,9 +229,12 @@ class TLDR(Bot):
     async def process_command(self, message: discord.Message):
         ctx = await self.get_context(message)
 
+        print(ctx.command)
+
         if ctx.command is None:
             return
 
+<<<<<<< HEAD
         # get the object of the command actually being run, so that can be checked instead of just the parent command
         # Discord.py invokes the parent command, then it looks for any sub commands and invokes those directly, instead of processing them like commands
         view = copy.copy(ctx.view)
@@ -239,6 +261,44 @@ class TLDR(Bot):
         # return if user doesnt have clearance for command
         if not ctx.command.can_use(ctx.author) or not command.can_use(ctx.author):
             return
+=======
+        print(ctx.command)
+        if self.clearance:
+            # get the object of the command actually being run, so that can be checked instead of just the parent command
+            # Discord.py invokes the parent command, then it looks for any sub commands and invokes those directly, instead of processing them like commands
+            view = copy.copy(ctx.view)
+            full_command_name = ctx.command.name
+            view.skip_ws()
+            while True:
+                add = view.get_word()
+                if not add:
+                    break
+                full_command_name += f' {add}'
+
+            command = self.get_command(full_command_name)
+
+            # create copy of original so values of original aren't modified
+            ctx.command = copy.copy(ctx.command)
+            ctx.command.docs = ctx.command.get_help(ctx.author)
+
+            # check if command has been disabled
+            if ctx.command.disabled or command.disabled:
+                return await modules.embed_maker.error(
+                    ctx, "This command has been disabled"
+                )
+
+            # return if user doesnt have clearance for command
+            if not ctx.command.can_use(ctx.author) or not command.can_use(ctx.author):
+                return
+
+        # check if the command has a missing dependency
+        ctx_dependency = ctx.command.module_dependency()
+        command_dependency = ctx.command.module_dependency()
+        if ctx_dependency:
+            return await modules.embed_maker.error(ctx, f'Command missing module dependency [{ctx_dependency}]')
+        if command_dependency:
+            return await modules.embed_maker.error(ctx, f'Command missing module dependency [{command_dependency}]')
+>>>>>>> 88dba9e3f42fb6549799b62633605ddbe93ef2c7
 
         await self.invoke(ctx)
 

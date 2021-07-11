@@ -188,6 +188,7 @@ class Utility(Cog):
             ),
         ],
         cls=commands.Command,
+        module_dependency=['timers']
     )
     async def anon_poll(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if not args:
@@ -549,6 +550,7 @@ class Utility(Cog):
             "remindme 10h 30m 10s stay alive",
         ],
         cls=commands.Command,
+        module_dependency=['timers']
     )
     async def remindme(self, ctx: Context, *, reminder: str = None):
         if reminder is None:
