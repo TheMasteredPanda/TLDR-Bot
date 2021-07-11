@@ -1,4 +1,5 @@
 import datetime
+import json
 import discord
 import time
 import config
@@ -188,7 +189,7 @@ class Utility(Cog):
             ),
         ],
         cls=commands.Command,
-        module_dependency=['timers']
+        module_dependency=["timers"],
     )
     async def anon_poll(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if not args:
@@ -550,7 +551,7 @@ class Utility(Cog):
             "remindme 10h 30m 10s stay alive",
         ],
         cls=commands.Command,
-        module_dependency=['timers']
+        module_dependency=["timers"],
     )
     async def remindme(self, ctx: Context, *, reminder: str = None):
         if reminder is None:
@@ -708,12 +709,21 @@ class Utility(Cog):
             else:
                 help_object[cog_name].append(command)
 
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
+        member_clearance = (
+            self.bot.clearance.member_clearance(ctx.author)
+            if self.bot.clearance
+            else None
+        )
+
         # if user didnt ask for a specific command, display all the available categories and commands to the user
         if command_name is None:
-            highest_member_clearance = self.bot.clearance.highest_member_clearance(
-                member_clearance
+            highest_member_clearance = (
+                self.bot.clearance.highest_member_clearance(member_clearance)
+                if self.bot.clearance
+                else None
             )
+            if highest_member_clearance is None:
+                highest_member_clearance = "*"
 
             embed = await embed_maker.message(
                 ctx,
@@ -731,6 +741,7 @@ class Utility(Cog):
                 "Admin",
                 "Dev",
                 "Special Access",
+                "UK",
             ]
             for cog_name in sorted_cog_names:
                 if cog_name not in help_object:
@@ -776,8 +787,10 @@ class Utility(Cog):
             if type(command) == commands.Group and command.all_commands:
                 sub_commands = command.sub_commands(member=ctx.author)
                 if sub_commands:
-                    sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc.name for sc in sub_commands)
-                    sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
+                    sub_commands_str = "**\nSub Commands:** " + " | ".join(
+                        sc.name for sc in sub_commands
+                    )
+                    sub_commands_str += f"\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`"
                     cmd_help += sub_commands_str
 
             if command_help.command_args:

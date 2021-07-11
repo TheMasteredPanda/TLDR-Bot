@@ -290,6 +290,8 @@ class Command(discord.ext.commands.Command):
 
     def access_given(self, member: discord.Member):
         """Return True if member has been given access to command, otherwise return False."""
+        if config.MODULES["clearance"] is False:
+            return False
         command_clearance = self.bot.clearance.command_clearance(self)
         return member.id in command_clearance["users"]
 
@@ -302,6 +304,8 @@ class Command(discord.ext.commands.Command):
 
     def can_use(self, member: discord.Member):
         """Returns True if member can use command, otherwise return False."""
+        if config.MODULES["clearance"] is False:
+            return True
         command_clearance = self.bot.clearance.command_clearance(self)
         member_clearance = self.bot.clearance.member_clearance(member)
         return self.bot.clearance.member_has_clearance(
@@ -330,7 +334,12 @@ class Command(discord.ext.commands.Command):
         if member is None:
             return help_object
 
-        member_clearance = self.bot.clearance.member_clearance(member)
+        member_clearance = (
+            self.bot.clearance.member_clearance(member)
+            if self.bot.clearance
+            else {"groups": ["*"], "roles": ["*"], "user_id": member.id}
+        )
+
         if (
             self.special_help_group
             and self.special_help_group in member_clearance["groups"]
@@ -338,8 +347,10 @@ class Command(discord.ext.commands.Command):
             help_object = self.__original_kwargs__[self.special_help_group]
             help_object.clearance = self.special_help_group
         else:
-            help_object.clearance = self.bot.clearance.highest_member_clearance(
-                member_clearance
+            help_object.clearance = (
+                self.bot.clearance.highest_member_clearance(member_clearance)
+                if self.bot.clearance
+                else "*"
             )
 
         return help_object
