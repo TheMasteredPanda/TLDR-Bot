@@ -61,6 +61,7 @@ class TLDR(Bot):
         self.invite_logger = modules.invite_logger.InviteLogger(self)
         self.moderation = modules.moderation.ModerationSystem(self)
         self.ukparl_module = modules.ukparliament.UKParliamentModule(self)
+        self.catchpa_module = modules.catchpa.CatchpaModule(self)
         self.clearance = modules.commands.Clearance(self)
 
         self.first_ready = False

@@ -68,28 +68,37 @@ class DataManager:
 
 class GatewayGuild:
     def __init__(self, bot, data_manager: DataManager, **kwargs):
-        self.bot = bot
-        self.data_manager = data_manager
-        if "guild" in kwargs:
-            self.guild: Guild = kwargs["guild"]
-            self.id: int = self.guild.id
+        self._bot = bot
+        self._data_manager = data_manager
+        self._kwargs = kwargs
 
-        if "guild_id" in kwargs:
-            self.guild: Guild = bot.get_guild(kwargs["guild_id"])
-            if self.guild is not None:
-                self.id: int = self.guild.id
+    async def load(self):
+        if "guild" in self._kwargs:
+            self._guild: Guild = self._kwargs["guild"]
+            self._id: int = self._guild.id
 
-        if "landing_channel_id" in kwargs:
-            self.landing_channelP: TextChannel = self.guild.get_channel(
-                kwargs["landing_channel"]
-            )
-        else:
-            landing_channel = self.guild.create_text_channel("welcome")
-            # Add welcome message here; make welcome message configurable.
-            self.landing_channel: TextChannel = landing_channel
+            if "guild_id" in self._kwargs:
+                self._guild: Guild = self._bot.get_guild(self.kwargs["guild_id"])
+                if self._guild is not None:
+                    self.id: int = self._guild.id
+
+            if "landing_channel_id" in self._kwargs:
+                self._landing_channel: TextChannel = self._guild.get_channel(
+                    self._kwargs["landing_channel"]
+                )
+            else:
+                landing_channel = await self._guild.create_text_channel("welcome")
+                # Add welcome message here; make welcome message configurable.
+                self.landing_channel: TextChannel = landing_channel
+
+    def get_name(self):
+        return self._guild.name
+
+    def get_id(self):
+        return self._id
 
     async def create_single_use_invite(self, ttl: int = 60):
-        invite = await self.landing_channel.create_invite(max_age=ttl, max_uses=1)
+        invite = await self._landing_channel.create_invite(max_age=ttl, max_uses=1)
         return invite
 
 
@@ -98,6 +107,30 @@ class CatchpaModule:
         self.gateway_guilds = []
         self.data_manager = DataManager()
         self.bot = bot
+        bot.logger.info("Catchpa Gateway Module initiated.")
+
+    async def load(self):
+        mongo_guilds = self.data_manager.get_guilds()
+
+        if len(mongo_guilds) == 0:
+            self.bot.logger.info("No previous Gateway Guilds active. Creating one...")
+            g_guild = await self.create_guild("Gateway Guild 1")
+            await g_guild.load()
+            self.bot.logger.info("Created Gateway Guild 1.")
+            self.data_manager.add_guild(g_guild.id)
+            self.bot.logger.info("Added Guild to MongoDB.")
+        elif len(mongo_guilds) > 0:
+            self.bot.logger.info("Previous Gateway Guilds found. Indexing...")
+            guilds: list[Guild] = self.bot.guilds
+
+            for guild in guilds:
+                for m_guild_id in mongo_guilds:
+                    if guild.id == m_guild_id:
+                        g_guild = GatewayGuild(self.bot, self.data_manager, guil=guild)
+                        self.bot.logger.info(
+                            f"Found gateway {g_guild.name}/{g_guild.id}. Adding to Gateway Guild List."
+                        )
+                        await g_guild.load()
 
     async def create_guild(self, name: str) -> GatewayGuild:
         guild = await self.bot.create_guild(name)
