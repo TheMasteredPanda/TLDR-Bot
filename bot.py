@@ -51,6 +51,10 @@ class TLDR(Bot):
         # Load Cogs
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py") and filename[:-3] != "template_cog":
+                if filename[:-1] in self.enabled_cogs and self.enabled_cogs[filename[:-3]]:
+                    self.load_extension(f"cogs.{filename[:-3]}")
+                    self.logger.info(f"Cog {filename[:-3]} is now loaded.")
+
         self.google_drive = modules.google_drive.Drive() if self.enabled_modules['google_drive'] else None
         self.webhooks = modules.webhooks.Webhooks(self) if self.enabled_modules['webhooks'] else None
         self.watchlist = modules.watchlist.Watchlist(self) if self.enabled_modules['watchlist'] else None
