@@ -51,27 +51,6 @@ class TLDR(Bot):
         # Load Cogs
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py") and filename[:-3] != "template_cog":
-<<<<<<< HEAD
-                self.load_extension(f"cogs.{filename[:-3]}")
-                self.logger.info(f"Cog {filename[:-3]} is now loaded.")
-
-        self.google_drive = modules.google_drive.Drive()
-        self.webhooks = modules.webhooks.Webhooks(self)
-        self.watchlist = modules.watchlist.Watchlist(self)
-        self.timers = modules.timers.Timers(self)
-        self.reaction_menus = modules.reaction_menus.ReactionMenus(self)
-        self.custom_commands = modules.custom_commands.CustomCommands(self)
-        self.leveling_system = modules.leveling.LevelingSystem(self)
-        self.invite_logger = modules.invite_logger.InviteLogger(self)
-        self.moderation = modules.moderation.ModerationSystem(self)
-        self.ukparl_module = modules.ukparliament.UKParliamentModule(self)
-        self.catchpa_module = modules.catchpa.CatchpaModule(self)
-        self.clearance = modules.commands.Clearance(self)
-=======
-                if filename[:-3] in self.enabled_cogs and self.enabled_cogs[filename[:-3]]:
-                    self.load_extension(f"cogs.{filename[:-3]}")
-                    self.logger.info(f"Cog {filename[:-3]} is now loaded.")
-
         self.google_drive = modules.google_drive.Drive() if self.enabled_modules['google_drive'] else None
         self.webhooks = modules.webhooks.Webhooks(self) if self.enabled_modules['webhooks'] else None
         self.watchlist = modules.watchlist.Watchlist(self) if self.enabled_modules['watchlist'] else None
@@ -83,8 +62,6 @@ class TLDR(Bot):
         self.moderation = modules.moderation.ModerationSystem(self) if self.enabled_modules['moderation'] else None
         self.ukparl_module = modules.ukparliament.UKParliamentModule(self) if self.enabled_modules['ukparl_module'] else None
         self.clearance = modules.commands.Clearance(self) if self.enabled_modules['clearance'] else None
->>>>>>> 88dba9e3f42fb6549799b62633605ddbe93ef2c7
-
         self.first_ready = False
 
     def add_cog(self, cog):
