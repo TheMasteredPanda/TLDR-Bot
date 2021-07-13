@@ -1,3 +1,5 @@
+from bson import json_util
+import json
 from typing import Union
 from bot import TLDR
 from modules import commands, embed_maker, catchpa
@@ -66,10 +68,10 @@ class Catchpa(Cog):
         cls=Group,
         invoke_without_command=True,
     )
-    async def mod_cmds(self, ctx: Context):
+    async def mod_cmd(self, ctx: Context):
         return await embed_maker.command_error(ctx)
 
-    @catchpa_cmd.group(
+    @mod_cmd.group(
         help="A set of commands used to configure the configurable elements of this feature.",
         name="config",
         usage="catchpa mod config [sub command]",
@@ -78,18 +80,52 @@ class Catchpa(Cog):
         invoke_without_command=True,
     )
     async def config_mod_cmd(self, ctx: Context):
-        config = self.bot.catchpa.get_data_manager().get_config()
-        print(config)
+        print(ctx.subcommand_passed)
+        config = self.bot.catchpa.get_settings()
+        config.pop("_id")
+        return await embed_maker.message(
+            ctx,
+            description=f"```{json_util.dumps(config['modules']['catchpa'], indent=4)}```",
+            title="Catchpa Gateway Settings",
+            send=True,
+        )
 
-    @catchpa_cmd.group(
+    @config_mod_cmd.group(
         help="Set a value of a configuration variable.",
         name="set",
         usage="catchpa mod config set [variable name] [value]",
         examples=["catchpa mod config set landing_channel.name welcome-tldr"],
         cls=Command,
+        command_args=[
+            (
+                ("--path", "-p", str),
+                "The path of the setting, with fullspots substituting spaces.",
+            ),
+            (("--value", "-v", str), "Value to set the setting to."),
+        ],
     )
-    async def set_config_mod_cmd(self, ctx: Context):
-        pass
+    async def set_config_mod_cmd(
+        self, ctx: Context, *, args: Union[ParseArgs, str] = ""
+    ):
+        if args["pre"] != "":
+            split_pre = args["pre"].split(" ")
+            args["path"] = split_pre[0]
+            args["value"] = split_pre[1]
+        else:
+            if args["path"] is None:
+                return await embed_maker.command_error(ctx, "path")
+
+            if args["value"] is None:
+                return await embed_maker.command_error(ctx, "value")
+
+        print(args)
+        self.bot.catchpa.set_setting(args["path"], args["value"])
+        await embed_maker.message(
+            ctx,
+            description=f"Set value {args['value']} on setting {args['path']}",
+            title="Changed Setting",
+            send=True,
+        )
 
     @catchpa_cmd.group(
         help="A set of dev commands used when testing this feature.",

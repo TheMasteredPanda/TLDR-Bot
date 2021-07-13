@@ -159,6 +159,10 @@ class CatchpaModule:
         mongo_guild_ids = self._data_manager.get_guilds(False)
 
         if len(mongo_guild_ids) == 0:
+            if len(self._bot.guilds) >= 10:
+                return await self._bot.critical_error(
+                    "Can't load Catchpa Gateway Module, Bot cannot create new Guilds if it is in 10 or more Guilds."
+                )
             self._logger.info("No previous Gateway Guilds active. Creating one...")
             g_guild = await self.create_guild()
             self._logger.info(f"Created {g_guild.get_name()}")
@@ -211,3 +215,48 @@ class CatchpaModule:
 
     def get_data_manager(self) -> DataManager:
         return self._data_manager
+
+    def get_settings(self):
+        return self._settings_handler.get_settings(config.MAIN_SERVER)
+
+    def set_setting(self, path: str, value: object):
+        settings = self._settings_handler.get_settings(config.MAIN_SERVER)
+
+        def keys():
+            def walk(key_list: list, branch: dict, full_branch_key: str):
+                walk_list = []
+                for key in branch.keys():
+                    if type(branch[key]) is dict:
+                        walk(key_list, branch[key], f"{full_branch_key}.{key}")
+                    else:
+                        walk_list.append(f"{full_branch_key}.{key}".lower())
+
+                key_list.extend(walk_list)
+                return key_list
+
+            key_list = []
+
+            for key in settings.keys():
+                if type(settings[key]) is dict:
+                    key_list = walk(key_list, settings[key], key)
+                else:
+                    key_list.append(key.lower())
+            return key_list
+
+        print(keys())
+        path = f"modules.catchpa.{path}"
+        if path.lower() in keys():
+            split_path = path.split(".")
+            parts_count = len(split_path)
+
+            def walk(parts: list[str], part: str, branch: dict):
+                if parts.index(part) == (parts_count - 1):
+                    branch[part] = value
+                    self._settings_handler.save(settings)
+                else:
+                    walk(parts, parts[parts.index(part) + 1], branch[part])
+
+            if parts_count == 1:
+                settings[path] = value
+            else:
+                walk(split_path, split_path[0], settings)
