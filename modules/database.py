@@ -323,7 +323,7 @@ class Connection:
         """
         guild_settings = self.guild_settings.find_one({"guild_id": guild_id})
         if guild_settings is None:
-            guild_settings = {"guild_id": guild_id, "mute_role_id": None}
+            guild_settings = {"guild_id": guild_id, "mute_role_id": None, "modules": {}}
             self.guild_settings.insert_one(guild_settings)
 
         return guild_settings

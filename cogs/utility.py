@@ -742,6 +742,7 @@ class Utility(Cog):
                 "Dev",
                 "Special Access",
                 "UK",
+                "Catchpa",
             ]
             for cog_name in sorted_cog_names:
                 if cog_name not in help_object:

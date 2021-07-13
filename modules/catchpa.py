@@ -1,4 +1,7 @@
+import config
 from enum import Enum
+from typing import Union
+from discord.errors import Forbidden, HTTPException
 from discord.guild import Guild
 from discord.channel import TextChannel
 import modules.database as database
@@ -7,7 +10,7 @@ import modules.database as database
 A Catchpa Gateway System to prevent continuous bot attacks.
 
 Requirements:
-    - [ ] Bot to have ownership over gateway server.
+    - [DONE] Bot to have ownership over gateway server.
     - [ ] Bot to create more gateway servers if the need arises.
     - [ ] Each new member to a catchpa server will need a dedicated channel to prove they are not a bot.
         * [ ] In this channel, only they will be able to see themselves and the bot.
@@ -55,15 +58,49 @@ class CatchpaChannel:
 
 
 class DataManager:
-    def __init__(self):
-        self.connection = database.get_connection()
-        self.catchpa_guilds = self.connection.catchpa_guilds
+    def __init__(self, logger):
+        self._logger = logger
+        self._db = database.get_connection()
+        self._catchpa_guilds = self._db.catchpa_guilds
+        self._config = {
+            "name": "Gateway Guild {number}",
+            "landing_channel": {"name": "welcome", "message": ""},
+        }
+
+        settings = self._db.get_guild_settings(config.MAIN_SERVER)
+
+        print(settings)
+        if "catchpa" not in settings["modules"].keys():
+            settings["modules"]["catchpa"] = self._config
+            self._db.guild_settings.save(settings)
+            self._logger.info(
+                "Catchpa Gateway Settings not found, adding default config to the Guild's settings."
+            )
+        else:
+            self._config = settings["modules"]["catchpa"]
+            self._logger.info("Found Catchpa Gateway Settings.")
 
     def add_guild(self, guild_id: int):
-        self.catchpa_guilds.insert_one({"guild_id": guild_id})
+        self._catchpa_guilds.insert_one(
+            {"guild_id": guild_id, "landing_channel_id": 0, "stats": {}}
+        )
 
-    def get_guilds(self) -> list[int]:
-        return list(self.catchpa_guilds.find({}))
+    def remove_guild(self, guild_id: int):
+        self._catchpa_guilds.delete_one({"guild_id": guild_id})
+
+    def get_guilds(self, include_stats: bool = False) -> list[object]:
+        return self._catchpa_guilds.find(
+            {}, {} if include_stats is False else {"stats": 0}
+        )
+
+    def get_config(self):
+        # Check if main server has a valid id before using this function.
+        return self._db.guild_settings.find_one({"guild_id": config.MAIN_SERVER})
+
+    def set_config(self, path: str, value):
+        self._db.guild_settings.update_one(
+            {"guild_id": self._config["guild_id"]}, {"$set": {path: value}}
+        )
 
 
 class GatewayGuild:
@@ -91,53 +128,97 @@ class GatewayGuild:
                 # Add welcome message here; make welcome message configurable.
                 self.landing_channel: TextChannel = landing_channel
 
+    async def delete(self):
+        self._data_manager.remove_guild(self._id)
+        # Need to write in here a better way to delete a gateway guild. I need to check if this is the only guild within the list, then check if people are in the guild doing catchpas before I delete the guild.
+        try:
+            await self._guild.delete()
+            return True
+        except (HTTPException, Forbidden) as ignore:
+            return False
+
+    def get_landing_channel(self):
+        return self.landing_channel
+
+    def set_landing_channel(self, channel: TextChannel):
+        self.landing_channel = channel
+
     def get_name(self):
         return self._guild.name
 
     def get_id(self):
         return self._id
 
-    async def create_single_use_invite(self, ttl: int = 60):
-        invite = await self._landing_channel.create_invite(max_age=ttl, max_uses=1)
-        return invite
+    def get_guild(self):
+        return self._guild
 
 
 class CatchpaModule:
     def __init__(self, bot):
-        self.gateway_guilds = []
-        self.data_manager = DataManager()
-        self.bot = bot
+        self._gateway_guilds = []
+        self._data_manager = DataManager(bot.logger)
+        self._bot = bot
+        self._logger = bot.logger
+        if config.MAIN_SERVER == 0:
+            bot.logger.info(
+                "Catchpa Gateway Module required the MAIN_SERVER variable in config.py to be set to a non-zero value (a valid guild id). Will not initate module."
+            )
+            return
         bot.logger.info("Catchpa Gateway Module initiated.")
 
     async def load(self):
-        mongo_guilds = self.data_manager.get_guilds()
+        mongo_guild_ids = self._data_manager.get_guilds(False)
 
-        if len(mongo_guilds) == 0:
-            self.bot.logger.info("No previous Gateway Guilds active. Creating one...")
-            g_guild = await self.create_guild("Gateway Guild 1")
-            await g_guild.load()
-            self.bot.logger.info("Created Gateway Guild 1.")
-            self.data_manager.add_guild(g_guild.id)
-            self.bot.logger.info("Added Guild to MongoDB.")
-        elif len(mongo_guilds) > 0:
-            self.bot.logger.info("Previous Gateway Guilds found. Indexing...")
-            guilds: list[Guild] = self.bot.guilds
+        if len(mongo_guild_ids) == 0:
+            self._logger.info("No previous Gateway Guilds active. Creating one...")
+            g_guild = await self.create_guild()
+            self._logger.info(f"Created {g_guild.get_name()}")
+            self._logger.info("Added Guild to MongoDB.")
+        elif len(mongo_guild_ids) > 0:
+            self._logger.info("Previous Gateway Guilds found. Indexing...")
+            guilds: list[Guild] = self._bot.guilds
 
             for guild in guilds:
-                for m_guild_id in mongo_guilds:
+                for m_guild in mongo_guild_ids:
+                    m_guild_id = m_guild["guild_id"]
+                    m_guild_landing_channel_id = m_guild["landing_channel_id"]
                     if guild.id == m_guild_id:
-                        g_guild = GatewayGuild(self.bot, self.data_manager, guil=guild)
-                        self.bot.logger.info(
+                        g_guild = GatewayGuild(
+                            self._bot,
+                            self._data_manager,
+                            guild=guild,
+                            landing_channel_id=m_guild_landing_channel_id,
+                        )
+                        self._logger.info(
                             f"Found gateway {g_guild.name}/{g_guild.id}. Adding to Gateway Guild List."
                         )
                         await g_guild.load()
 
-    async def create_guild(self, name: str) -> GatewayGuild:
-        guild = await self.bot.create_guild(name)
-        self.data_manager.add_guild(guild.id)
-        g_guild = GatewayGuild(self.bot, self.data_manager, guild=guild)
-        self.gateway_guilds.append(g_guild)
+    async def create_guild(self) -> GatewayGuild:
+        guild = await self._bot.create_guild(
+            self._data_manager.get_config["name"].replace(
+                "{number}", len(self._gateway_guilds) + 1
+            )
+        )
+        self._data_manager.add_guild(guild.id)
+        g_guild = GatewayGuild(self._bot, self._data_manager, guild=guild)
+        self._gateway_guilds.append(g_guild)
         return g_guild
 
     def get_gateway_guilds(self) -> list[GatewayGuild]:
-        return self.gateway_guilds
+        return self._gateway_guilds
+
+    def is_gatway_guild(self, guild_id: int) -> bool:
+        for guild in self._gateway_guilds:
+            if guild.get_id() == guild_id:
+                return True
+        return False
+
+    def get_gateway_guild(self, guild_id: int) -> Union[GatewayGuild, None]:
+        for g_guild in self._gateway_guilds:
+            if g_guild.get_id() == guild_id:
+                return g_guild
+        return None
+
+    def get_data_manager(self) -> DataManager:
+        return self._data_manager

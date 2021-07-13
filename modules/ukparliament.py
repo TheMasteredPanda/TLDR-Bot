@@ -39,11 +39,6 @@ class UKParliamentConfig:
         self.db = database.get_connection()
         self.settings = self.db.get_guild_settings(guild_id)
         self.guild_id = guild_id
-        if "modules" not in self.settings.keys():
-            self.db.guild_settings.update_one(
-                {"guild_id": guild_id}, {"$set": {"modules": {}}}
-            )
-            self.settings = self.db.get_guild_settings(guild_id)
 
         if "ukparliament" not in self.settings["modules"].keys():
             self.db.guild_settings.update_one(

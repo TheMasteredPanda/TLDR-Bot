@@ -16,7 +16,10 @@ log_session = None
 
 class Command(Converter):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
-    async def convert(self, ctx: Context, argument: str = '') -> Optional[Union[commands.Command, commands.Group]]:
+
+    async def convert(
+        self, ctx: Context, argument: str = ""
+    ) -> Optional[Union[commands.Command, commands.Group]]:
         """
         Converts provided argument to command
 
@@ -37,7 +40,8 @@ class Command(Converter):
 
 class ParseArgs(Converter, dict):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
-    async def convert(self, ctx: Context, argument: str = '') -> dict:
+
+    async def convert(self, ctx: Context, argument: str = "") -> dict:
         """
         Converts provided argument to dictionary of command args and their values.
         Command args are gotten from ctx.command.docs.command_args.
@@ -69,9 +73,11 @@ class ParseArgs(Converter, dict):
                 args[long[2:]] = data_type
 
                 if type(short) == str:
-                    matches = re.findall(rf'(\s|^)({short})(\s|$)', argument)
+                    matches = re.findall(rf"(\s|^)({short})(\s|$)", argument)
                     for match in matches:
-                        argument = re.sub(''.join(match), match[0] + long + match[2], argument)
+                        argument = re.sub(
+                            "".join(match), match[0] + long + match[2], argument
+                        )
 
                 result[long[2:]] = None
 
@@ -80,7 +86,7 @@ class ParseArgs(Converter, dict):
             # split argument with regex
             split_argument = re.split(regex, argument)
             # anything before the first arg is put into result['pre']
-            result['pre'] = split_argument.pop(0)
+            result["pre"] = split_argument.pop(0)
 
             for arg, data in zip(split_argument[::2], split_argument[1::2]):
                 data_type = args[arg]
@@ -98,7 +104,7 @@ class ParseArgs(Converter, dict):
             return result
         except Exception as e:
             logger = get_logger()
-            logger.exception(f'Error in ParseArgs. Argument: {argument} | Error: {e}')
+            logger.exception(f"Error in ParseArgs. Argument: {argument} | Error: {e}")
 
 
 def id_match(identifier: str, extra: str) -> re.Match:
@@ -117,7 +123,7 @@ def id_match(identifier: str, extra: str) -> re.Match:
     :class:`re.Match`
         Either discord ID match or extra regex match
     """
-    id_regex = re.compile(r'([0-9]{15,21})$')
+    id_regex = re.compile(r"([0-9]{15,21})$")
     additional_regex = re.compile(extra)
     return id_regex.match(identifier) or additional_regex.match(identifier)
 
@@ -138,7 +144,7 @@ def get_custom_emote(ctx: Context, emote: str) -> Optional[discord.Emoji]:
     Optional[:class:`discord.Emoji`]
         Emoji if one is found, otherwise `None`.
     """
-    match = id_match(emote, r'<a?:[a-zA-Z0-9\_]+:([0-9]+)>$')
+    match = id_match(emote, r"<a?:[a-zA-Z0-9\_]+:([0-9]+)>$")
     result = None
 
     if match is None:
@@ -161,7 +167,9 @@ def get_custom_emote(ctx: Context, emote: str) -> Optional[discord.Emoji]:
     return result
 
 
-async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional[discord.Role]:
+async def get_guild_role(
+    guild: discord.Guild, role_identifier: str
+) -> Optional[discord.Role]:
     """
     Get guild's role by its name or id.
 
@@ -177,7 +185,7 @@ async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional
     Optional[:class:`discord.Role`]
         Role if one is found, otherwise `None`.
     """
-    match = id_match(role_identifier, r'<@&([0-9]+)>$')
+    match = id_match(role_identifier, r"<@&([0-9]+)>$")
     if match:
         role = guild.get_role(int(match.group(1)))
     else:
@@ -186,7 +194,9 @@ async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional
     return role
 
 
-async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[discord.Member], str]:
+async def get_member_from_string(
+    ctx: Context, string: str
+) -> Tuple[Optional[discord.Member], str]:
     """
     Get member from the first part of the string and return the remaining string.
 
@@ -204,30 +214,40 @@ async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[di
     """
     # check if source is member mention
     if ctx.message.mentions:
-        return ctx.message.mentions[0], ' '.join(string.split()[1:])
+        return ctx.message.mentions[0], " ".join(string.split()[1:])
 
     member_name = ""
     previous_result = None
     for part in string.split():
-        member_match = await get_member(ctx, f'{member_name} {part}'.strip(), multi=False, return_message=False)
+        member_match = await get_member(
+            ctx, f"{member_name} {part}".strip(), multi=False, return_message=False
+        )
         if member_match is None:
             # if both member and previous result are None, nothing can be found from the string, return None and the string
             if previous_result is None:
                 return None, string
             # if member is None, but previous result is a list, return Normal get_member call and allow user to choose member
             elif type(previous_result) == list:
-                return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
+                return (
+                    await get_member(ctx, f"{member_name}".strip()),
+                    string.replace(f"{member_name}".strip(), "").strip(),
+                )
             elif type(previous_result) == discord.Member:
-                return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
+                return (
+                    previous_result,
+                    string.replace(f"{member_name}".strip(), "").strip(),
+                )
         else:
             # update variables
             previous_result = member_match
-            member_name = f'{member_name} {part}'.strip()
+            member_name = f"{member_name} {part}".strip()
 
-    return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
+    return previous_result, string.replace(f"{member_name}".strip(), "").strip()
 
 
-async def get_member_by_id(guild: discord.Guild, member_id: int) -> Optional[discord.Member]:
+async def get_member_by_id(
+    guild: discord.Guild, member_id: int
+) -> Optional[discord.Member]:
     """
     Simple function to get or fetch member in guild by member's id.
 
@@ -254,7 +274,9 @@ async def get_member_by_id(guild: discord.Guild, member_id: int) -> Optional[dis
     return member
 
 
-async def get_member(ctx: Context, source, *, multi: bool = True, return_message: bool = True) -> Optional[Union[discord.Member, discord.Message, list]]:
+async def get_member(
+    ctx: Context, source, *, multi: bool = True, return_message: bool = True
+) -> Optional[Union[discord.Member, discord.Message, list]]:
     """
     Get member from given source. Source could be id or name.
     Member could also be a mention, so ctx.message.mentions are checked.
@@ -280,7 +302,9 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
     """
     # just in case source is empty
     if not source:
-        return await embed_maker.error(ctx, 'Input is empty') if return_message else None
+        return (
+            await embed_maker.error(ctx, "Input is empty") if return_message else None
+        )
 
     if type(source) == int:
         source = str(source)
@@ -299,49 +323,84 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
                 # if member hasnt been cached yet, fetching them should work, if member is inaccessible, it will return None
                 member = await ctx.guild.fetch_member(int(source))
                 if member is None:
-                    return await embed_maker.error(ctx, f'Member not found by ID: `{source}`') if return_message else None
+                    return (
+                        await embed_maker.error(
+                            ctx, f"Member not found by ID: `{source}`"
+                        )
+                        if return_message
+                        else None
+                    )
             except discord.Forbidden:
-                return await embed_maker.error(ctx, 'Bot does not have access to the guild members') if return_message else None
+                return (
+                    await embed_maker.error(
+                        ctx, "Bot does not have access to the guild members"
+                    )
+                    if return_message
+                    else None
+                )
             except discord.HTTPException:
-                return await embed_maker.error(ctx, f'Member not found by id: `{source}`') if return_message else None
+                return (
+                    await embed_maker.error(ctx, f"Member not found by id: `{source}`")
+                    if return_message
+                    else None
+                )
 
         if member:
             return member
 
     # if source length is less than 3, don't bother searching, too many matches will come
     if len(source) < 3:
-        return await embed_maker.error(ctx, 'User name input needs to be at least 3 characters long') if return_message else None
+        return (
+            await embed_maker.error(
+                ctx, "User name input needs to be at least 3 characters long"
+            )
+            if return_message
+            else None
+        )
 
     # checks first for a direct name match
     members = list(
         filter(
-            lambda m: m.name.lower() == source.lower() or  # username match
-                      m.display_name.lower() == source.lower() or  # nickname match (if user doesnt have a nickname, it'll match the name again)
-                      str(m).lower() == source.lower(),  # name and discriminator match
-            ctx.guild.members
+            lambda m: m.name.lower() == source.lower()
+            or m.display_name.lower() == source.lower()  # username match
+            or str(  # nickname match (if user doesnt have a nickname, it'll match the name again)
+                m
+            ).lower()
+            == source.lower(),  # name and discriminator match
+            ctx.guild.members,
         )
     )
 
     # if can't find direct name match, check for a match with regex
     if not members:
         # checks for regex match
-        special_chars_map = {i: '\\' + chr(i) for i in b'()[]{}?*+-|^$\\.&~#'}
+        special_chars_map = {i: "\\" + chr(i) for i in b"()[]{}?*+-|^$\\.&~#"}
         safe_source = source.translate(special_chars_map)
 
         members = list(
             filter(
-                lambda m: re.findall(fr'({safe_source.lower()})', str(m).lower()) or  # regex match name and discriminator
-                          re.findall(fr'({safe_source.lower()})', m.display_name.lower()),  # regex match nickname
-                ctx.guild.members
+                lambda m: re.findall(fr"({safe_source.lower()})", str(m).lower())
+                or re.findall(  # regex match name and discriminator
+                    fr"({safe_source.lower()})", m.display_name.lower()
+                ),  # regex match nickname
+                ctx.guild.members,
             )
         )
 
         if not members:
-            return await embed_maker.error(ctx, f'No members found by the name `{source}`') if return_message else None
+            return (
+                await embed_maker.error(ctx, f"No members found by the name `{source}`")
+                if return_message
+                else None
+            )
 
     # too many matches
     if len(members) > 10 and multi:
-        return await embed_maker.error(ctx, 'Too many user matches') if return_message else None
+        return (
+            await embed_maker.error(ctx, "Too many user matches")
+            if return_message
+            else None
+        )
 
     # only one match, return member
     if len(members) == 1:
@@ -350,47 +409,53 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
         return members
 
     # send embed containing member matches and let member choose which one they meant
-    description = 'Found multiple users, which one did you mean? `type index of member`\n\n'
+    description = (
+        "Found multiple users, which one did you mean? `type index of member`\n\n"
+    )
     for i, member in enumerate(members):
-        description += f'`#{i + 1}` | {member.display_name}#{member.discriminator}'
+        description += f"`#{i + 1}` | {member.display_name}#{member.discriminator}"
 
         # also display members nickname, if member has one
         if member.nick:
-            description += f' - [{member.name}#{member.discriminator}]'
+            description += f" - [{member.name}#{member.discriminator}]"
 
-        description += '\n'
+        description += "\n"
 
     # generate embed
     users_embed_message = await embed_maker.message(
         ctx,
         description=description,
-        author={'name': 'Members'},
-        footer={'text': str(ctx.author), 'icon_url': ctx.author.avatar_url},
-        send=True
+        author={"name": "Members"},
+        footer={"text": str(ctx.author), "icon_url": ctx.author.avatar_url},
+        send=True,
     )
 
     # function that validates member input
     def input_check(m):
-        return m.author.id == ctx.author.id and m.channel.id == ctx.channel.id and m.content.isdigit()
+        return (
+            m.author.id == ctx.author.id
+            and m.channel.id == ctx.channel.id
+            and m.content.isdigit()
+        )
 
     # wait for member input
     try:
-        user_message = await ctx.bot.wait_for('message', check=input_check, timeout=20)
+        user_message = await ctx.bot.wait_for("message", check=input_check, timeout=20)
         await users_embed_message.delete(delay=5)
         index = user_message.content
         if index.isdigit() and len(members) >= int(index) - 1 >= 0:
             return members[int(index) - 1]
         elif not index.isdigit():
-            return await embed_maker.error(ctx, 'Input is not a number')
+            return await embed_maker.error(ctx, "Input is not a number")
         elif int(index) - 1 > len(members) or int(index) - 1 < 0:
-            return await embed_maker.error(ctx, 'Input number out of range')
+            return await embed_maker.error(ctx, "Input number out of range")
 
     except asyncio.TimeoutError:
         await users_embed_message.delete()
-        return await embed_maker.error(ctx, 'Timeout')
+        return await embed_maker.error(ctx, "Timeout")
 
 
-def get_logger(name: str = 'TLDR-Bot-log'):
+def get_logger(name: str = "TLDR-Bot-log"):
     """
     Get logging session, or create it if needed.
 
@@ -406,13 +471,13 @@ def get_logger(name: str = 'TLDR-Bot-log'):
     """
     global log_session
 
-    logger = logging.getLogger('TLDR')
+    logger = logging.getLogger("TLDR")
     logger.setLevel(logging.DEBUG)
     if not logger.handlers:
-        log_path = os.path.join('logs/', f'{name}.log')
+        log_path = os.path.join("logs/", f"{name}.log")
         os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
-        formatter = logging.Formatter('{asctime} {levelname:<8} {message}', style='{')
+        formatter = logging.Formatter("{asctime} {levelname:<8} {message}", style="{")
 
         # sys
         sysh = logging.StreamHandler(sys.stdout)
@@ -426,5 +491,5 @@ def get_logger(name: str = 'TLDR-Bot-log'):
         fh.setFormatter(formatter)
         logger.addHandler(fh)
 
-    adapter = logging.LoggerAdapter(logger, extra={'session': 2})
+    adapter = logging.LoggerAdapter(logger, extra={"session": 2})
     return adapter
