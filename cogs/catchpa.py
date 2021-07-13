@@ -80,8 +80,7 @@ class Catchpa(Cog):
         invoke_without_command=True,
     )
     async def config_mod_cmd(self, ctx: Context):
-        print(ctx.subcommand_passed)
-        config = self.bot.catchpa.get_settings()
+        config = self.bot.catchpa.get_settings().copy()
         config.pop("_id")
         return await embed_maker.message(
             ctx,
@@ -118,7 +117,6 @@ class Catchpa(Cog):
             if args["value"] is None:
                 return await embed_maker.command_error(ctx, "value")
 
-        print(args)
         self.bot.catchpa.set_setting(args["path"], args["value"])
         await embed_maker.message(
             ctx,
@@ -170,7 +168,7 @@ class Catchpa(Cog):
             )
 
         number = len(self.bot.catchpa.get_gateway_guilds()) + 1
-        g_guild = await self.bot.catchpa.create_guild(f"Gateway Guild {number}")
+        g_guild = await self.bot.catchpa.create_guild()
         await embed_maker.message(
             ctx, description=f"Created Gateway Guild No. {number}", send=True
         )
@@ -195,6 +193,7 @@ class Catchpa(Cog):
                         f"  **ID**: {guild.id}",
                         f"  **User Count:** {len(guild.members)}",
                         f"  **Owner:** {guild.owner.name}/{guild.owner.id}",
+                        f"  **Gateway Guild:** {'Yes' if self.bot.catchpa.is_gatway_guild(guild.id) else 'No'}",
                     ]
                 )
             )
@@ -209,35 +208,51 @@ class Catchpa(Cog):
         usage="catchpa dev delete",
         examples=["catchpa dev delete"],
         module_dependency=["catchpa"],
-        command_args=[(("--name", "-n", str), "Guild name")],
+        command_args=[
+            (("--name", "-n", str), "Guild name"),
+            (
+                ("--gateway-guild", "-gg", str),
+                "If this is true it will check the Gateway Guilds list, if not it will check the guilds the bot is joined to. Used in cases where a guild owned by the bot is not in the gateway guild list.",
+            ),
+        ],
         cls=Command,
     )
-    async def dev_guild_delete(self, ctx: Context, *args):
-        if len(args) == 0:
+    async def dev_guild_delete(self, ctx: Context, *, args: Union[ParseArgs, str] = ""):
+        if args == "":
             return await embed_maker.command_error(ctx)
 
         guilds: list[Guild] = self.bot.guilds
-        name = " ".join(args)
+        name = args["pre"] if args["pre"] != "" else args["name"]
 
         for guild in guilds:
             if name.lower() == guild.name.lower():
-                deleted = await self.bot.catchpa.get_gateway_guild(guild.id).delete()
-                if deleted is False:
-                    return await embed_maker.message(
-                        ctx,
-                        description=f"Failed to delete guild {guild.name}.",
-                        title="Couldn't delete gateway guild.",
-                        send=True,
-                    )
-                return await embed_maker.message(
-                    ctx,
-                    description=f"Deleted guild {guild.name}.",
-                    title="Deleted Gateway Guild.",
-                    send=True,
-                )
+                if args["gateway-guild"] == "no":
+                    deleted = await self.bot.catchpa.get_gateway_guild(
+                        guild.id
+                    ).delete()
+                    if deleted is False:
+                        return await embed_maker.message(
+                            ctx,
+                            description=f"Failed to delete guild {guild.name}.",
+                            title="Couldn't delete gateway guild.",
+                            send=True,
+                        )
+                elif args["gateway-guild"] is None:
+                    guilds = self.bot.guilds
+
+                    for guild in guilds:
+                        if guild.name.lower() == name.lower():
+                            await guild.delete()
+
+                            return await embed_maker.message(
+                                ctx,
+                                description=f"Deleted guild {guild.name}.",
+                                title="Deleted Gateway Guild.",
+                                send=True,
+                            )
         return await embed_maker.message(
             ctx,
-            description="Couldn't find guild under name {name}.",
+            description=f"Couldn't find guild under name {name}.",
             title="Couldn't findguild.",
             send=True,
         )

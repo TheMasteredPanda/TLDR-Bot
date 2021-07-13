@@ -45,6 +45,9 @@ class Events(Cog):
         if self.bot.leveling_system:
             self.bot.leveling_system.initialise_guilds()
 
+        if self.bot.catchpa:
+            await self.bot.catchpa.load()
+
         if self.bot.ukparl_module:
             self.bot.ukparl_module.set_guild(self.bot.get_guild(config.MAIN_SERVER))
             await self.bot.ukparl_module.load()

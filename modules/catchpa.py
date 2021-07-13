@@ -1,3 +1,4 @@
+from pymongo.cursor import Cursor
 import config
 from enum import Enum
 from typing import Union
@@ -64,17 +65,23 @@ class DataManager:
         self._db = database.get_connection()
         self._catchpa_guilds = self._db.catchpa_guilds
 
-    def add_guild(self, guild_id: int):
+    def add_guild(self, guild_id: int, landing_channel_id: int = 0):
         self._catchpa_guilds.insert_one(
-            {"guild_id": guild_id, "landing_channel_id": 0, "stats": {}}
+            {
+                "guild_id": guild_id,
+                "landing_channel_id": landing_channel_id,
+                "stats": {},
+            }
         )
 
     def remove_guild(self, guild_id: int):
         self._catchpa_guilds.delete_one({"guild_id": guild_id})
 
-    def get_guilds(self, include_stats: bool = False) -> list[object]:
-        return self._catchpa_guilds.find(
-            {}, {} if include_stats is False else {"stats": 0}
+    def get_guilds(self, include_stats: bool = False) -> Cursor:
+        return (
+            self._catchpa_guilds.find({}, {"stats": 0})
+            if include_stats is False
+            else self._catchpa_guilds.find({}, {"stats": 0})
         )
 
 
@@ -83,25 +90,26 @@ class GatewayGuild:
         self._bot = bot
         self._data_manager = data_manager
         self._kwargs = kwargs
+        self._guild: Union[Guild, None] = None
 
     async def load(self):
         if "guild" in self._kwargs:
             self._guild: Guild = self._kwargs["guild"]
             self._id: int = self._guild.id
 
-            if "guild_id" in self._kwargs:
-                self._guild: Guild = self._bot.get_guild(self.kwargs["guild_id"])
-                if self._guild is not None:
-                    self.id: int = self._guild.id
+        if "guild_id" in self._kwargs:
+            self._guild: Guild = self._bot.get_guild(self.kwargs["guild_id"])
+            if self._guild is not None:
+                self.id: int = self._guild.id
 
-            if "landing_channel_id" in self._kwargs:
-                self._landing_channel: TextChannel = self._guild.get_channel(
-                    self._kwargs["landing_channel"]
-                )
-            else:
-                landing_channel = await self._guild.create_text_channel("welcome")
-                # Add welcome message here; make welcome message configurable.
-                self.landing_channel: TextChannel = landing_channel
+        if "landing_channel_id" in self._kwargs:
+            self._landing_channel: TextChannel = self._guild.get_channel(
+                self._kwargs["landing_channel_id"]
+            )
+        else:
+            landing_channel = await self._guild.create_text_channel("welcome")
+            # Add welcome message here; make welcome message configurable.
+            self.landing_channel: TextChannel = landing_channel
 
     async def delete(self):
         self._data_manager.remove_guild(self._id)
@@ -113,10 +121,10 @@ class GatewayGuild:
             return False
 
     def get_landing_channel(self):
-        return self.landing_channel
+        return self._landing_channel
 
     def set_landing_channel(self, channel: TextChannel):
-        self.landing_channel = channel
+        self._landing_channel = channel
 
     def get_name(self):
         return self._guild.name
@@ -156,8 +164,8 @@ class CatchpaModule:
         self._logger.info("Catchpa Gateway Module initiated.")
 
     async def load(self):
-        mongo_guild_ids = self._data_manager.get_guilds(False)
-
+        mongo_guild_ids: list = list(self._data_manager.get_guilds(False))
+        print(mongo_guild_ids)
         if len(mongo_guild_ids) == 0:
             if len(self._bot.guilds) >= 10:
                 return await self._bot.critical_error(
@@ -167,35 +175,40 @@ class CatchpaModule:
             g_guild = await self.create_guild()
             self._logger.info(f"Created {g_guild.get_name()}")
             self._logger.info("Added Guild to MongoDB.")
-        elif len(mongo_guild_ids) > 0:
+        else:
             self._logger.info("Previous Gateway Guilds found. Indexing...")
-            guilds: list[Guild] = self._bot.guilds
 
-            for guild in guilds:
-                for m_guild in mongo_guild_ids:
-                    m_guild_id = m_guild["guild_id"]
-                    m_guild_landing_channel_id = m_guild["landing_channel_id"]
-                    if guild.id == m_guild_id:
-                        g_guild = GatewayGuild(
-                            self._bot,
-                            self._data_manager,
-                            guild=guild,
-                            landing_channel_id=m_guild_landing_channel_id,
-                        )
-                        self._logger.info(
-                            f"Found gateway {g_guild.name}/{g_guild.id}. Adding to Gateway Guild List."
-                        )
-                        await g_guild.load()
+            for m_guild in list(mongo_guild_ids):
+                m_guild_id = m_guild["guild_id"]
+                m_guild_landing_channel_id = m_guild["landing_channel_id"]
+                guild = self._bot.get_guild(m_guild_id)
+                if guild is None:
+                    continue
+                if guild.id == m_guild_id:
+                    g_guild = GatewayGuild(
+                        self._bot,
+                        self._data_manager,
+                        guild=guild,
+                        landing_channel_id=m_guild_landing_channel_id,
+                    )
+                    await g_guild.load()
+                    self._gateway_guilds.append(g_guild)
+                    self._logger.info(
+                        f"Found gateway {g_guild.get_name()}/{g_guild.get_id()}. Adding to Gateway Guild List."
+                    )
 
     async def create_guild(self) -> GatewayGuild:
+        guild_name_format = self._settings_handler.get_settings(config.MAIN_SERVER)[
+            "modules"
+        ]["catchpa"]["guild_name"]
         guild = await self._bot.create_guild(
-            self._data_manager.get_config["name"].replace(
-                "{number}", len(self._gateway_guilds) + 1
-            )
+            guild_name_format.replace("{number}", str(len(self._gateway_guilds) + 1))
         )
-        self._data_manager.add_guild(guild.id)
         g_guild = GatewayGuild(self._bot, self._data_manager, guild=guild)
+        await g_guild.load()
+        self._data_manager.add_guild(guild.id, g_guild.get_landing_channel().id)
         self._gateway_guilds.append(g_guild)
+        self._logger.info(f"Created gateway guild {g_guild.get_name()}")
         return g_guild
 
     def get_gateway_guilds(self) -> list[GatewayGuild]:
@@ -243,7 +256,6 @@ class CatchpaModule:
                     key_list.append(key.lower())
             return key_list
 
-        print(keys())
         path = f"modules.catchpa.{path}"
         if path.lower() in keys():
             split_path = path.split(".")
