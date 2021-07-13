@@ -44,7 +44,7 @@ class TLDR(Bot):
         )
         self.enabled_modules = config.MODULES
         self.enabled_cogs = config.COGS
-
+        self.settings_handler = modules.utils.SettingsHandler()
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
         self.command_system = modules.commands.CommandSystem(self)

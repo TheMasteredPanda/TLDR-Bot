@@ -14,6 +14,30 @@ db = database.get_connection()
 log_session = None
 
 
+class SettingsHandler:
+    """
+    A settings handler. Used to store centrally settings from the guild_settings collection.
+    This was written primarily to prevent multiple modules from saving to the collection old
+    versions of a settings document.
+    """
+
+    def __init__(self):
+        self._db = database.get_connection()
+        self._settings = {}
+
+    def get_settings(self, guild_id: int):
+        if guild_id not in self._settings.keys():
+            self._settings[guild_id] = self._db.get_guild_settings(guild_id)
+        return self._settings[guild_id]
+
+    def save(self, new_settings):
+        """
+        Saves an updated settings document.
+        """
+        self._db.guild_settings.save(new_settings)
+        self._settings[new_settings["guild_id"]] = new_settings
+
+
 class Command(Converter):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
 
