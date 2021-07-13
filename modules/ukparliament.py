@@ -1,4 +1,5 @@
 from io import BytesIO
+from modules.utils import SettingsHandler
 from cachetools.ttl import TTLCache
 from bot import TLDR
 from datetime import datetime
@@ -31,33 +32,25 @@ import configparser
 
 
 class UKParliamentConfig:
-    def __init__(self, guild_id: int):
+    def __init__(self, settings_handler: SettingsHandler, guild_id: int):
         """
         Utility/handler class to interface with the collection containing the channel ids for each tracker.
         Used soley to store the ids of channel assigned to each tracker.
         """
+        self._settings_handler: SettingsHandler = settings_handler
         self.db = database.get_connection()
-        self.settings = self.db.get_guild_settings(guild_id)
+        settings = self._settings_handler.get_settings(guild_id)
         self.guild_id = guild_id
 
-        if "ukparliament" not in self.settings["modules"].keys():
-            self.db.guild_settings.update_one(
-                {"guild_id": guild_id},
-                {
-                    "$set": {
-                        "modules": {
-                            "ukparliament": {
-                                "royal_assent": 0,
-                                "lords_divisions": 0,
-                                "commons_divisions": 0,
-                                "publications": 0,
-                                "feed": 0,
-                            }
-                        }
-                    }
-                },
-            )
-            self.settings = self.db.get_guild_settings(guild_id)
+        if "ukparliament" not in settings["modules"].keys():
+            settings["modules"]["ukparliament"] = {
+                "royal_assent": 0,
+                "lords_divisions": 0,
+                "commons_divisions": 0,
+                "publications": 0,
+                "feed": 0,
+            }
+            self._settings_handler.save(settings)
 
     def set_channel(self, tracker_name: str, channel_id: int):
         """
@@ -70,13 +63,14 @@ class UKParliamentConfig:
         channel_id: :class:`int`
             The id of the text channel.
         """
-        if tracker_name not in self.settings["modules"]["ukparliament"].keys():
+        settings = self._settings_handler.get_settings(self.guild_id)
+        if tracker_name not in settings["modules"]["ukparliament"].keys():
             raise Exception(
                 f"Tracker name {tracker_name} is not a key for a channel id."
             )
 
-        self.settings["modules"]["ukparliament"][tracker_name] = channel_id
-        self.db.guild_settings.save(self.settings)
+        settings["modules"]["ukparliament"][tracker_name] = channel_id
+        self._settings_handler.save(settings)
 
     def get_channel_id(self, tracker_id):
         """
@@ -94,13 +88,16 @@ class UKParliamentConfig:
             The id of the text channel or 0
         """
 
-        if tracker_id not in self.settings["modules"]["ukparliament"].keys():
+        settings = self._settings_handler.get_settings(self.guild_id)
+        if tracker_id not in settings["modules"]["ukparliament"].keys():
             raise Exception(f"Tracker name {tracker_id} is not a key for a channel id.")
 
-        return self.settings["modules"]["ukparliament"][tracker_id]
+        return settings["modules"]["ukparliament"][tracker_id]
 
     def get_channel_ids(self):
-        return self.settings["modules"]["ukparliament"]
+        return self._settings_handler.get_settings(self.guild_id)["modules"][
+            "ukparliament"
+        ]
 
 
 class PartyColour(BetterEnum):
@@ -393,7 +390,7 @@ class UKParliamentModule:
         wasn't for this impediment.
 
         """
-        self.config = UKParliamentConfig(self._guild.id)
+        self.config = UKParliamentConfig(self._bot.settings_handler, self._guild.id)
         self.aiohttp_session = getattr(self._bot.http, "_HTTPClient__session")
         self.parliament = UKParliament(self.aiohttp_session)
         await self.parliament.load()

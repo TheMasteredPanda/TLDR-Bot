@@ -36,6 +36,7 @@ class SettingsHandler:
         """
         self._db.guild_settings.save(new_settings)
         self._settings[new_settings["guild_id"]] = new_settings
+        return new_settings
 
 
 class Command(Converter):

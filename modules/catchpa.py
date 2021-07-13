@@ -5,6 +5,7 @@ from discord.errors import Forbidden, HTTPException
 from discord.guild import Guild
 from discord.channel import TextChannel
 import modules.database as database
+from modules.utils import SettingsHandler
 
 """
 A Catchpa Gateway System to prevent continuous bot attacks.
@@ -62,23 +63,6 @@ class DataManager:
         self._logger = logger
         self._db = database.get_connection()
         self._catchpa_guilds = self._db.catchpa_guilds
-        self._config = {
-            "name": "Gateway Guild {number}",
-            "landing_channel": {"name": "welcome", "message": ""},
-        }
-
-        settings = self._db.get_guild_settings(config.MAIN_SERVER)
-
-        print(settings)
-        if "catchpa" not in settings["modules"].keys():
-            settings["modules"]["catchpa"] = self._config
-            self._db.guild_settings.save(settings)
-            self._logger.info(
-                "Catchpa Gateway Settings not found, adding default config to the Guild's settings."
-            )
-        else:
-            self._config = settings["modules"]["catchpa"]
-            self._logger.info("Found Catchpa Gateway Settings.")
 
     def add_guild(self, guild_id: int):
         self._catchpa_guilds.insert_one(
@@ -91,15 +75,6 @@ class DataManager:
     def get_guilds(self, include_stats: bool = False) -> list[object]:
         return self._catchpa_guilds.find(
             {}, {} if include_stats is False else {"stats": 0}
-        )
-
-    def get_config(self):
-        # Check if main server has a valid id before using this function.
-        return self._db.guild_settings.find_one({"guild_id": config.MAIN_SERVER})
-
-    def set_config(self, path: str, value):
-        self._db.guild_settings.update_one(
-            {"guild_id": self._config["guild_id"]}, {"$set": {path: value}}
         )
 
 
@@ -157,6 +132,7 @@ class CatchpaModule:
     def __init__(self, bot):
         self._gateway_guilds = []
         self._data_manager = DataManager(bot.logger)
+        self._settings_handler: SettingsHandler = bot.settings_handler
         self._bot = bot
         self._logger = bot.logger
         if config.MAIN_SERVER == 0:
@@ -164,7 +140,20 @@ class CatchpaModule:
                 "Catchpa Gateway Module required the MAIN_SERVER variable in config.py to be set to a non-zero value (a valid guild id). Will not initate module."
             )
             return
-        bot.logger.info("Catchpa Gateway Module initiated.")
+
+        settings = self._settings_handler.get_settings(config.MAIN_SERVER)
+
+        if "catchpa" not in settings["modules"].keys():
+            self._logger.info(
+                "Catchpa Gateway settings not found in Guild settings. Adding default settings now."
+            )
+            settings["modules"]["catchpa"] = {
+                "guild_name": "Gateway Guild {number}",
+                "landing_channel": {"name": "welcome", "message": ""},
+            }
+            self._settings_handler.save(settings)
+        self._logger.info("Catchpa Gateway settings found.")
+        self._logger.info("Catchpa Gateway Module initiated.")
 
     async def load(self):
         mongo_guild_ids = self._data_manager.get_guilds(False)
