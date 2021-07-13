@@ -211,3 +211,9 @@ class CatchpaModule:
 
     def get_data_manager(self) -> DataManager:
         return self._data_manager
+
+    def get_settings(self):
+        return self._settings_handler.get_settings(config.MAIN_SERVER)
+
+    def set_settings(self, path: str, value: str):
+        pass
