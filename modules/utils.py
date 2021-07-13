@@ -31,12 +31,39 @@ class SettingsHandler:
         return self._settings[guild_id]
 
     def save(self, new_settings):
-        """
-        Saves an updated settings document.
-        """
-        self._db.guild_settings.save(new_settings)
-        self._settings[new_settings["guild_id"]] = new_settings
-        return new_settings
+        if "_id" not in new_settings:
+            raise Exception(
+                "Can't save new settings as no '_id' exists on the document."
+            )
+
+        self._db.guild_settings.replace_one({"_id": new_settings["_id"]}, new_settings)
+
+    def get_key_map(self, settings, flat: bool = False) -> list[str]:
+        def walk(key_list: list, branch: dict, full_branch_key: str):
+            walk_list = {} if flat is False else []
+            for key, value in branch:
+                if type(branch[key]) is dict:
+                    walk(key_list, branch[key], f"{full_branch_key}.{key}")
+                else:
+                    walk_list[f"{full_branch_key}.{key}".lower()] = (
+                        value
+                        if flat is False
+                        else walk_list.append(f"{full_branch_key}.{key}")
+                    )
+
+            key_list.extend(walk_list)
+            return key_list
+
+        key_list = []
+
+        for key, value in settings:
+            if type(settings[key]) is dict:
+                key_list = walk(key_list, settings[key], key)
+            else:
+                key_list[key.lower()] = (
+                    value if flat is False else key_list.append(key.lower())
+                )
+        return key_list
 
 
 class Command(Converter):
