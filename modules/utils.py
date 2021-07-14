@@ -14,6 +14,31 @@ db = database.get_connection()
 log_session = None
 
 
+class Channel(Converter):
+    async def convert(self, ctx: Context, argument: str = '') -> Optional[discord.TextChannel]:
+        match = id_match(argument, r'<#([0-9]+)>$')
+        if match is None:
+            # not a mention
+            if ctx.guild:
+                result = discord.utils.get(ctx.guild.text_channels, name=argument)
+            else:
+                def check(c):
+                    return isinstance(c, discord.TextChannel) and c.name == argument
+
+                result = discord.utils.find(check, ctx.bot.get_all_channels())
+        else:
+            channel_id = int(match.group(1))
+            if ctx.guild:
+                result = ctx.guild.get_channel(channel_id)
+            else:
+                result = None
+
+        if not isinstance(result, discord.TextChannel):
+            result = None
+
+        return result
+
+
 class Command(Converter):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
     async def convert(self, ctx: Context, argument: str = '') -> Optional[Union[commands.Command, commands.Group]]:
@@ -428,3 +453,60 @@ def get_logger(name: str = 'TLDR-Bot-log'):
 
     adapter = logging.LoggerAdapter(logger, extra={'session': 2})
     return adapter
+
+
+def replace_mentions(guild: discord.Guild, string) -> str:
+    # replace mentions in values with actual names
+    mentions = re.findall(r'(<(@|@&|@!|#)\d+>)', string)
+    for mention in mentions:
+        # get type, ie. @, @&, @! or #
+        mention_type = mention[1]
+        # get id from find
+        mention_id = re.findall(r'(\d+)', mention[0])[0]
+
+        # turn type into iterable
+        iterable_switch = {
+            '@': guild.members,
+            '@!': guild.members,
+            '@&': guild.roles,
+            '#': guild.channels
+        }
+        iterable = iterable_switch.get(mention_type, None)
+        if not iterable:
+            continue
+
+        # get object from id
+        mention_object = discord.utils.find(lambda o: o.id == int(mention_id), iterable)
+        # if object actually exists replace mention in string
+        if mention_object:
+            string = string.replace(f'{mention[0]}', f'{mention_type[0]}{mention_object.name}')
+
+    return string
+
+
+def embed_message_to_text(message: discord.Message):
+    embed = message.embeds[0]
+
+    # get either title or author
+    title = ''
+    if embed.title:
+        title = embed.title.name if type(embed.title) != str else embed.title
+    elif embed.author:
+        title = embed.author.name if type(embed.author) != str else embed.author
+    # format description
+    description = ('\n' if title else '') + embed.description if embed.description else ''
+
+    # convert fields to text
+    fields = ""
+    for field in embed.fields:
+        if fields or description:
+            fields += '\n'
+
+        fields += f'{field.name}\n{field.value}'
+
+    # convert values to a multi line message
+    text = f"{title}" \
+           f"{description}" \
+           f"{fields}"
+
+    return text

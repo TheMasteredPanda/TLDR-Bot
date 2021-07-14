@@ -1,10 +1,9 @@
 import discord
-import inspect
+import copy
 
 from modules import database
-from discord import Webhook, RequestsWebhookAdapter
+from discord import Webhook, AsyncWebhookAdapter
 from typing import Optional
-db = database.get_connection()
 
 
 class Webhooks:
@@ -12,14 +11,24 @@ class Webhooks:
         self.bot = bot
         self.webhooks = {}
 
-    def initialize(self):
+    async def initialize(self):
         """Cache all the existing webhooks."""
         for guild in self.bot.guilds:
             self.webhooks[guild.id] = {}
-            webhooks = db.webhooks.find({'guild_id': guild.id})
-            for webhook in webhooks:
-                partial_webhook = Webhook.from_url(webhook['url'], adapter=RequestsWebhookAdapter())
-                self.webhooks[guild.id][partial_webhook.channel_id] = partial_webhook
+            for channel in guild.channels:
+                if type(channel) != discord.TextChannel:
+                    continue
+
+                channel_webhooks = await channel.webhooks()
+                if not channel_webhooks:
+                    continue
+
+                webhook = channel_webhooks[0]
+                try:
+                    partial_webhook = Webhook.from_url(webhook.url, adapter=AsyncWebhookAdapter(channel._state.http._HTTPClient__session))
+                    self.webhooks[guild.id][channel.id] = partial_webhook
+                except:
+                    continue
 
     async def create_webhook(self, channel: discord.TextChannel) -> discord.Webhook:
         """Create a webhook for a channel."""
@@ -29,18 +38,19 @@ class Webhooks:
 
     async def get_webhook(self, channel: discord.TextChannel) -> Optional[discord.Webhook]:
         """Get a webhook for a channel or create it, if it doesn't exist."""
+        print(self.webhooks)
         if channel.id in self.webhooks[channel.guild.id]:
             webhook = self.webhooks[channel.guild.id][channel.id]
         else:
             webhook = await self.create_webhook(channel)
 
-        return webhook
+        return copy.copy(webhook)
 
-    async def send(self, channel: discord.TextChannel, content: str, username: str = None, avatar_url: str = None, files: list[discord.File] = None, embeds: list[discord.Embed] = None) -> Optional[discord.WebhookMessage]:
+    async def send(self, channel: discord.TextChannel, content: str = '', username: str = None, avatar_url: str = None, files: list[discord.File] = None, embeds: list[discord.Embed] = None) -> Optional[discord.WebhookMessage]:
         """Send webhook message."""
         channel_webhook = await self.get_webhook(channel)
-        if channel_webhook is None:
-            channel_webhook = self.create_webhook(channel)
+        if not channel_webhook:
+            channel_webhook = await self.create_webhook(channel)
 
-        kwargs = {'username': username, 'avatar_url': avatar_url, 'files': files, 'embeds': embeds}
-        return await channel_webhook.send(content, **kwargs)
+        kwargs = {'username': username, 'avatar_url': avatar_url, 'files': files, 'embeds': embeds, 'content': content}
+        return await channel_webhook.send(**kwargs)

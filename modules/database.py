@@ -162,7 +162,10 @@ class Connection:
         The guild settings collection
             {
                 'guild_id': :class:`int`,
-                'mute_role_id': :class:`int`
+                'mute_role_id': :class:`int`,
+                'slack_bridges': {
+                   'slack_channel_id': 'discord_channel_id'
+                }
             }
     bills_tracker: :class:`pymongo.collection.Collection`
         The bills tracker collection:
@@ -177,14 +180,23 @@ class Connection:
                 'bill_id': :class:`int`
                 'division_id': :class:`int`
             }
-    webhooks: :class:`pymongo.collection.Collection`
-        The webhooks collection
+    slack_bridge :class:`pymongo.collection.Collection`
+        The collection for the slack bridge system
             {
-                "guild_id" : :class:`int`,
-                'url': :class:`str`
+                'aliases': [
+                    {
+                        "slack_id": :class:`str`
+                        "discord_id": :class:`int`
+                    }
+                ]
+                'bridges': [
+                    {
+                        "slack_channel_id": :class:`str`
+                        "discord_channel_id": :class:`int`
+                    }
+                ]
             }
     """
-
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
         self.db = self.mongo_client["TLDR"]
@@ -201,7 +213,7 @@ class Connection:
         self.bills_tracker = self.db["bills_tracker"]
         self.divisions_tracker = self.db["divisions_tracker"]
         self.guild_settings = self.db["guild_settings"]
-        self.webhooks = self.db['webhooks']
+        self.slack_bridge = self.db['slack_bridge']
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})

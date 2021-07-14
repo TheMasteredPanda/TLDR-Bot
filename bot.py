@@ -18,6 +18,7 @@ import modules.custom_commands
 import modules.invite_logger
 import modules.moderation
 import modules.commands
+import modules.slack_bridge
 
 from datetime import datetime
 from discord.ext.commands import when_mentioned_or, Bot
@@ -65,6 +66,7 @@ class TLDR(Bot):
         self.moderation = modules.moderation.ModerationSystem(self) if self.enabled_modules['moderation'] else None
         self.ukparl_module = modules.ukparliament.UKParliamentModule(self) if self.enabled_modules['ukparl_module'] else None
         self.clearance = modules.commands.Clearance(self) if self.enabled_modules['clearance'] else None
+        self.slack_bridge = modules.slack_bridge.Slack(self)
 
         self.first_ready = False
 
