@@ -16,8 +16,8 @@ from modules.utils import replace_mentions, embed_message_to_text, async_file_do
 db = database.get_connection()
 
 
+# TODO: find out how to keep > from formatting to | thing on the slack side for commands
 # TODO: allow slack members to run commands on discord side
-# TODO: handle reactions on both sides
 class SlackMember:
     def __init__(self, data, bot, app: AsyncApp):
         self.bot = bot
@@ -229,19 +229,12 @@ def discord_message_to_slack(message: discord.Message):
         content = replace_mentions(message.guild, message.content)
         text = normalize_text(content, message.guild)
         blocks = [{
-            "type": "rich_text",
-            "elements": [
-                {
-                    "type": "rich_text_section",
-                    "elements": [
-                        {
-                            "type": "text",
-                            "text": text
-                        }
-                    ]
-                }
-            ]
-          }]
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": text,
+            }
+        }]
 
     return blocks
 
