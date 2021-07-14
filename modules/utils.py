@@ -4,7 +4,9 @@ import asyncio
 import logging
 import os
 import sys
+import requests
 
+from io import BytesIO
 from logging import handlers
 from typing import Tuple, Union, Optional
 from modules import embed_maker, database, commands
@@ -12,31 +14,6 @@ from discord.ext.commands import Context, Converter
 
 db = database.get_connection()
 log_session = None
-
-
-class Channel(Converter):
-    async def convert(self, ctx: Context, argument: str = '') -> Optional[discord.TextChannel]:
-        match = id_match(argument, r'<#([0-9]+)>$')
-        if match is None:
-            # not a mention
-            if ctx.guild:
-                result = discord.utils.get(ctx.guild.text_channels, name=argument)
-            else:
-                def check(c):
-                    return isinstance(c, discord.TextChannel) and c.name == argument
-
-                result = discord.utils.find(check, ctx.bot.get_all_channels())
-        else:
-            channel_id = int(match.group(1))
-            if ctx.guild:
-                result = ctx.guild.get_channel(channel_id)
-            else:
-                result = None
-
-        if not isinstance(result, discord.TextChannel):
-            result = None
-
-        return result
 
 
 class Command(Converter):
@@ -145,6 +122,30 @@ def id_match(identifier: str, extra: str) -> re.Match:
     id_regex = re.compile(r'([0-9]{15,21})$')
     additional_regex = re.compile(extra)
     return id_regex.match(identifier) or additional_regex.match(identifier)
+
+
+def get_text_channel(ctx: Context, argument: str = '') -> Optional[discord.TextChannel]:
+    match = id_match(argument, r'<#([0-9]+)>$')
+    if match is None:
+        # not a mention
+        if ctx.guild:
+            result = discord.utils.get(ctx.guild.text_channels, name=argument)
+        else:
+            def check(c):
+                return isinstance(c, discord.TextChannel) and c.name == argument
+
+            result = discord.utils.find(check, ctx.bot.get_all_channels())
+    else:
+        channel_id = int(match.group(1))
+        if ctx.guild:
+            result = ctx.guild.get_channel(channel_id)
+        else:
+            result = None
+
+    if not isinstance(result, discord.TextChannel):
+        result = None
+
+    return result
 
 
 def get_custom_emote(ctx: Context, emote: str) -> Optional[discord.Emoji]:
@@ -510,3 +511,22 @@ def embed_message_to_text(message: discord.Message):
            f"{fields}"
 
     return text
+
+
+async def async_file_downloader(urls: list[str], headers: dict = None) -> list[BytesIO]:
+    async def fetch_file(index: int, files: list, url: str):
+        response = requests.get(url, headers=headers)
+        file = BytesIO(response.content)
+        file.seek(0)
+        files[index] = file
+
+    futures = []
+    files = [None] * len(urls)
+    for i, url in enumerate(urls):
+        future = asyncio.create_task(fetch_file(i, files, url))
+        futures.append(future)
+
+    if futures:
+        await asyncio.gather(*futures)
+
+    return [file for file in files if file]

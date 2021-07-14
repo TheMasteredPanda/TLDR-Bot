@@ -214,12 +214,9 @@ class TLDR(Bot):
     async def process_command(self, message: discord.Message):
         ctx = await self.get_context(message)
 
-        print(ctx.command)
-
         if ctx.command is None:
             return
 
-        print(ctx.command)
         if self.clearance:
             # get the object of the command actually being run, so that can be checked instead of just the parent command
             # Discord.py invokes the parent command, then it looks for any sub commands and invokes those directly, instead of processing them like commands

@@ -180,6 +180,12 @@ class Connection:
                 'bill_id': :class:`int`
                 'division_id': :class:`int`
             }
+    webhooks: :class:`pymongo.collection.Collection`
+        The webhooks collection
+            {
+                "channel_id": :class:`int`,
+                'url': :class:`str`
+            }
     slack_bridge :class:`pymongo.collection.Collection`
         The collection for the slack bridge system
             {
@@ -213,6 +219,7 @@ class Connection:
         self.bills_tracker = self.db["bills_tracker"]
         self.divisions_tracker = self.db["divisions_tracker"]
         self.guild_settings = self.db["guild_settings"]
+        self.webhooks = self.db['webhooks']
         self.slack_bridge = self.db['slack_bridge']
 
     def clear_bills_tracker_collection(self):
