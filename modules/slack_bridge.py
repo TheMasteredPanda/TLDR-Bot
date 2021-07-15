@@ -81,6 +81,11 @@ class SlackMessage:
             )
         self.__dict__[key] = value
 
+    async def delete(self):
+        if self.discord_message_id and self.channel.discord_channel:
+            discord_message = await self.channel.discord_channel.fetch_message(int(self.discord_message_id))
+            await discord_message.delete()
+
     async def send_to_discord(self, *, edit: bool = False):
         """Function for sending messages from slack to discord via a webhook."""
         if not self.channel.discord_channel:
@@ -115,6 +120,7 @@ class SlackMessage:
 class DiscordMessage:
     def __init__(self, message: discord.Message, slack: 'Slack'):
         self.slack = slack
+        self.message = message
 
         self.id = message.id
         self.text = message.content
@@ -153,6 +159,11 @@ class DiscordMessage:
                 {"$set": {f"{key}": value}},
             )
         self.__dict__[key] = value
+
+    async def delete(self):
+        if self.slack_message_id:
+            slack_channel = self.slack.get_channel(discord_id=self.channel_id)
+            await self.slack.app.client.chat_delete(channel=slack_channel.id, ts=self.slack_message_id)
 
     @staticmethod
     def hyperlink_converter(text):
@@ -424,12 +435,13 @@ class Slack:
 
         self.bot.add_listener(self.on_message, 'on_message')
         self.bot.add_listener(self.on_message_edit, 'on_message_edit')
+        self.bot.add_listener(self.on_message_delete, 'on_message_delete')
 
         self.channels: list[SlackChannel] = []
         self.members: list[SlackMember] = []
 
-        self.discord_messages = TTLCache(ttl=600.0, maxsize=100)
-        self.slack_messages = TTLCache(ttl=600.0, maxsize=100)
+        self.discord_messages: TTLCache[int, DiscordMessage] = TTLCache(ttl=600.0, maxsize=100)
+        self.slack_messages: TTLCache[str, SlackMessage] = TTLCache(ttl=600.0, maxsize=100)
         self.message_links = []
 
         self.initialize_data()
@@ -500,7 +512,7 @@ class Slack:
         await self.members_cached.wait()
         await self.channels_cached.wait()
 
-        messages = db.slack_messages.find({})
+        messages = db.slack_messages.find({}).sort('timestamp', -1)
         for message in messages:
             twenty_four_hours = 24 * 60 * 60
             if time.time() - message['timestamp'] > twenty_four_hours:
@@ -510,7 +522,15 @@ class Slack:
             if message['origin'] == 'discord':
                 channel_id = message['discord_channel_id']
                 channel = self.bot.get_channel(channel_id)
-                discord_message = await channel.fetch_message(message['discord_message_id'])
+
+                try:
+                    discord_message = await channel.fetch_message(message['discord_message_id'])
+                except:
+                    # on error delete message cache and continue
+                    # most-likely errors when message has been deleted
+                    db.slack_messages.delete_one(message)
+                    continue
+
                 if not discord_message:
                     db.slack_messages.delete_one(message)
                     continue
@@ -563,8 +583,18 @@ class Slack:
         await ack()
 
     async def slack_message(self, body):
+        print(json.dumps(body, indent=2))
         """Function called on message even from slack."""
         await self.messages_cached.wait()
+
+        # delete discord message on slack message delete
+        if 'subtype' in body['event'] and body['event']['subtype'] == 'message_deleted':
+            ts = body['event']['deleted_ts']
+            if ts not in self.slack_messages:
+                return
+            deleted_message = self.slack_messages[ts]
+            return await deleted_message.delete()
+
         # ignore message_changed events if the messages are already cached
         is_edit = 'subtype' in body['event'] and body['event']['subtype'] == 'message_changed'
         ts = body['event']['message']['ts'] if is_edit else body['event']['ts']
@@ -592,6 +622,13 @@ class Slack:
                 message.send_to_discord()
             )
 
+    # Discord events
+
+    async def on_message_delete(self, message: discord.Message):
+        if message.id in self.discord_messages:
+            discord_message = self.discord_messages[message.id]
+            await discord_message.delete()
+
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
         """
         Function called on on_edit_message event, used for dealing with message edit events on the discord side
@@ -605,6 +642,10 @@ class Slack:
         """Function call on on_message event, used for identifying discord bridge channel and forwarding the messages to slack."""
         # ignore webhook messages and pms
         if not message.guild or message.webhook_id:
+            return
+
+        slack_channel = self.get_channel(discord_id=message.channel.id)
+        if not slack_channel:
             return
 
         message = DiscordMessage(message, self)
