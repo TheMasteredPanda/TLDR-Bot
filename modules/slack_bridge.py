@@ -205,12 +205,12 @@ class DiscordMessage:
     def text_to_slack_formatting(text):
         """Converts discord's bold and italic formatting to slack standards."""
         special_chars_map = {i: '\\' + chr(i) for i in b'()[]{}?*+-|^$\\.&~#'}
-        italic = re.findall(r'((?=[^*]|^)\*([^*\s][^*]+[^*\s])\*(?=[^*]|$))', text)
+        italic = re.findall(r'((?:[^*]|^)\*((?:[^*\s][^*]+[^*\s]?)|(?:[^*\s]?[^*]+[^*\s]))\*(?:[^*]|$))', text)
         for match in italic:
             match_text = match[1]
-            text = re.sub(match[0].translate(special_chars_map), f'_{match_text}_', text)
+            text = re.sub(match[0].strip().translate(special_chars_map), f'_{match_text}_', text)
 
-        bold = re.findall(r'(\*\*([^*\s][^*]+[^*\s])\*\*)', text)
+        bold = re.findall(r'(\*\*((?:[^*\s][^*]*[^*\s]?)|(?:[^*\s]?[^*]*[^*\s]))\*\*)', text)
         for match in bold:
             match_text = match[1]
             text = re.sub(match[0].translate(special_chars_map), f'*{match_text}*', text)
