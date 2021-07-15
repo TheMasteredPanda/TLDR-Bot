@@ -295,17 +295,16 @@ async def get_member_from_string(
             previous_result = member_match
             member_name = f"{member_name} {part}".strip()
 
-<<<<<<< HEAD
-    return previous_result, string.replace(f"{member_name}".strip(), "").strip()
-=======
     if len(string.split()) == 1:
         if type(previous_result) == list:
-            return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
+            return (
+                await get_member(ctx, f"{member_name}".strip()),
+                string.replace(f"{member_name}".strip(), "").strip(),
+            )
         elif type(previous_result) == discord.Member:
-            return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
+            return previous_result, string.replace(f"{member_name}".strip(), "").strip()
 
-    return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
->>>>>>> 806d75f86554c43834aac837e8a91e5e25acfb38
+    return previous_result, string.replace(f"{member_name}".strip(), "").strip()
 
 
 async def get_member_by_id(
