@@ -1,3 +1,5 @@
+import string
+import random
 from pymongo.cursor import Cursor
 import config
 from enum import Enum
@@ -5,29 +7,30 @@ from typing import Union
 from discord.errors import Forbidden, HTTPException
 from discord.guild import Guild
 from discord.channel import TextChannel
+from discord import Member
 import modules.database as database
 from modules.utils import SettingsHandler
 
 """
-A Catchpa Gateway System to prevent continuous bot attacks.
+A Captcha Gateway System to prevent continuous bot attacks.
 
 Requirements:
     - [DONE] Bot to have ownership over gateway server.
     - [ ] Bot to create more gateway servers if the need arises.
-    - [ ] Each new member to a catchpa server will need a dedicated channel to prove they are not a bot.
+    - [ ] Each new member to a captcha server will need a dedicated channel to prove they are not a bot.
         * [ ] In this channel, only they will be able to see themselves and the bot.
-        * [ ] In this channel, the catchpa will happen.
-        * [ ] This channel will be removed after a time-to-live if the catchpa has not be completed, configuable ofc.
-        * [ ] This channel will be removed after the catchpa is successfully on unsuccessfully completed.
+        * [ ] In this channel, the captcha will happen.
+        * [ ] This channel will be removed after a time-to-live if the captcha has not be completed, configuable ofc.
+        * [ ] This channel will be removed after the captcha is successfully on unsuccessfully completed.
     - [ ] The Bot should allow for invitation links to be generated for each gateway server through a command, accessed on
     the main TLDR guild.
     - [ ] The Bot should allow for warning announcements if any one gateway is becoming too full.
-    - [ ] After the catchpa is complete, the user should be given a one-time invitation link. Once they have joined the
+    - [ ] After the captcha is complete, the user should be given a one-time invitation link. Once they have joined the
     main TLDR server,
     they should be kicked off of the gateway server.
     - The following data points need to be stored:
-        * [ ] Amount of successful catchpas.
-        * [ ] Amount of unsuccessful catchpas.
+        * [ ] Amount of successful captchas.
+        * [ ] Amount of unsuccessful captchas.
         * [ ] Amount of joins per month.
     - The following commands need to be written:
         * [ ] A command to get an invitiation link. This command will also need to accomodate for the different types of
@@ -43,30 +46,27 @@ Requirements:
         * [ ] A command to add gateway guilds to the list of gateway guilds handled by the bot. This is only for the edgest
         of cases, so I don't think I'll end up doing this.
         * A command to invalidate an invitiation link.
-        * Catchpas:
+        * Captchas:
             - Used to determine whether a user is a bot or a human.
-            - What will be the catchpes?
-                * At the moment nobody has a clue, so the basic catchpas now will be:
+            - What will be the captchas?
+                * At the moment nobody has a clue, so the basic captchas now will be:
                     * [ ] Choosing out six pictures the correct object.
                     * [ ] Typing out what word has squiggled about in a manner no readable by computers.
 """
 
 
-class CatchpaChannel:
-    def __init__(self, guild: Guild, channel: TextChannel):
-        self.guild = guild
-        self.channel = channel
-        self.catchpa = None
+def random_chars(length: int):
+    return "".join(random.choice(string.ascii_letters) for i in range(length))
 
 
 class DataManager:
     def __init__(self, logger):
         self._logger = logger
         self._db = database.get_connection()
-        self._catchpa_guilds = self._db.catchpa_guilds
+        self._captcha_guilds = self._db.captcha_guilds
 
     def add_guild(self, guild_id: int, landing_channel_id: int = 0):
-        self._catchpa_guilds.insert_one(
+        self._captcha_guilds.insert_one(
             {
                 "guild_id": guild_id,
                 "landing_channel_id": landing_channel_id,
@@ -75,14 +75,21 @@ class DataManager:
         )
 
     def remove_guild(self, guild_id: int):
-        self._catchpa_guilds.delete_one({"guild_id": guild_id})
+        self._captcha_guilds.delete_one({"guild_id": guild_id})
 
     def get_guilds(self, include_stats: bool = False) -> Cursor:
         return (
-            self._catchpa_guilds.find({}, {"stats": 0})
+            self._captcha_guilds.find({}, {"stats": 0})
             if include_stats is False
-            else self._catchpa_guilds.find({}, {"stats": 0})
+            else self._captcha_guilds.find({}, {"stats": 0})
         )
+
+
+class CaptchaChannel:
+    def __init__(self, for_member: Member, channel: TextChannel):
+        self._member = for_member
+        self._channel = channel
+        self._image = ImageCaptcha()
 
 
 class GatewayGuild:
@@ -90,7 +97,7 @@ class GatewayGuild:
         self._bot = bot
         self._data_manager = data_manager
         self._kwargs = kwargs
-        self._guild: Union[Guild, None] = None
+        self._channels: dict[int, CaptchaChannel] = {}
 
     async def load(self):
         if "guild" in self._kwargs:
@@ -113,7 +120,7 @@ class GatewayGuild:
 
     async def delete(self):
         self._data_manager.remove_guild(self._id)
-        # Need to write in here a better way to delete a gateway guild. I need to check if this is the only guild within the list, then check if people are in the guild doing catchpas before I delete the guild.
+        # Need to write in here a better way to delete a gateway guild. I need to check if this is the only guild within the list, then check if people are in the guild doing captchas before I delete the guild.
         try:
             await self._guild.delete()
             return True
@@ -135,8 +142,11 @@ class GatewayGuild:
     def get_guild(self):
         return self._guild
 
+    def create_channel(self, for_member: Member):
+        pass
 
-class CatchpaModule:
+
+class CaptchaModule:
     def __init__(self, bot):
         self._gateway_guilds = []
         self._data_manager = DataManager(bot.logger)
@@ -145,31 +155,30 @@ class CatchpaModule:
         self._logger = bot.logger
         if config.MAIN_SERVER == 0:
             bot.logger.info(
-                "Catchpa Gateway Module required the MAIN_SERVER variable in config.py to be set to a non-zero value (a valid guild id). Will not initate module."
+                "Captcha Gateway Module required the MAIN_SERVER variable in config.py to be set to a non-zero value (a valid guild id). Will not initate module."
             )
             return
 
         settings = self._settings_handler.get_settings(config.MAIN_SERVER)
 
-        if "catchpa" not in settings["modules"].keys():
+        if "captcha" not in settings["modules"].keys():
             self._logger.info(
-                "Catchpa Gateway settings not found in Guild settings. Adding default settings now."
+                "Captcha Gateway settings not found in Guild settings. Adding default settings now."
             )
-            settings["modules"]["catchpa"] = {
+            settings["modules"]["captcha"] = {
                 "guild_name": "Gateway Guild {number}",
                 "landing_channel": {"name": "welcome", "message": ""},
             }
             self._settings_handler.save(settings)
-        self._logger.info("Catchpa Gateway settings found.")
-        self._logger.info("Catchpa Gateway Module initiated.")
+        self._logger.info("Captcha Gateway settings found.")
+        self._logger.info("Captcha Gateway Module initiated.")
 
     async def load(self):
         mongo_guild_ids: list = list(self._data_manager.get_guilds(False))
-        print(mongo_guild_ids)
         if len(mongo_guild_ids) == 0:
             if len(self._bot.guilds) >= 10:
                 return await self._bot.critical_error(
-                    "Can't load Catchpa Gateway Module, Bot cannot create new Guilds if it is in 10 or more Guilds."
+                    "Can't load Captcha Gateway Module, Bot cannot create new Guilds if it is in 10 or more Guilds."
                 )
             self._logger.info("No previous Gateway Guilds active. Creating one...")
             g_guild = await self.create_guild()
@@ -200,7 +209,7 @@ class CatchpaModule:
     async def create_guild(self) -> GatewayGuild:
         guild_name_format = self._settings_handler.get_settings(config.MAIN_SERVER)[
             "modules"
-        ]["catchpa"]["guild_name"]
+        ]["captcha"]["guild_name"]
         guild = await self._bot.create_guild(
             guild_name_format.replace("{number}", str(len(self._gateway_guilds) + 1))
         )
@@ -256,7 +265,7 @@ class CatchpaModule:
                     key_list.append(key.lower())
             return key_list
 
-        path = f"modules.catchpa.{path}"
+        path = f"modules.captcha.{path}"
         if path.lower() in keys():
             split_path = path.split(".")
             parts_count = len(split_path)
