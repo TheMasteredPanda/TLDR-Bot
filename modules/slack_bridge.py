@@ -125,7 +125,7 @@ class DiscordMessage:
         self.author_is_bot: bool = message.author.bot
         self.author_name = message.author.name
         self.author_avatar = str(message.author.avatar_url)
-        self.attachment_urls = [attachment.url for attachment in message.attachments]
+        self.attachment_urls = [{'url': attachment.url, 'filename': attachment.filename} for attachment in message.attachments]
 
         self.slack_message_id = None
         self.initialise_data()
@@ -235,7 +235,7 @@ class DiscordMessage:
 
         kwargs = self.to_slack_blocks()
 
-        if kwargs['blocks'] or kwargs['text']:
+        if kwargs['blocks'] and kwargs['text']:
             kwargs.update({'channel': slack_channel.id})
             if edit:
                 kwargs['ts'] = self.slack_message_id
@@ -248,16 +248,15 @@ class DiscordMessage:
             if not edit:
                 self.slack_message_id = slack_message['message']['ts']
 
-        # TODO: attachment from discord side needs redoing
-        # if self.message.attachments and not edit:
-        #     for attachment in self.message.attachments:
-        #         file = await attachment.to_file()
-        #         await self.slack.app.client.files_upload(
-        #             file=file.fp,
-        #             filename=attachment.filename,
-        #             channels=slack_channel.id,
-        #             title=f'Uploaded by: {self.message.author.name}'
-        #         )
+        if self.attachment_urls:
+            files = await async_file_downloader([a['url'] for a in self.attachment_urls])
+            for i, file in enumerate(files):
+                await self.slack.app.client.files_upload(
+                    file=file,
+                    filename=self.attachment_urls[i]['filename'],
+                    channels=slack_channel.id,
+                    title=f'Uploaded by: {self.author_name}'
+                )
 
 
 # TODO: find out how to keep > from formatting to | thing on the slack side for commands
