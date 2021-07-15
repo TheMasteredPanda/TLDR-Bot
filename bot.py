@@ -10,7 +10,7 @@ import modules.database
 import modules.leveling
 import modules.embed_maker
 import modules.ukparliament
-import modules.catchpa
+import modules.captcha
 import modules.webhooks
 import modules.watchlist
 import modules.google_drive
@@ -19,7 +19,6 @@ import modules.custom_commands
 import modules.invite_logger
 import modules.moderation
 import modules.commands
-import modules.catchpa
 
 from datetime import datetime
 from discord.ext.commands import when_mentioned_or, Bot
@@ -114,9 +113,9 @@ class TLDR(Bot):
             else None
         )
 
-        self.catchpa = (
-            modules.catchpa.CatchpaModule(self)
-            if self.enabled_modules["catchpa"]
+        self.captcha = (
+            modules.captcha.CaptchaModule(self)
+            if self.enabled_modules["captcha"]
             else None
         )
         self.first_ready = False

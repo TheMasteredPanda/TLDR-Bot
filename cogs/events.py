@@ -45,8 +45,8 @@ class Events(Cog):
         if self.bot.leveling_system:
             self.bot.leveling_system.initialise_guilds()
 
-        if self.bot.catchpa:
-            await self.bot.catchpa.load()
+        if self.bot.captcha:
+            await self.bot.captcha.load()
 
         if self.bot.ukparl_module:
             self.bot.ukparl_module.set_guild(self.bot.get_guild(config.MAIN_SERVER))
@@ -554,12 +554,31 @@ class Events(Cog):
         guild_id = member.guild.id
         user_id = member.id
 
+        if self.bot.captcha:
+            captcha_module = self.bot.captcha
+            if captcha_module.is_gatway_guild(guild_id):
+                print(f"{member.name} entered {member.guild.name}.")
+                print(user_id)
+                if captcha_module.is_operator(user_id):
+                    print(f"{member.name} is on the op list.")
+                    roles = member.guild.roles
+                    op_roles = list(
+                        filter(lambda r: r.name.lower() == "operator", roles)
+                    )
+                    if len(op_roles) != 0:
+                        print("Found op role.")
+                        await member.add_roles(op_roles[0])
+                        self.bot.logger.info(
+                            f"Added Operator role to {member.name} on {member.guild.name} guild."
+                        )
+                else:
+                    print(f"{member.name} is not an operator.")
+
         # see if user is in left_leveling_users, if they are, move the data back to leveling_users
         left_user = db.left_leveling_users.find_one(
             {"guild_id": guild_id, "user_id": user_id}
         )
         if left_user:
-
             # transfer back data
             db.left_leveling_users.delete_many(
                 {"guild_id": guild_id, "user_id": user_id}

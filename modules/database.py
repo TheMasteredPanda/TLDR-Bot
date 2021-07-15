@@ -177,8 +177,8 @@ class Connection:
                 'bill_id': :class:`int`
                 'division_id': :class:`int`
             }
-    catchpa_guilds: :class:`pymongo.ccollection.Collection`
-        The catchpa guilds collection:
+    captcha_guilds: :class:`pymongo.ccollection.Collection`
+        The captcha guilds collection:
             {
                 'guild_id': :class:`int`
     webhooks: :class:`pymongo.collection.Collection`
@@ -205,7 +205,7 @@ class Connection:
         self.bills_tracker = self.db["bills_tracker"]
         self.divisions_tracker = self.db["divisions_tracker"]
         self.guild_settings = self.db["guild_settings"]
-        self.catchpa_guilds = self.db["catchpa_guilds"]
+        self.captcha_guilds = self.db["captcha_guilds"]
         self.webhooks = self.db["webhooks"]
 
     def clear_bills_tracker_collection(self):

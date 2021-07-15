@@ -1,5 +1,9 @@
+import io
+from captcha.image import ImageCaptcha
 import string
 import random
+import discord
+from discord.colour import Colour
 from pymongo.cursor import Cursor
 import config
 from enum import Enum
@@ -56,7 +60,7 @@ Requirements:
 
 
 def random_chars(length: int):
-    return "".join(random.choice(string.ascii_letters) for i in range(length))
+    return "".join(random.choice(string.ascii_lowercase) for i in range(length))
 
 
 class DataManager:
@@ -86,10 +90,12 @@ class DataManager:
 
 
 class CaptchaChannel:
-    def __init__(self, for_member: Member, channel: TextChannel):
+    def __init__(
+        self, for_member: Member, channel: TextChannel, image_captcha: ImageCaptcha
+    ):
         self._member = for_member
         self._channel = channel
-        self._image = ImageCaptcha()
+        data = image_captcha.generate(random_chars(6))
 
 
 class GatewayGuild:
@@ -116,7 +122,21 @@ class GatewayGuild:
         else:
             landing_channel = await self._guild.create_text_channel("welcome")
             # Add welcome message here; make welcome message configurable.
-            self.landing_channel: TextChannel = landing_channel
+            self._landing_channel: TextChannel = landing_channel
+
+        roles = self._guild.roles
+
+        if len(list(filter(lambda r: r.name.lower() == "operator", roles))) == 0:
+            self._bot.logger.info(
+                f"No Operator role found on {self._guild.name}, creating one..."
+            )
+            await self._guild.create_role(
+                name="Operator",
+                color=Colour.dark_gold(),
+                permissions=discord.Permissions(8),
+            )
+        else:
+            self._bot.logger.info(f"Found Operator role on {self._guild.name}.")
 
     async def delete(self):
         self._data_manager.remove_guild(self._id)
@@ -153,6 +173,8 @@ class CaptchaModule:
         self._settings_handler: SettingsHandler = bot.settings_handler
         self._bot = bot
         self._logger = bot.logger
+        self._image_captcha = ImageCaptcha(width=360, height=120)
+
         if config.MAIN_SERVER == 0:
             bot.logger.info(
                 "Captcha Gateway Module required the MAIN_SERVER variable in config.py to be set to a non-zero value (a valid guild id). Will not initate module."
@@ -166,6 +188,7 @@ class CaptchaModule:
                 "Captcha Gateway settings not found in Guild settings. Adding default settings now."
             )
             settings["modules"]["captcha"] = {
+                "operators": [],
                 "guild_name": "Gateway Guild {number}",
                 "landing_channel": {"name": "welcome", "message": ""},
             }
@@ -175,7 +198,13 @@ class CaptchaModule:
 
     async def load(self):
         mongo_guild_ids: list = list(self._data_manager.get_guilds(False))
-        if len(mongo_guild_ids) == 0:
+        valid_guild_ids = list(
+            filter(
+                lambda m_guild: self._bot.get_guild(m_guild["guild_id"]) is not None,
+                mongo_guild_ids,
+            )
+        )
+        if len(valid_guild_ids) == 0:
             if len(self._bot.guilds) >= 10:
                 return await self._bot.critical_error(
                     "Can't load Captcha Gateway Module, Bot cannot create new Guilds if it is in 10 or more Guilds."
@@ -187,7 +216,7 @@ class CaptchaModule:
         else:
             self._logger.info("Previous Gateway Guilds found. Indexing...")
 
-            for m_guild in list(mongo_guild_ids):
+            for m_guild in list(valid_guild_ids):
                 m_guild_id = m_guild["guild_id"]
                 m_guild_landing_channel_id = m_guild["landing_channel_id"]
                 guild = self._bot.get_guild(m_guild_id)
@@ -205,6 +234,46 @@ class CaptchaModule:
                     self._logger.info(
                         f"Found gateway {g_guild.get_name()}/{g_guild.get_id()}. Adding to Gateway Guild List."
                     )
+
+    def get_operators(self):
+        return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
+            "captcha"
+        ]["operators"]
+
+    def set_operator(self, member_id: int):
+        operators: list[int] = self._settings_handler.get_settings(config.MAIN_SERVER)[
+            "modules"
+        ]["captcha"]["operators"]
+
+        if member_id in operators:
+            operators.remove(member_id)
+        else:
+            operators.append(member_id)
+        self._settings_handler.save(
+            self._settings_handler.get_settings(config.MAIN_SERVER)
+        )
+
+    def is_operator(self, member_id: int) -> bool:
+        operators = self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
+            "captcha"
+        ]["operators"]
+        print(operators)
+        print(member_id)
+        print(member_id in operators)
+        return (
+            member_id
+            in self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
+                "captcha"
+            ]["operators"]
+        )
+
+    def create_captcha_image(self):
+        text = random_chars(6)
+        captcha_image = self._image_captcha.generate_image(text)
+        image_bytes = io.BytesIO()
+        captcha_image.save(image_bytes, "PNG")
+        image_bytes.seek(0)
+        return image_bytes, text
 
     async def create_guild(self) -> GatewayGuild:
         guild_name_format = self._settings_handler.get_settings(config.MAIN_SERVER)[

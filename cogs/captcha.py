@@ -1,12 +1,17 @@
+import config
 from bson import json_util
 import json
 from typing import Union
+
+from discord.embeds import Embed
+from discord.file import File
+from discord.member import Member
 from bot import TLDR
 from modules import commands, embed_maker, captcha
 from discord.ext.commands import Cog, command, group, Context
 from discord.guild import Guild
 from modules.commands import Command, Group
-from modules.utils import ParseArgs
+from modules.utils import ParseArgs, get_member_from_string
 from modules.captcha import GatewayGuild
 
 
@@ -335,6 +340,62 @@ class Captcha(Cog):
 
         guild_name = args["name"] if args["name"] is not None else args["pre"]
         captcha_id = args["captcha"] if args["captcha"] is not None else 1
+
+    @dev_create_cmd.command(
+        help="Create a captch image, for testing",
+        name="image",
+        usage="captcha dev create image",
+        examples=["captcha dev create image"],
+        cls=Command,
+    )
+    async def dec_create_captcha_image(self, ctx: Context):
+        captcha_image, captcha_text = self.bot.captcha.create_captcha_image()
+        embed: Embed = await embed_maker.message(
+            ctx, title="Captcha Image.", description=f"Text: {captcha_text}"
+        )
+        embed.set_image(url="attachment://captcha.png")
+        return await ctx.channel.send(
+            file=File(fp=captcha_image, filename="captcha.png"), embed=embed
+        )
+
+    @dev_cmds.command(
+        help="Add or remove an operator to an operator list. This will allow member on the op list to become operators when they join Gateway Guilds. Affording them admin access on the guild.",
+        name="op",
+        usage="captcha dev op TheMasteredPanda",
+        examples=["captcha dev op TheMasteredPanda"],
+        cls=Command,
+    )
+    async def dev_operator(self, ctx: Context, member_string: str = None):
+        if member_string is None:
+            return await embed_maker.command_error(ctx)
+
+        member, ignore = await get_member_from_string(ctx, member_string)
+        if member is None:
+            return await embed_maker.message(
+                ctx,
+                description=f"Couldn't find member {member_string}",
+                title="Couldn't find Member",
+                send=True,
+            )
+
+        was_op = member.id in self.bot.captcha.get_operators()
+        print(f"Id to set: {member.id}.")
+        self.bot.captcha.set_operator(member.id)
+
+        if was_op is False:
+            await embed_maker.message(
+                ctx,
+                description=f"Added {member.name} to the Operators list.",
+                title="Added Operator.",
+                send=True,
+            )
+        else:
+            await embed_maker.message(
+                ctx,
+                description=f"Removed {member.name} from the Operators list",
+                title="Removed Operator.",
+                send=True,
+            )
 
 
 def setup(bot: TLDR):

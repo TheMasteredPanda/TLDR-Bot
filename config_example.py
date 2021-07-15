@@ -40,7 +40,7 @@ MODULES = {
     "moderation": True,
     "ukparl_module": True,
     "clearance": True,
-    "catchpa": True,
+    "captcha": True,
 }
 
 COGS = {
@@ -54,5 +54,5 @@ COGS = {
     "settings": True,
     "uk_parliament": True,
     "utility": True,
-    "catchpa": True,
+    "captcha": True,
 }
