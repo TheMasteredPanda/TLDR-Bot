@@ -485,9 +485,7 @@ def replace_mentions(guild: discord.Guild, string) -> str:
     return string
 
 
-def embed_message_to_text(message: discord.Message):
-    embed = message.embeds[0]
-
+def embed_message_to_text(embed):
     # get either title or author
     title = ''
     if embed.title:

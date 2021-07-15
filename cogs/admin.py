@@ -566,7 +566,7 @@ class Admin(Cog):
 
             # if message has embed, convert the embed to text and add it to channel_history_string
             if message.embeds:
-                history_string += f'\n"{embed_message_to_text(message)}"\n'
+                history_string += f'\n"{embed_message_to_text(message.embeds[0])}"\n'
 
             # if message has attachments add them to channel_history_string
             if message.attachments:

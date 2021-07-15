@@ -202,6 +202,19 @@ class Connection:
                     }
                 ]
             }
+    slack_messages :class:`pymongo.collection.Collection`
+        The collection for keeping track of which slack message corresponds to which discord message and vice-versa.
+            {
+                'slack_message_id': :class:`str`
+                'discord_message_id': :class:`int`
+                'slack_channel_id': :class:`str`
+                'discord_channel_id': :class:`str`
+                'origin': :class:`str`
+                'files': :class:`list`
+                'text': :class:`str`
+                'user_id': :class`str`
+                'timestamp': :class:`int`
+            }
     """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -221,6 +234,7 @@ class Connection:
         self.guild_settings = self.db["guild_settings"]
         self.webhooks = self.db['webhooks']
         self.slack_bridge = self.db['slack_bridge']
+        self.slack_messages = self.db['slack_messages']
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
