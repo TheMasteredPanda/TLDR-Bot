@@ -234,6 +234,7 @@ async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[di
 
     member_name = ""
     previous_result = None
+
     for part in string.split():
         member_match = await get_member(ctx, f'{member_name} {part}'.strip(), multi=False, return_message=False)
         if member_match is None:
@@ -249,6 +250,12 @@ async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[di
             # update variables
             previous_result = member_match
             member_name = f'{member_name} {part}'.strip()
+
+    if len(string.split()) == 1:
+        if type(previous_result) == list:
+            return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
+        elif type(previous_result) == discord.Member:
+            return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
 
     return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
 
