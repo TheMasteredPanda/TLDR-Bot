@@ -212,7 +212,7 @@ async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional
     return role
 
 
-async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[discord.Member], str]:
+async def get_member_from_string(ctx: Optional[Context], string: str, *, guild: discord.Guild = None) -> Tuple[Optional[discord.Member], str]:
     """
     Get member from the first part of the string and return the remaining string.
 
@@ -222,28 +222,37 @@ async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[di
         Context.
     string: :class:`str`
         String where the member will be searched from.
+    guild: :class:`discord.Guild`,
+        Optional guild paramater that can be used to use the simplified get_guild_member function
 
     Returns
     -------
     Tuple[Optional[:class:`discord.Member`], :class:`str`]
         Member and remaining string if member is found or `None` and string.
     """
-    # check if source is member mention
-    if ctx.message.mentions:
-        return ctx.message.mentions[0], ' '.join(string.split()[1:])
+    if ctx:
+        # check if source is member mention
+        if ctx.message.mentions:
+            return ctx.message.mentions[0], ' '.join(string.split()[1:])
 
     member_name = ""
     previous_result = None
 
+    if guild:
+        ctx = guild
+        member_func = get_guild_member
+    else:
+        member_func = get_member
+
     for part in string.split():
-        member_match = await get_member(ctx, f'{member_name} {part}'.strip(), multi=False, return_message=False)
+        member_match = await member_func(ctx, f'{member_name} {part}'.strip(), multi=False, return_message=False)
         if member_match is None:
             # if both member and previous result are None, nothing can be found from the string, return None and the string
             if previous_result is None:
                 return None, string
             # if member is None, but previous result is a list, return Normal get_member call and allow user to choose member
             elif type(previous_result) == list:
-                return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
+                return await member_func(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
             elif type(previous_result) == discord.Member:
                 return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
         else:
@@ -287,6 +296,78 @@ async def get_member_by_id(guild: discord.Guild, member_id: int) -> Optional[dis
     return member
 
 
+async def get_guild_member(guild: discord.Guild, source, **_) -> Optional[Union[discord.Member, discord.Message, list]]:
+    """
+    Clean version of get member which only needs guild. It was easier to do this rather than start upgrading get_member.
+
+    Parameters
+    ----------------
+    guild: :class:`discord.Guild`
+        Context.
+    source: :class:`str`
+        Identifier to which members are matched, can be id or name.
+
+    Returns
+    -------
+    Optional[Union[:class:`discord.Member`, :class`discord.Message`, :class:`list`]]:
+        discord.Member if member is found else None.
+    """
+    if type(source) == int:
+        source = str(source)
+
+    # Check if source is member id
+    if source.isdigit() and len(source) > 9:
+        member = guild.get_member(int(source))
+
+        # if member isn't found by get, maybe they aren't in the cache, fetch them by making an api call
+        if not member:
+            try:
+                # if member hasnt been cached yet, fetching them should work, if member is inaccessible, it will return None
+                member = await guild.fetch_member(int(source))
+                if member is None:
+                    return
+            except:
+                return
+
+        if member:
+            return member
+
+    # if source length is less than 3, don't bother searching, too many matches will come
+    if len(source) < 3:
+        return
+
+    # checks first for a direct name match
+    members = list(
+        filter(
+            lambda m: m.name.lower() == source.lower() or  # username match
+                      m.display_name.lower() == source.lower() or  # nickname match (if user doesnt have a nickname, it'll match the name again)
+                      str(m).lower() == source.lower(),  # name and discriminator match
+            guild.members
+        )
+    )
+
+    # if can't find direct name match, check for a match with regex
+    if not members:
+        # checks for regex match
+        special_chars_map = {i: '\\' + chr(i) for i in b'()[]{}?*+-|^$\\.&~#'}
+        safe_source = source.translate(special_chars_map)
+
+        members = list(
+            filter(
+                lambda m: re.findall(fr'({safe_source.lower()})', str(m).lower()) or  # regex match name and discriminator
+                          re.findall(fr'({safe_source.lower()})', m.display_name.lower()),  # regex match nickname
+                guild.members
+            )
+        )
+
+        if not members:
+            return
+
+    # only one match, return member
+    if len(members) == 1:
+        return members[0]
+
+
 async def get_member(ctx: Context, source, *, multi: bool = True, return_message: bool = True) -> Optional[Union[discord.Member, discord.Message, list]]:
     """
     Get member from given source. Source could be id or name.
@@ -312,7 +393,7 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
         List if multiple members are found and multi is False.
     """
     # just in case source is empty
-    if not source:
+    if not source and return_message:
         return await embed_maker.error(ctx, 'Input is empty') if return_message else None
 
     if type(source) == int:

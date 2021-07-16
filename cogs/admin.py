@@ -76,7 +76,6 @@ class Admin(Cog):
         cls=commands.Command
     )
     async def slack_channel_info(self, ctx: Context, channel_id: str = None):
-        # TODO: include team name in channel info
         if channel_id is None:
             return await embed_maker.command_error(ctx)
 
@@ -118,6 +117,9 @@ class Admin(Cog):
         if slack_channel is None:
             return await embed_maker.error(ctx, f'Unable to find slack chnanel via id [{slack_channel_id}]')
 
+        if discord_channel is None:
+            return await embed_maker.command_error(ctx, '[discord channel]')
+
         if discord_channel.lower() == "none":
             slack_channel.unset_discord_channel(None)
             return await embed_maker.message(
@@ -155,7 +157,6 @@ class Admin(Cog):
         embed = await embed_maker.message(
             ctx,
             author={'name': 'Slack Bridge Members'},
-            description=f'To view more info about members type:\n`{ctx.prefix}slack member info [member id]`'
         )
         members = self.bot.slack_bridge.members
 
@@ -229,6 +230,9 @@ class Admin(Cog):
         slack_member = self.bot.slack_bridge.get_user(slack_member_id)
         if slack_member is None:
             return await embed_maker.error(ctx, f'Unable to find slack member via id [{slack_member_id}]')
+
+        if discord_member_identifier is None:
+            return await embed_maker.command_error(ctx, '[discord member]')
 
         if discord_member_identifier.lower() == "none":
             slack_member.unset_discord_member()

@@ -13,7 +13,7 @@ from typing import Optional
 from modules import database
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
-from modules.utils import replace_mentions, embed_message_to_text, async_file_downloader
+from modules.utils import replace_mentions, embed_message_to_text, async_file_downloader, get_member_from_string
 
 db = database.get_connection()
 image_extensions = ['jpg', 'png', 'gif', 'webp', 'tiff', 'bmp', 'jpeg']
@@ -86,6 +86,34 @@ class SlackMessage:
 
             db.slack_messages.delete_one({'slack_message_id': self.ts})
 
+    async def replace_custom_mentions(self, string: str) -> str:
+        if not self.channel.discord_channel:
+            return string
+
+        mentions = re.findall(r'(?:^|\s|)@(.+)$', string)
+        for mention in mentions:
+            member, _ = await get_member_from_string(None, mention, guild=self.channel.discord_channel.guild)
+            if member:
+                string = string.replace(f'@{mention}', member.mention)
+
+        return string
+
+    def replace_valid_mentions(self, string: str) -> str:
+        # replace mentions in values with actual names
+        mentions = re.findall(r'(<([@#])([^|>]+)(?:\|(\w+))?>)', string)
+        for mention in mentions:
+            mention_type = mention[1]
+            mention_id = mention[2]
+
+            if mention_type == '#':
+                string = string.replace(mention[0], f'#{mention[3]}')
+            elif mention_type == '@':
+                slack_member = self.slack.get_user(mention_id)
+                if slack_member:
+                    string = string.replace(mention[0], f'@{slack_member.name}')
+
+        return string
+
     async def send_to_discord(self, *, edit: bool = False):
         """Function for sending messages from slack to discord via a webhook."""
         if not self.channel.discord_channel:
@@ -103,6 +131,8 @@ class SlackMessage:
         ]
 
         text = unescape(self.text)
+        text = await self.replace_custom_mentions(text)
+        text = self.replace_valid_mentions(text)
 
         discord_message = await self.slack.bot.webhooks.send(
             content=text,
@@ -168,6 +198,52 @@ class DiscordMessage:
 
             db.slack_messages.delete_one({'discord_message_id': self.id})
 
+    def replace_custom_mentions(self, text: str) -> str:
+        """
+        This whole function is a mess.
+        Replaces things like @hatty in a discord message with slack member mentions [<@U0271HF3ZQV>] before sending it off to slack.
+        """
+        slack_channel = self.slack.get_channel(discord_id=self.channel_id)
+        if not slack_channel:
+            return text
+
+        special_chars_map = {i: '\\' + chr(i) for i in b'()[]{}?*+-|^$\\.&~#'}
+        mentions = re.findall(r'(?:^|\s|)(@.+)', text)
+
+        def match_member(string: str):
+            safe_text = string.translate(special_chars_map)
+            members = list(
+                filter(
+                    lambda m: re.findall(fr'({safe_text.lower()})', m.name.lower()),
+                    self.slack.members
+                )
+            )
+            if len(members) == 1:
+                return members[0]
+
+            return members
+
+        for mention in mentions:
+            previous_match = None
+            member_name = ""
+            for part in mention[1:].split():
+                member_match = match_member(f'{member_name} {part}'.strip())
+                if member_match is None:
+                    if previous_match is None:
+                        break
+                    if type(previous_match) == SlackMember:
+                        text = text.replace(mention, f'<@{previous_match.id}>')
+                        break
+                else:
+                    # update variables
+                    previous_match = member_match
+                    member_name = f'{member_name} {part}'.strip()
+
+            if len(mention.split()) == 1 and type(previous_match) == SlackMember:
+                text = text.replace(mention, f'<@{previous_match.id}>')
+
+        return text
+
     @staticmethod
     def hyperlink_converter(text):
         """Converts discord hyperlink format to slack format."""
@@ -182,6 +258,7 @@ class DiscordMessage:
 
     def normalize_text(self, text):
         """Function for normalising discord text to slack standards."""
+        text = self.replace_custom_mentions(text)
         text = replace_mentions(self.guild, text)
         text = self.hyperlink_converter(text)
         text = self.text_to_slack_formatting(text)
