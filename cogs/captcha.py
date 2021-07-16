@@ -19,6 +19,24 @@ class Captcha(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
 
+    async def construct_blacklist_embed(
+        ctx: Context, blacklist: list, max_page_num: int, page_limit: int, *, page: int
+    ):
+        if len(blacklist) == 0:
+            return await embed_maker.message(
+                ctx, description="No blacklist entries found."
+            )
+
+        bits = []
+
+        for i, entry in enumerate(
+            blacklist[page_limit * (page - 1) : page_limit * page]
+        ):
+            member = entry["member_id"]
+            started = entry["started"]
+            ends = entry["ends"]
+            bits.append("\n".join(["**Member "]))
+
     @group(
         help="Captcha Gateway System. A method of stopping the bot attacks.",
         name="captcha",
@@ -129,6 +147,26 @@ class Captcha(Cog):
             title="Changed Setting",
             send=True,
         )
+
+    @mod_cmd.group(
+        help="Blacklist - for users who couldn't pass the first set of Captcha tests. These commands allow the viewing, adding, and removing of users on the Blacklist.",
+        name="blacklist",
+        usage="captcha mod blacklist [sub-command]",
+        examples=[
+            "captcha mod blacklist",
+            "captcha mod blacklist add TheMasteredPanda 24h",
+        ],
+        cls=Group,
+        invoke_without_command=True,
+    )
+    async def blacklist_mod_cmd(self, ctx: Context):
+        return
+
+    async def blacklist_add_cmd(self, ctx: Context):
+        return
+
+    async def blacklist_rm_cmd(self, ctx: Context):
+        return
 
     @captcha_cmd.group(
         help="A set of dev commands used when testing this feature.",

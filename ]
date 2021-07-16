@@ -7,7 +7,6 @@ import string
 import random
 import discord
 from discord.colour import Colour
-from discord.invite import Invite
 from pymongo.cursor import Cursor
 import config
 from enum import Enum
@@ -115,90 +114,48 @@ class DataManager:
         )
 
     def is_blacklisted(self, member_id: int):
-        return self._captcha_blacklist.find({"member_id": member_id}) is not None
+        return self._captcha_blacklist.find({'member_id': member_id}) is not None
 
-    def add_member_to_blacklist(self, member_id: int, duration: int = 86400):
-        now = time.time()
-        self._captcha_blacklist.insert_one(
-            {
-                "member_id": member_id,
-                "started": datetime.datetime.now(),
-                "ends": now + duration,
-            }
-        )
-
-    def get_blacklist(self):
-        return self._captcha_blacklist.find_many({})
-
+    def add_member_to_blacklist(self, member_id: int, duration: int = 300):
+        now = datetime.datetime.now()
+        self._captcha_blacklist.insert_one({'member_id': member_id, 'started': datetime.datetime.now(), 'ends': now + duration})
 
 class CaptchaChannel:
-    def __init__(
-        self,
-        bot,
-        g_guild,
-        member: Member,
-    ):
-        channel_name = random_chars(12)
-        self._channel: TextChannel = bot.create_text_channel(
-            name=channel_name,
-            category=g_guild.get_main_category(),
-            overwrites={
-                self._guild.default_role: discord.PermissionOverwrite(
-                    view_channel=False, read_message_history=False
-                ),
-                member: discord.PermissionOverwrite(
-                    view_channel=True,
-                    read_messages=True,
-                    send_messages=True,
-                    read_message_history=True,
-                ),
-            },
-        )
-
-        self._data_manager = bot.captcha.get_data_manager()
-        self._guild = g_guild.get_guild()
-        self._generate_image = bot.modules.captcha.create_captcha_image()
+    def __init__(self, bot, data_manager: DataManager, generate_image, channel_id: int, guild):
+        self._data_manager = data_manager
+        self._channel_id = channel_id
+        self._guild = guild
+        self._generate_image = generate_image
         self._answer_text = None
         self._started = False
-        self._member = member
-        self._bot = bot
 
     def _get_entry(self):
         return self._data_manager.get_captcha_channel(self._guild_id, self._channel_id)
 
     def construct_embed(self):
         entry = self._get_entry()
-        tries = entry["tries"]
+        tries = entry['tries']
         image, text = self._generate_image()
         image_file = discord.File(fp=image, filename="captcha.png")
         self._answer_text = text
-        embed: discord.Embed = discord.Embed(
-            colour=config.EMBED_COLOUR,
-            title=f"Try {tries}. {tries - 1} remaining.",
-            description="Try the text presented in the image correctly.",
-        )
-        embed.set_image("attachment://captcha.png")
+        embed: discord.Embed = discord.Embed(colour=config.EMBED_COLOUR, title=f"Try {tries}. {tries - 1} remaining.", description="Try the text presented in the image correctly.")
+        embed.set_image('attachment://captcha.png')
         return embed, image_file
 
     async def send_captcha_message(self):
         entry = self._get_entry()
-        channel: Union[TextChannel, None] = discord.utils.get(
-            self._guild.text_channels, id=self._channel.id
-        )
+        channel: Union[TextChannel, None] = discord.utils.get(self._guild.text_channels, id=channel_id)
 
-        if entry["tries"] != 0:
+        if entry['tries'] != 0:
             embed, image_file = self.construct_embed()
             await channel.send(file=image_file, embed=embed)
         else:
-            embed: discord.Embed = discord.Embed(
-                color=config.EMBED_COLOUR,
-                title="Too many tries.",
-                description="Unfortunately, you have not completed captchas despite three tries. Your account id has been temporarily blacklisted for a day. Please come back after5 minutes and try again :) .",
-            )
+            embed: discord.Embed = discord.Embed(color=config.EMBED_COLOUR, title="Too many tries.", description="Unfortunately, you have not completed captchas despite three tries. Your account id has been temporarily blacklisted for 5 minutes. Please come back after5 minutes and try again :) .")
             await channel.send(embed)
             asyncio.sleep(10)
-            self._data_manager.add_member_to_blacklist(self._member.id)
-            await self._member.kick()
+
+
+
 
     async def on_message(self, message: discord.Message):
         if self._started is False:
@@ -217,31 +174,8 @@ class CaptchaChannel:
             return
 
         if message.content.lower() != self._answer_text:
-            await self._channel.send("Incorrect.")
-            await self.send_captcha_message()
-            entry = self._get_entry()
-            entry["tries"] = entry["tries"] - 1 if entry["tries"] > 0 else 0
-            if entry["tries"] == 0:
-                self._data_manager.add_member_to_blacklist(self._member.id)
-                await self._member.kick()
-        else:
-            embed: discord.Embed = discord.Embed(
-                color=config.EMBED_COLOUR,
-                title="Successfully Completed Captcha.",
-                description=f"Successfully completed Captcha, heres the single use, valid for 2 minutes, invitation link to TLDR! Once you join, you will be kicked from this Gateway guild. {self.create_tldr_invite()}",
-            )
-            # Create invite to welcome channel.
-
-    async def create_tldr_invite(self):
-        main_guild: Guild = discord.utils.get(self.bot.guilds, id=config.MAIN_SERVER)
-        settings = self.settings_handler.get_settings(config.MAIN_SERVER)["modules"][
-            "captcha"
-        ]
-        main_channel: TextChannel = discord.utils.get(
-            main_guild.text_channels, id=settings["main_guild_landing_channel"]
-        )
-        invite: Invite = main_channel.create_invite(max_age=120, max_uses=1)
-        return invite
+            image, text = self._generate_image()
+            self._image = discord.File(fp=image, file)
 
 
 class GatewayGuild:
@@ -250,7 +184,6 @@ class GatewayGuild:
         self._data_manager = data_manager
         self._kwargs = kwargs
         self._category = None
-        self._captcha_channels = {}
 
     async def load(self):
         if "guild" in self._kwargs:
@@ -318,9 +251,70 @@ class GatewayGuild:
         return self._guild
 
     def create_captcha_channel(self, for_member: Member):
-        captcha_channel = CaptchaChannel(self._bot, self, for_member)
-        self._captcha_channels[for_member.id] = captcha_channel
-        return captcha_channel
+        channel_name = random_chars(12)
+        channel: TextChannel = self._bot.create_text_channel(
+            name=channel_name,
+            category=self.get_main_category(),
+            overwrites={
+                self._guild.default_role: discord.PermissionOverwrite(
+                    view_channel=False, read_message_history=False
+                ),
+                for_member: discord.PermissionOverwrite(
+                    view_channel=True,
+                    read_messages=True,
+                    send_messages=True,
+                    read_message_history=True,
+                ),
+            },
+        )
+
+        self._channels[for_member.id] = {
+            "channel": {"id": channel.id, "ttl": 120},
+            "tries": 3,
+            "answer": None,
+        }
+
+    def send_captcha_message(self, for_member: Member):
+        entry = self._channels[for_member.id]
+        tries = entry["tries"]
+        image, text = self._bot.captcha.create_captcha_image()
+        entry["answer"] = text
+        embed: discord.Embed = discord.Embed(
+            colour=config.EMBED_COLOUR,
+            timestamp=datetime.datetime.now(),
+            title=f"Try {tries}. {tries -1} remaining.",
+            description="Please type out the text showing in the image above correctly.",
+        )
+        embed.set_image(url="attachment://captcha.png")
+        channel = discord.utils.get(
+            self._guild.text_channels, id=entry["channel"]["id"]
+        )
+        if channel is None:
+            raise Exception(
+                f"Channel under id {entry['channel']['id']} is None. Expected otherwise."
+            )
+        await channel.send(
+            embed=embed, file=discord.File(fp=image, filename="catchpa.png")
+        )
+
+    def get_captcha_channel(self, **kwargs):
+        if "for_member_id" in kwargs or "for_member" in kwargs:
+            return self._channels[
+                kwargs["for_member_id"]
+                if "for_member_id" in kwargs
+                else kwargs["for_member"].id
+            ]
+        if "channel_id" in kwargs:
+            filtered_list = list(
+                filter(
+                    lambda entry: entry["channel"]["id"] == kwargs["channel_id"],
+                    self._channels.values(),
+                )
+            )
+
+            if len(filtered_list) > 0:
+                return None
+            return filtered_list[0]
 
 
 class CaptchaModule:
@@ -348,7 +342,6 @@ class CaptchaModule:
                 "operators": [],
                 "guild_name": "Gateway Guild {number}",
                 "landing_channel": {"name": "welcome", "message": ""},
-                "main_guild_landing_channel": None,
             }
             self._settings_handler.save(settings)
         self._logger.info("Captcha Gateway settings found.")
@@ -412,6 +405,12 @@ class CaptchaModule:
         )
 
     def is_operator(self, member_id: int) -> bool:
+        operators = self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
+            "captcha"
+        ]["operators"]
+        print(operators)
+        print(member_id)
+        print(member_id in operators)
         return (
             member_id
             in self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
