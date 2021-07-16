@@ -35,6 +35,7 @@ class SlackMessage:
         self.channel_id = event_data['channel']
         self.text = event_data['text']
         self.ts = event_data['ts']
+        self.thread_ts = event_data['thread_ts'] if 'thread_ts' in event_data else None
         self.files = [
             {'url': file['url_private_download'], 'name': file['name']}
             for file in event_data['files']
@@ -92,9 +93,9 @@ class SlackMessage:
 
         mentions = re.findall(r'(?:^|\s|)@(.+)$', string)
         for mention in mentions:
-            member, _ = await get_member_from_string(None, mention, guild=self.channel.discord_channel.guild)
+            member, extra_string = await get_member_from_string(None, mention, guild=self.channel.discord_channel.guild)
             if member:
-                string = string.replace(f'@{mention}', member.mention)
+                string = string.replace(f'@{mention}', f'{member.mention} {extra_string}'.strip())
 
         return string
 
@@ -161,7 +162,8 @@ class DiscordMessage:
         self.author_name = message.author.name
         self.author_avatar = str(message.author.avatar_url).replace('.webp', '.png')
         self.attachment_urls = [{'url': attachment.url, 'filename': attachment.filename} for attachment in message.attachments]
-        self.reply_id = message.reference.message_id if message.reference else None
+        # self.reply_id = message.reference.message_id if message.reference else None
+        # self.reply_is_bot = message.reference.resolved.author.bot if message.reference and type(message.reference.resolved) == discord.Message else None
 
         self.slack_message_id = None
         self.initialise_data()
@@ -208,7 +210,7 @@ class DiscordMessage:
             return text
 
         special_chars_map = {i: '\\' + chr(i) for i in b'()[]{}?*+-|^$\\.&~#'}
-        mentions = re.findall(r'(?:^|\s|)(@.+)', text)
+        mentions = re.findall(r'(?:^|\s)(@.+)', text)
 
         def match_member(string: str):
             safe_text = string.translate(special_chars_map)
@@ -228,19 +230,19 @@ class DiscordMessage:
             member_name = ""
             for part in mention[1:].split():
                 member_match = match_member(f'{member_name} {part}'.strip())
-                if member_match is None:
+                if not member_match:
                     if previous_match is None:
                         break
                     if type(previous_match) == SlackMember:
-                        text = text.replace(mention, f'<@{previous_match.id}>')
+                        text = text.replace(f'@{member_name}', f'<@{previous_match.id}>')
                         break
                 else:
                     # update variables
                     previous_match = member_match
                     member_name = f'{member_name} {part}'.strip()
 
-            if len(mention.split()) == 1 and type(previous_match) == SlackMember:
-                text = text.replace(mention, f'<@{previous_match.id}>')
+            if len(mention[1:].split()) == 1 and type(previous_match) == SlackMember:
+                text = text.replace(f'@{member_name}', f'<@{previous_match.id}>')
 
         return text
 
@@ -297,9 +299,51 @@ class DiscordMessage:
 
         return text
 
-    def to_slack_blocks(self):
+    # disabled, waiting for threads, maybe will be enabled in the future
+    # async def reply_blocks(self):
+    #     if self.reply_is_bot is None:
+    #         return
+    #
+    #     slack_channel = self.slack.get_channel(discord_id=self.channel_id)
+    #     if self.reply_is_bot:
+    #         slack_message = next(filter(lambda sm: sm.discord_message_id == self.reply_id, self.slack.slack_messages.values()), None)
+    #         if slack_message is None:
+    #             slack_message_link = next(filter(lambda ml: ml[1] == self.reply_id, self.slack.message_links.items()), None)
+    #             if slack_message_link is None:
+    #                 return
+    #             slack_message = await self.slack.get_slack_message(slack_channel.id, slack_message_link[0], self.reply_id)
+    #     else:
+    #         discord_message = self.slack.discord_messages.get(self.reply_id, None)
+    #         if not discord_message:
+    #             discord_message_link = self.slack.message_links.get(self.reply_id, None)
+    #             discord_message = await self.slack.get_discord_message(self.channel_id, self.reply_id, discord_message_link)
+    #             if not discord_message:
+    #                 return
+    #         slack_message = await self.slack.get_slack_message(slack_channel.id, discord_message.slack_message_id)
+    #
+    #     slack_message_link = await self.slack.app.client.chat_getPermalink(channel=slack_message.channel_id, message_ts=slack_message.ts)
+    #     if slack_message_link['ok']:
+    #         return [
+    #             {
+    #                 "type": "context",
+    #                 "elements": [
+    #                     {
+    #                         "type": "mrkdwn",
+    #                         "text": f"┌Reply to: <{slack_message_link['permalink']}|{slack_message.text[:15]}...>"
+    #                     }
+    #                 ]
+    #             }
+    #         ]
+
+    async def to_slack_blocks(self):
         """Main entrypoint for converting discord message to appropriate slack format."""
         kwargs = {'text': '', 'blocks': []}
+
+        # if self.reply_id:
+        #     reply_blocks = await self.reply_blocks()
+        #     if reply_blocks:
+        #         kwargs['blocks'] += reply_blocks
+
         if self.author_is_bot and self.embed:
             blocks, text = self.embed_to_blocks()
             kwargs['blocks'] = blocks
@@ -338,7 +382,7 @@ class DiscordMessage:
         if not slack_channel:
             return
 
-        kwargs = self.to_slack_blocks()
+        kwargs = await self.to_slack_blocks()
 
         if kwargs['blocks'] and kwargs['text']:
             kwargs.update({'channel': slack_channel.id})
@@ -348,6 +392,8 @@ class DiscordMessage:
             else:
                 kwargs.update({'icon_url': str(self.author_avatar), 'username': self.author_name})
                 func = self.slack.app.client.chat_postMessage
+            # if self.reply_id:
+            #     kwargs['unfurl_links'] = False
 
             slack_message = await func(**kwargs)
             if not edit:
@@ -361,7 +407,7 @@ class DiscordMessage:
                     file=file,
                     filename=file_urls[i]['filename'],
                     channels=slack_channel.id,
-                    title=f'Uploaded by: {self.author_name}'
+                    title=f'Uploaded by: {self.author_name}',
                 )
 
 
@@ -669,6 +715,9 @@ class Slack:
             if edit_message:
                 return
 
+        if is_bot_message and not (is_delete or is_edit):
+            return
+
         slack_message = self.slack_messages.get(ts, None)
         if not slack_message and (is_edit or is_delete):
             slack_message_link = self.message_links[ts] if ts in self.message_links else None
@@ -679,9 +728,6 @@ class Slack:
             if not slack_message:
                 return
             return await slack_message.delete()
-
-        if is_bot_message:
-            return
 
         if is_edit:
             slack_message.text = body['event']['message']['text']
@@ -696,6 +742,9 @@ class Slack:
 
     # Retrieve messages
     async def get_slack_message(self, channel_id: str, message_id: str, discord_message_id: int = None) -> Optional[SlackMessage]:
+        if message_id is None:
+            return
+
         result = await self.app.client.conversations_history(
             channel=channel_id,
             inclusive=True,
@@ -708,7 +757,7 @@ class Slack:
         message = result['messages'][0]
         data = {
             'event': {
-                'user': message['user'],
+                'user': message['user'] if 'user' in message else message['username'],
                 'discord_message_id': discord_message_id,
                 'channel': channel_id,
                 'text': message['text'],
