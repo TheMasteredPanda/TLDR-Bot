@@ -16,10 +16,10 @@ from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from modules.utils import replace_mentions, embed_message_to_text, async_file_downloader
 
 db = database.get_connection()
+image_extensions = ['jpg', 'png', 'gif', 'webp', 'tiff', 'bmp', 'jpeg']
 
 
 # TODO: handle replies
-# TODO: handles message deletes
 class SlackMessage:
     def __init__(self, data: dict, slack: 'Slack'):
         self.data = data
@@ -61,17 +61,13 @@ class SlackMessage:
             db.slack_messages.insert_one({
                 'slack_message_id': self.ts,
                 'discord_message_id': self.discord_message_id,
-                'slack_channel_id': self.channel.id,
                 'origin': 'slack',
-                'files': self.files,
-                'text': self.text,
-                'user_id': self.user_id,
                 'timestamp': round(time.time())
             })
 
     def __setattr__(self, key, value):
         if (
-            key in ["text", "discord_message_id"]
+            key in ["discord_message_id"]
             and key in self.__dict__
             and self.__dict__[key] != value
         ):
@@ -85,6 +81,10 @@ class SlackMessage:
         if self.discord_message_id and self.channel.discord_channel:
             discord_message = await self.channel.discord_channel.fetch_message(int(self.discord_message_id))
             await discord_message.delete()
+            if self.ts in self.slack.slack_messages:
+                del self.slack.slack_messages[self.ts]
+
+            db.slack_messages.delete_one({'slack_message_id': self.ts})
 
     async def send_to_discord(self, *, edit: bool = False):
         """Function for sending messages from slack to discord via a webhook."""
@@ -120,18 +120,18 @@ class SlackMessage:
 class DiscordMessage:
     def __init__(self, message: discord.Message, slack: 'Slack'):
         self.slack = slack
-        self.message = message
 
         self.id = message.id
         self.text = message.content
-        self.embeds = message.embeds
+        self.embed = message.embeds[0] if message.embeds else None
         self.guild_id = message.guild.id
         self.guild: discord.Guild = slack.bot.get_guild(self.guild_id)
         self.channel_id = message.channel.id
         self.author_is_bot: bool = message.author.bot
         self.author_name = message.author.name
-        self.author_avatar = str(message.author.avatar_url)
+        self.author_avatar = str(message.author.avatar_url).replace('.webp', '.png')
         self.attachment_urls = [{'url': attachment.url, 'filename': attachment.filename} for attachment in message.attachments]
+        self.reply_id = message.reference.message_id if message.reference else None
 
         self.slack_message_id = None
         self.initialise_data()
@@ -143,14 +143,13 @@ class DiscordMessage:
             db.slack_messages.insert_one({
                 'slack_message_id': self.slack_message_id,
                 'discord_message_id': self.id,
-                'discord_channel_id': self.channel_id,
                 'origin': 'discord',
                 'timestamp': round(time.time())
             })
 
     def __setattr__(self, key, value):
         if (
-            key in ["text", "slack_message_id"]
+            key in ["slack_message_id"]
             and key in self.__dict__
             and self.__dict__[key] != value
         ):
@@ -164,6 +163,10 @@ class DiscordMessage:
         if self.slack_message_id:
             slack_channel = self.slack.get_channel(discord_id=self.channel_id)
             await self.slack.app.client.chat_delete(channel=slack_channel.id, ts=self.slack_message_id)
+            if self.id in self.slack.discord_messages:
+                del self.slack.discord_messages[self.id]
+
+            db.slack_messages.delete_one({'discord_message_id': self.id})
 
     @staticmethod
     def hyperlink_converter(text):
@@ -186,7 +189,7 @@ class DiscordMessage:
 
     def embed_to_blocks(self) -> tuple[list, str]:
         """Converts discord embeds into slack blocks."""
-        text = embed_message_to_text(self.embeds[0])
+        text = embed_message_to_text(self.embed)
         text = '>' + text.replace('\n', '\n>')
         text = self.normalize_text(text)
 
@@ -219,20 +222,34 @@ class DiscordMessage:
 
     def to_slack_blocks(self):
         """Main entrypoint for converting discord message to appropriate slack format."""
-        kwargs = {'blocks': [], 'text': ''}
-        if self.author_is_bot and self.embeds:
-            kwargs['blocks'], kwargs['text'] = self.embed_to_blocks()
-        else:
+        kwargs = {'text': '', 'blocks': []}
+        if self.author_is_bot and self.embed:
+            blocks, text = self.embed_to_blocks()
+            kwargs['blocks'] = blocks
+            kwargs['text'] = text
+        elif self.text:
             text = replace_mentions(self.guild, self.text)
             text = self.normalize_text(text)
             kwargs['text'] = text
-            kwargs['blocks'] = [{
+            kwargs['blocks'].append({
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
                     "text": text,
                 }
-            }]
+            })
+
+        image_urls = [a for a in self.attachment_urls if a['url'].split('.')[-1] in image_extensions]
+        for attachment in image_urls:
+            kwargs['blocks'].append(
+                {
+                    "type": "image",
+                    "image_url": attachment['url'],
+                    "alt_text": f"Uploaded by {self.author_name} - {attachment['filename']}"
+                }
+            )
+        if not kwargs['text'] and image_urls:
+            kwargs['text'] = f'Image{"s" if len(image_urls) > 1 else ""} uploaded by {self.author_name}'
 
         return kwargs
 
@@ -260,11 +277,12 @@ class DiscordMessage:
                 self.slack_message_id = slack_message['message']['ts']
 
         if self.attachment_urls:
-            files = await async_file_downloader([a['url'] for a in self.attachment_urls])
+            file_urls = [a for a in self.attachment_urls if a['url'].split('.')[-1] not in image_extensions]
+            files = await async_file_downloader([a['url'] for a in file_urls])
             for i, file in enumerate(files):
                 await self.slack.app.client.files_upload(
                     file=file,
-                    filename=self.attachment_urls[i]['filename'],
+                    filename=file_urls[i]['filename'],
                     channels=slack_channel.id,
                     title=f'Uploaded by: {self.author_name}'
                 )
@@ -305,7 +323,7 @@ class SlackMember:
         """Gets slack user alias and sets the alias variables if alias has been set."""
         data = db.slack_bridge.find_one({'aliases': {'$elemMatch': {'slack_id': self.id}}}, {"aliases.$": 1})
         discord_id = data['aliases'][0]['discord_id'] if len(data['aliases']) > 0 else None
-        discord_name = data['aliases'][0]['discord_name'] if len(data['aliases']) > 0 else None
+        discord_name = data['aliases'][0]['discord_name'] if len(data['aliases']) > 0 and 'discord_name' in data['aliases'][0] else None
 
         if discord_id:
             await self.bot.wait_until_ready()
@@ -434,15 +452,15 @@ class Slack:
         self.bot.loop.create_task(self.handler.start_async())
 
         self.bot.add_listener(self.on_message, 'on_message')
-        self.bot.add_listener(self.on_message_edit, 'on_message_edit')
-        self.bot.add_listener(self.on_message_delete, 'on_message_delete')
+        self.bot.add_listener(self.on_raw_message_edit, 'on_raw_message_edit')
+        self.bot.add_listener(self.on_raw_message_delete, 'on_raw_message_delete')
 
         self.channels: list[SlackChannel] = []
         self.members: list[SlackMember] = []
 
-        self.discord_messages: TTLCache[int, DiscordMessage] = TTLCache(ttl=600.0, maxsize=100)
-        self.slack_messages: TTLCache[str, SlackMessage] = TTLCache(ttl=600.0, maxsize=100)
-        self.message_links = []
+        self.discord_messages: TTLCache[int, DiscordMessage] = TTLCache(ttl=600.0, maxsize=500)
+        self.slack_messages: TTLCache[str, SlackMessage] = TTLCache(ttl=600.0, maxsize=500)
+        self.message_links = TTLCache(ttl=86400.0, maxsize=1000)
 
         self.initialize_data()
         self.messages_cached = asyncio.Event()
@@ -508,11 +526,10 @@ class Slack:
 
     async def cache_messages(self):
         """Cache messages in the database."""
-        await self.bot.wait_until_ready()
         await self.members_cached.wait()
         await self.channels_cached.wait()
 
-        messages = db.slack_messages.find({}).sort('timestamp', -1)
+        messages = db.slack_messages.find({}).sort('timestamp', 1)
         for message in messages:
             twenty_four_hours = 24 * 60 * 60
             if time.time() - message['timestamp'] > twenty_four_hours:
@@ -520,36 +537,10 @@ class Slack:
                 continue
 
             if message['origin'] == 'discord':
-                channel_id = message['discord_channel_id']
-                channel = self.bot.get_channel(channel_id)
-
-                try:
-                    discord_message = await channel.fetch_message(message['discord_message_id'])
-                except:
-                    # on error delete message cache and continue
-                    # most-likely errors when message has been deleted
-                    db.slack_messages.delete_one(message)
-                    continue
-
-                if not discord_message:
-                    db.slack_messages.delete_one(message)
-                    continue
-                message = DiscordMessage(discord_message, self)
-                self.discord_messages[message.id] = message
+                self.message_links[message['discord_message_id']] = message['slack_message_id']
             elif message['origin'] == 'slack':
-                data = {
-                    'event': {
-                        'user': message['user_id'],
-                        'discord_message_id': message['discord_message_id'],
-                        'channel': message['slack_channel_id'],
-                        'text': message['text'],
-                        'ts': message['slack_message_id'],
-                        'files': message['files'],
-                        'subtype': ''
-                    }
-                }
-                slack_message = SlackMessage(data, self)
-                self.slack_messages[slack_message.ts] = slack_message
+                self.message_links[message['slack_message_id']] = message['discord_message_id']
+
         self.messages_cached.set()
 
     async def cache_channels(self):
@@ -583,38 +574,42 @@ class Slack:
         await ack()
 
     async def slack_message(self, body):
-        print(json.dumps(body, indent=2))
         """Function called on message even from slack."""
         await self.messages_cached.wait()
 
-        # delete discord message on slack message delete
-        if 'subtype' in body['event'] and body['event']['subtype'] == 'message_deleted':
-            ts = body['event']['deleted_ts']
-            if ts not in self.slack_messages:
-                return
-            deleted_message = self.slack_messages[ts]
-            return await deleted_message.delete()
+        is_delete = 'subtype' in body['event'] and body['event']['subtype'] == 'message_deleted'
+        is_edit = 'subtype' in body['event'] and body['event']['subtype'] == 'message_changed'
+        is_bot_message = 'subtype' in body['event'] and body['event']['subtype'] == 'bot_message'
+
+        event = body['event']
+        ts = event['message']['ts'] if is_edit else event['deleted_ts'] if is_delete else event['ts']
+        channel_id = event['channel']
 
         # ignore message_changed events if the messages are already cached
-        is_edit = 'subtype' in body['event'] and body['event']['subtype'] == 'message_changed'
-        ts = body['event']['message']['ts'] if is_edit else body['event']['ts']
         if is_edit:
             # check if message was edit by the bot
             edit_message = next(filter(lambda dm: dm.slack_message_id == ts, self.discord_messages.values()), None)
             if edit_message:
                 return
 
-        if 'subtype' in body['event'] and body['event']['subtype'] == 'bot_message':
+        slack_message = self.slack_messages.get(ts, None)
+        if not slack_message and (is_edit or is_delete):
+            slack_message_link = self.message_links[ts] if ts in self.message_links else None
+            slack_message = await self.get_slack_message(channel_id, ts, slack_message_link)
+
+        # delete discord message on slack message delete
+        if is_delete:
+            if not slack_message:
+                return
+            return await slack_message.delete()
+
+        if is_bot_message:
             return
 
         if is_edit:
-            cached_message = self.slack_messages[ts]
-            if not cached_message:
-                return
-
-            cached_message.text = body['event']['message']['text']
+            slack_message.text = body['event']['message']['text']
             asyncio.create_task(
-                cached_message.send_to_discord(edit=True)
+                slack_message.send_to_discord(edit=True)
             )
         else:
             message = SlackMessage(body, self)
@@ -622,21 +617,94 @@ class Slack:
                 message.send_to_discord()
             )
 
+    # Retrieve messages
+    async def get_slack_message(self, channel_id: str, message_id: str, discord_message_id: int = None) -> Optional[SlackMessage]:
+        result = await self.app.client.conversations_history(
+            channel=channel_id,
+            inclusive=True,
+            oldest=message_id,
+            limit=1
+        )
+        if not result or not result['messages']:
+            return
+
+        message = result['messages'][0]
+        data = {
+            'event': {
+                'user': message['user'],
+                'discord_message_id': discord_message_id,
+                'channel': channel_id,
+                'text': message['text'],
+                'ts': message_id,
+                'files': [],
+                'subtype': ''
+            }
+        }
+        return SlackMessage(data, self)
+
+    async def get_discord_message(self, channel_id: int, message_id: int, slack_message_id: str = None) -> Optional[DiscordMessage]:
+        channel = self.bot.get_channel(channel_id)
+
+        try:
+            message = await channel.fetch_message(message_id)
+        except:
+            # most-likely errors when message has been deleted
+            db.slack_messages.delete_one({'discord_message_id': message_id})
+            return
+
+        if message:
+            discord_message = DiscordMessage(message, self)
+            discord_message.slack_message_id = slack_message_id
+            return discord_message
+        else:
+            db.slack_messages.delete_one({'discord_message_id': message_id})
+
     # Discord events
 
-    async def on_message_delete(self, message: discord.Message):
-        if message.id in self.discord_messages:
-            discord_message = self.discord_messages[message.id]
+    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
+        channel_id = payload.channel_id
+
+        slack_channel = self.get_channel(discord_id=channel_id)
+        if not slack_channel:
+            return
+
+        await self.messages_cached.wait()
+
+        message_id = payload.message_id
+        if message_id in self.discord_messages:
+            discord_message = self.discord_messages[message_id]
+            if not discord_message:
+                discord_message_link = self.message_links[message_id]
+                discord_message = await self.get_discord_message(channel_id, message_id, discord_message_link)
+                if discord_message is None:
+                    return
+
             await discord_message.delete()
 
-    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+    async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent):
         """
         Function called on on_edit_message event, used for dealing with message edit events on the discord side
         and doing the same on the slack end.
         """
-        if before.content != after.content and after.id in self.discord_messages:
-            cached_message = self.discord_messages[after.id]
-            await cached_message.send_to_slack(edit=True)
+        channel_id = payload.channel_id
+
+        slack_channel = self.get_channel(discord_id=channel_id)
+        if not slack_channel:
+            return
+
+        await self.messages_cached.wait()
+
+        message_id = payload.message_id
+        content = payload.data['content']
+        cached_message = self.discord_messages.get(message_id, None)
+        if not cached_message:
+            cached_message_link = self.message_links.get(message_id, None)
+            cached_message = await self.get_discord_message(channel_id, message_id, cached_message_link)
+            if cached_message is None:
+                return
+
+        cached_message.text = content
+        await cached_message.send_to_slack(edit=True)
 
     async def on_message(self, message: discord.Message):
         """Function call on on_message event, used for identifying discord bridge channel and forwarding the messages to slack."""
@@ -648,5 +716,7 @@ class Slack:
         if not slack_channel:
             return
 
-        message = DiscordMessage(message, self)
-        await message.send_to_slack()
+        await self.messages_cached.wait()
+
+        discord_message = DiscordMessage(message, self)
+        await discord_message.send_to_slack()
