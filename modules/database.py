@@ -193,7 +193,10 @@ class Connection:
     captcha_blacklist: :class:`pymongo.collection.Collection`
         The captcha blacklist collection:
             {
-                'member_id': :class:`int`
+                'member': {
+                    'id': :class:`id`,
+                    'name': :class:`str`
+                },
                 'started': :class:`int`
                 'ends': :class:`int`
             }

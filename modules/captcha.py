@@ -162,7 +162,7 @@ class DataManager:
         self._captcha_blacklist.delete_one({"member": {"id": member_id}})
 
     def get_blacklist(self):
-        return self._captcha_blacklist.find_many({})
+        return self._captcha_blacklist.find({})
 
 
 class CaptchaChannel:
@@ -319,6 +319,33 @@ class GatewayGuild:
         else:
             self._bot.logger.info(f"Found Operator role on {self._guild.name}.")
 
+        blacklist = self._bot.captcha.get_data_manager().get_blacklist()
+        bans = await self._guild.bans()
+
+        self._bot.logger.info("Syncing with Blacklist...")
+        banned = 0
+        unbanned = 0
+        for entry in blacklist:
+            if entry["ends"] <= time.time():
+                await self._guild.unban(entry["member"]["id"])
+                self._bot.captcha.get_data_manager().rm_member_from_blacklist(
+                    entry["member"]["id"]
+                )
+                unbanned += 1
+                continue
+
+            ban_entry = discord.utils.find(
+                lambda be: be.user.id == entry["member"]["id"], bans
+            )
+
+            if ban_entry is None:
+                banned += 1
+                await self._guild.ban(entry["member"]["id"])
+
+        self._bot.logger.info(
+            f"Banned {banned} users and unbanned {unbanned} users on guild {self._guild.name}."
+        )
+
     async def delete(self):
         self._data_manager.remove_guild(self._id)
         # Need to write in here a better way to delete a gateway guild. I need to check if this is the only guild within the list, then check if people are in the guild doing captchas before I delete the guild.
@@ -355,6 +382,12 @@ class GatewayGuild:
         captcha_channel = CaptchaChannel(self._bot, self, for_member)
         self._captcha_channels[for_member.id] = captcha_channel
         return captcha_channel
+
+    def on_member_join(self, member: Member):
+        pass
+
+    def on_member_leave(self, member: Member):
+        pass
 
 
 class CaptchaModule:
