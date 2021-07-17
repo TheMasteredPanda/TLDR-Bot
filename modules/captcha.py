@@ -11,7 +11,7 @@ from discord.invite import Invite
 from pymongo.cursor import Cursor
 import config
 from enum import Enum
-from typing import Union
+from typing import Tuple, Union
 from discord.errors import Forbidden, HTTPException
 from discord.guild import Guild
 from discord.channel import TextChannel
@@ -26,8 +26,8 @@ Requirements:
     - [DONE] Bot to have ownership over gateway server.
     - [ ] Bot to create more gateway servers if the need arises.
     - [ ] Each new member to a captcha server will need a dedicated channel to prove they are not a bot.
-        * [ ] In this channel, only they will be able to see themselves and the bot.
-        * [ ] In this channel, the captcha will happen.
+        * [DONE] In this channel, only they will be able to see themselves and the bot.
+        * [DONE] In this channel, the captcha will happen.
         * [ ] This channel will be removed after a time-to-live if the captcha has not be completed, configuable ofc.
         * [ ] This channel will be removed after the captcha is successfully on unsuccessfully completed.
     - [ ] The Bot should allow for invitation links to be generated for each gateway server through a command, accessed on
@@ -114,18 +114,52 @@ class DataManager:
             {"guild_id": guild_id, "channel_id": channel_id}
         )
 
-    def is_blacklisted(self, member_id: int):
-        return self._captcha_blacklist.find({"member_id": member_id}) is not None
+    def is_blacklisted(self, **kwargs) -> Tuple[Cursor, list, None]:
+        member_id: Union[int, None] = (
+            kwargs["member_id"] if "member_id" in kwargs else None
+        )
+        member_name: Union[str, None] = (
+            kwargs["member_name"] if "member_name" in kwargs else None
+        )
+        member: Union[Member, None] = kwargs["member"] if "member" in kwargs else None
 
-    def add_member_to_blacklist(self, member_id: int, duration: int = 86400):
+        if member_id is not None:
+            return self._captcha_blacklist.find_one({"member": {"id": member_id}})
+
+        if member_name is not None:
+            return list(
+                self._captcha_blacklist.find(
+                    {"member": {{"name": {"$regex": f"^({member_name}.*)"}}}}
+                )
+            )
+
+        if member is not None:
+            return self._captcha_blacklist.find({"member": {"id": member.id}})
+
+        return None
+
+    def add_member_to_blacklist(self, member: Member, duration: int = 86400):
         now = time.time()
         self._captcha_blacklist.insert_one(
             {
-                "member_id": member_id,
+                "member": {"id": member.id, "name": member.display_name},
                 "started": datetime.datetime.now(),
                 "ends": now + duration,
             }
         )
+
+    def get_blacklisted_member(self, **kwargs) -> Union[Cursor, None]:
+        args = {}
+
+        if "name" in kwargs:
+            args["name"] = {"$regex": f"^({kwargs['name']}.*)"}
+        if "member_id" in kwargs:
+            args["member_id"] = kwargs["member_id"]
+
+        return self._captcha_blacklist.find_one({"member": args})
+
+    def rm_member_from_blacklist(self, member_id: int):
+        self._captcha_blacklist.delete_one({"member": {"id": member_id}})
 
     def get_blacklist(self):
         return self._captcha_blacklist.find_many({})
@@ -198,7 +232,7 @@ class CaptchaChannel:
             await channel.send(embed)
             asyncio.sleep(10)
             self._data_manager.add_member_to_blacklist(self._member.id)
-            await self._member.kick()
+            await self._member.ban()
 
     async def on_message(self, message: discord.Message):
         if self._started is False:
@@ -464,6 +498,12 @@ class CaptchaModule:
 
     def get_settings(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)
+
+    async def unban(self, member_id: int):
+        # Used primarily to unblacklist a member on all active guilds.
+        for g_guild in self._gateway_guilds:
+            guild: Guild = g_guild.get_guild()
+            await guild.unban(member_id)
 
     def set_setting(self, path: str, value: object):
         settings = self._settings_handler.get_settings(config.MAIN_SERVER)

@@ -1,4 +1,10 @@
+import re
+import functools
+import math
+from modules.reaction_menus import BookMenu
+from time import time
 import config
+from datetime import datetime, timedelta
 from bson import json_util
 import json
 from typing import Union
@@ -32,10 +38,46 @@ class Captcha(Cog):
         for i, entry in enumerate(
             blacklist[page_limit * (page - 1) : page_limit * page]
         ):
-            member = entry["member_id"]
+            member = entry["member"]
+            member_name = member["name"]
+            member_id = member["id"]
             started = entry["started"]
             ends = entry["ends"]
-            bits.append("\n".join(["**Member "]))
+            formatted_started = datetime.fromtimestamp(started).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            formatted_ends = datetime.fromtimestamp(ends).strftime("%Y-%m-%d %H:%M:%S")
+            diff = ends - started
+            m, s = divmod(diff, 60)
+            h, d = divmod(m, 60)
+
+            time_bits = []
+
+            if s != 0:
+                time_bits.append(f"{s} {'second' if s != 0 else 'seconds'}")
+            if m != 0:
+                time_bits.append(f"{m} {'minute' if m != 0 else 'minutes'}")
+            if h != 0:
+                time_bits.append(f"{h} {'hour' if h != 0 else 'hours'}")
+            if d != 0:
+                time_bits.append(f"{d} {'day' if d != 0 else 'days'}")
+
+            bits.append(
+                "\n".join(
+                    [
+                        f"- **{member_name}/{member_id}**",
+                        f"  **Started:** {formatted_started}",
+                        f"  **Ends:** {formatted_ends} (', '.join(time_bits))",
+                    ]
+                )
+            )
+
+        return await embed_maker.message(
+            ctx,
+            description="\n".join(bits),
+            author={"name": "Captcha Gateway"},
+            footer={"text": f"Page {page}/{max_page_num}"},
+        )
 
     @group(
         help="Captcha Gateway System. A method of stopping the bot attacks.",
@@ -160,13 +202,131 @@ class Captcha(Cog):
         invoke_without_command=True,
     )
     async def blacklist_mod_cmd(self, ctx: Context):
-        return
+        blacklist = self.bot.captcha.get_blacklist()
+        max_page_size = 6
+        max_page_num = math.ceil(len(blacklist) / max_page_size)
+        page_constructor = functools.partial(
+            self.construct_blacklist_embed,
+            ctx=ctx,
+            blacklist=blacklist,
+            max_page_num=max_page_num,
+            page_limit=max_page_size,
+        )
 
-    async def blacklist_add_cmd(self, ctx: Context):
-        return
+        embed = await page_constructor(page=1)
+        message = await ctx.send(embed)
+        menu = BookMenu(
+            message,
+            page=1,
+            max_page_num=max_page_num,
+            page_constructor=page_constructor,
+        )
+        self.bot.reaction_menus.add(menu)
 
-    async def blacklist_rm_cmd(self, ctx: Context):
-        return
+    @blacklist_mod_cmd.command(
+        help="Add a member to the blacklist.",
+        usage="add",
+        examples=[
+            "captcha mod blacklist add [name of member] [time (40h20m4s)]",
+            "captcha mod blacklist add TheMasteredPanda 24h",
+        ],
+        command_args=[
+            (("--name", "-n", str), "Name of the user you want to blacklist."),
+            (
+                ("--duration", "-d", str),
+                "The amount of time you want to blacklist this user for ([integer][time unit]. Time Units: s (seconds), m (minutes), h(hours)",
+            ),
+        ],
+        cls=Command,
+    )
+    async def blacklist_add_cmd(
+        self, ctx: Context, *, args: Union[ParseArgs, str] = ""
+    ):
+        split_pre = args["pre"].split(" ")
+
+        if len(split_pre) == 0:
+            return await embed_maker.command_error(ctx)
+
+        name_string = args["name"] if args["name"] is not None else split_pre[0]
+
+        member_entry = self.bot.captcha.get_data_manager().get_blacklisted_member(
+            name=name_string
+        )
+
+        if member_entry is None:
+            return await embed_maker.message(
+                ctx,
+                description=f"Can't find member {name_string} in blacklist.",
+                title="Can't find member.",
+                send=True,
+            )
+
+        member_name = member_entry["member"]["name"]
+
+        if member_entry:
+            return await embed_maker.message(
+                ctx,
+                description=f"Member {member_name} is already blacklisted.",
+                title="Member already blacklisted.",
+                send=True,
+            )
+
+        member, rest = get_member_from_string(args["pre"])
+        amount_string = args["duration"]
+        if amount_string is None:
+            if rest is not None:
+                amount_string = rest
+            else:
+                amount_string = split_pre[1]
+
+        amount_string_bits = re.split("(\\d{1,2}\\w{1})", amount_string)
+
+        duration_in_seconds = 0
+        for bit in amount_string_bits:
+            if bit.endswith("h"):
+                duration_in_seconds = duration_in_seconds + (3600 * int(bit.strip("h")))
+            if bit.endswith("m"):
+                duration_in_seconds = duration_in_seconds + (60 * int(bit.strip("m")))
+            if bit.endswith("s"):
+                duration_in_seconds = duration_in_seconds + int(bit.strip("s"))
+
+        self.bot.captcha.get_data_manager().add_member_to_blacklist(
+            member.id, duration_in_seconds
+        )
+
+    @blacklist_mod_cmd.command(
+        help="Remove a member from the blacklist.",
+        name="remove",
+        usage="captcha mod blacklist remove",
+        examples=["captcha mod blacklist remove [name of member]"],
+        cls=Command,
+    )
+    async def blacklist_rm_cmd(self, ctx: Context, name: str = ""):
+        if name == "":
+            return await embed_maker.command_error(ctx)
+
+        member_entry = self.bot.captcha.get_data_manager().get_blacklisted_member(
+            name=name
+        )
+
+        if member_entry is None:
+            return await embed_maker.message(
+                ctx,
+                description=f"Couldn't find member {name} in blacklist.",
+                title="Couldn't find name",
+                send=True,
+            )
+
+        self.bot.captcha.get_data_manager().rm_member_from_blacklist(
+            member_entry["member"]["id"]
+        )
+        await self.bot.captcha.unban(member_entry["member"]["id"])
+        await embed_maker.message(
+            ctx,
+            description=f"Removed {member_entry['member']['name']} from the blacklist.",
+            title="Removed member from blacklist",
+            send=True,
+        )
 
     @captcha_cmd.group(
         help="A set of dev commands used when testing this feature.",
