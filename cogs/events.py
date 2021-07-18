@@ -1,3 +1,5 @@
+from modules.captcha import CaptchaChannel
+from modules.custom_commands import Message
 import discord
 import time
 import hashlib
@@ -63,6 +65,24 @@ class Events(Cog):
             self.bot.watchlist.initialize()
 
         self.bot.first_ready = True
+
+    @Cog.listener()  # TODO: Create Gateway Guild Message listener, to listen for the answers to captchas. Also have to create a listener for members joning and leaving, to handle the kicking off of members on the gateway guild when they join the main TLDR Gateway.
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        captcha_module = self.bot.captcha
+
+        if captcha_module.is_gateway_guild(message.guild.id) is False:
+            return
+
+        g_guild = captcha_module.get_gateway_guild(message.guild.id)
+
+        if g_guild.has_captcha_channel(message.author.id) is False:
+            return
+
+        captcha_channel: CaptchaChannel = g_guild.get_captcha_channel(message.author.id)
+        await captcha_channel.on_message(message)
 
     async def check_left_members(self):
         self.bot.logger.info(f"Checking Guilds for left members.")

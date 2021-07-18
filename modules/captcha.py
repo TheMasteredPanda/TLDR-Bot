@@ -14,7 +14,7 @@ from enum import Enum
 from typing import Tuple, Union
 from discord.errors import Forbidden, HTTPException
 from discord.guild import Guild
-from discord.channel import TextChannel
+from discord.channel import CategoryChannel, TextChannel
 from discord import Member
 import modules.database as database
 from modules.utils import SettingsHandler
@@ -172,64 +172,69 @@ class CaptchaChannel:
         g_guild,
         member: Member,
     ):
-        channel_name = random_chars(12)
-        self._channel: TextChannel = bot.create_text_channel(
-            name=channel_name,
-            category=g_guild.get_main_category(),
-            overwrites={
-                self._guild.default_role: discord.PermissionOverwrite(
-                    view_channel=False, read_message_history=False
-                ),
-                member: discord.PermissionOverwrite(
-                    view_channel=True,
-                    read_messages=True,
-                    send_messages=True,
-                    read_message_history=True,
-                ),
-            },
-        )
-
+        self._member = member
+        self._g_guild = g_guild
         self._data_manager = bot.captcha.get_data_manager()
         self._guild = g_guild.get_guild()
-        self._generate_image = bot.modules.captcha.create_captcha_image()
+        self._generate_image = bot.captcha.create_captcha_image()
         self._answer_text = None
         self._started = False
         self._member = member
         self._bot = bot
+        self._tries = 5
 
-    def _get_entry(self):
-        return self._data_manager.get_captcha_channel(self._guild_id, self._channel_id)
+    def get_name(self):
+        return self._channel.name
+
+    async def start(self):
+        channel_name = random_chars(12)
+        self._channel: TextChannel = (
+            await self._g_guild.get_guild().create_text_channel(
+                name=channel_name,
+                category=self._g_guild.get_main_category(),
+                overwrites={
+                    self._g_guild.get_guild().default_role: discord.PermissionOverwrite(
+                        view_channel=False, read_message_history=False
+                    ),
+                    self._member: discord.PermissionOverwrite(
+                        view_channel=True,
+                        read_messages=True,
+                        send_messages=True,
+                        read_message_history=True,
+                    ),
+                },
+            )
+        )
+
+        self._started = True
+        await self.send_captcha_message()
 
     def construct_embed(self):
-        entry = self._get_entry()
-        tries = entry["tries"]
         image, text = self._generate_image()
         image_file = discord.File(fp=image, filename="captcha.png")
         self._answer_text = text
         embed: discord.Embed = discord.Embed(
             colour=config.EMBED_COLOUR,
-            title=f"Try {tries}. {tries - 1} remaining.",
+            title=f"Try {self._tries}. {self._tries - 1} remaining.",
             description="Try the text presented in the image correctly.",
         )
-        embed.set_image("attachment://captcha.png")
-        return embed, image_file
+        embed.set_image(url="attachment://captcha.png")
+        return (embed, image_file)
 
     async def send_captcha_message(self):
-        entry = self._get_entry()
-        channel: Union[TextChannel, None] = discord.utils.get(
-            self._guild.text_channels, id=self._channel.id
-        )
 
-        if entry["tries"] != 0:
-            embed, image_file = self.construct_embed()
-            await channel.send(file=image_file, embed=embed)
+        if self._tries != 0:
+            tuple_embed = self.construct_embed()
+            embed = tuple_embed[0]
+            image_file = tuple_embed[1]
+            await self._channel.send(file=image_file, embed=embed)
         else:
             embed: discord.Embed = discord.Embed(
                 color=config.EMBED_COLOUR,
                 title="Too many tries.",
                 description="Unfortunately, you have not completed captchas despite three tries. Your account id has been temporarily blacklisted for a day. Please come back after5 minutes and try again :) .",
             )
-            await channel.send(embed)
+            await self._channel.send(embed)
             asyncio.sleep(10)
             self._data_manager.add_member_to_blacklist(self._member.id)
             await self._member.ban()
@@ -238,32 +243,23 @@ class CaptchaChannel:
         if self._started is False:
             return
 
-        if message.author.bot:
-            return
-
-        if message.channel.id != self._channel_id:
-            return
-
-        if message.channel.guild.id != self._guild_id:
-            return
-
         if self._answer_text is None:
             return
 
         if message.content.lower() != self._answer_text:
             await self._channel.send("Incorrect.")
             await self.send_captcha_message()
-            entry = self._get_entry()
-            entry["tries"] = entry["tries"] - 1 if entry["tries"] > 0 else 0
-            if entry["tries"] == 0:
+            self._tries = self._tries - 1 if self._tries > 0 else 0
+            if self._tries == 0:
                 self._data_manager.add_member_to_blacklist(self._member.id)
-                await self._member.kick()
+                await self._member.ban()
         else:
             embed: discord.Embed = discord.Embed(
                 color=config.EMBED_COLOUR,
                 title="Successfully Completed Captcha.",
                 description=f"Successfully completed Captcha, heres the single use, valid for 2 minutes, invitation link to TLDR! Once you join, you will be kicked from this Gateway guild. {self.create_tldr_invite()}",
             )
+            await self._channel.send(embed)
             # Create invite to welcome channel.
 
     async def create_tldr_invite(self):
@@ -346,6 +342,12 @@ class GatewayGuild:
             f"Banned {banned} users and unbanned {unbanned} users on guild {self._guild.name}."
         )
 
+    def has_captcha_channel(self, member_id: int) -> bool:
+        return member_id in self._captcha_channels.keys()
+
+    def get_captcha_channel(self, member_id: int) -> Union[CaptchaChannel, None]:
+        return self._captcha_channels[member_id]
+
     async def delete(self):
         self._data_manager.remove_guild(self._id)
         # Need to write in here a better way to delete a gateway guild. I need to check if this is the only guild within the list, then check if people are in the guild doing captchas before I delete the guild.
@@ -355,27 +357,24 @@ class GatewayGuild:
         except (HTTPException, Forbidden) as ignore:
             return False
 
-    def get_landing_channel(self):
+    def get_landing_channel(self) -> Union[TextChannel, None]:
         return self._landing_channel
-
-    def set_landing_channel(self, channel: TextChannel):
-        self._landing_channel = channel
 
     def get_main_category(self):
         if self._category is None:
-            for category in self._bot.categories:
+            for category in self._guild.categories:
                 if category.name.lower() == "TLDR Gateway":
                     self._category = category
                     break
         return self._category
 
-    def get_name(self):
+    def get_name(self) -> str:
         return self._guild.name
 
-    def get_id(self):
+    def get_id(self) -> int:
         return self._id
 
-    def get_guild(self):
+    def get_guild(self) -> Guild:
         return self._guild
 
     def create_captcha_channel(self, for_member: Member):
@@ -514,7 +513,7 @@ class CaptchaModule:
     def get_gateway_guilds(self) -> list[GatewayGuild]:
         return self._gateway_guilds
 
-    def is_gatway_guild(self, guild_id: int) -> bool:
+    def is_gateway_guild(self, guild_id: int) -> bool:
         for guild in self._gateway_guilds:
             if guild.get_id() == guild_id:
                 return True

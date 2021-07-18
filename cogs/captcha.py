@@ -146,6 +146,16 @@ class Captcha(Cog):
     )
     async def config_mod_cmd(self, ctx: Context):
         config = self.bot.captcha.get_settings().copy()
+        operators = config["modules"]["captcha"]["operators"]
+        new_operators = []
+
+        for op in operators:
+            member = self.bot.get_user(op)
+            if member is None:
+                continue  # For now.
+
+            new_operators.append(f"{op} ({member.display_name})")
+        config["modules"]["captcha"]["operators"] = new_operators
         config.pop("_id")
         return await embed_maker.message(
             ctx,
@@ -182,7 +192,10 @@ class Captcha(Cog):
             if args["value"] is None:
                 return await embed_maker.command_error(ctx, "value")
 
-        self.bot.captcha.set_setting(args["path"], args["value"])
+        self.bot.captcha.set_setting(
+            args["path"],
+            args["value"] if args["value"].isnumeric() is False else int(args["value"]),
+        )
         await embed_maker.message(
             ctx,
             description=f"Set value {args['value']} on setting {args['path']}",
@@ -396,7 +409,7 @@ class Captcha(Cog):
                         f"  **ID**: {guild.id}",
                         f"  **User Count:** {len(guild.members)}",
                         f"  **Owner:** {guild.owner.name}/{guild.owner.id}",
-                        f"  **Gateway Guild:** {'Yes' if self.bot.captcha.is_gatway_guild(guild.id) else 'No'}",
+                        f"  **Gateway Guild:** {'Yes' if self.bot.captcha.is_gateway_guild(guild.id) else 'No'}",
                     ]
                 )
             )
@@ -463,7 +476,7 @@ class Captcha(Cog):
     @dev_create_cmd.command(
         help="Create an invitation link for a gateway guild.",
         name="invite",
-        uasge="captcha dev create invite [minimum uses] [time to live (in seconds)] [temporary (yes/no)] [name]",
+        usage="captcha dev create invite [minimum uses] [time to live (in seconds)] [temporary (yes/no)] [name]",
         examples=["captcha dev create invite 1 120 no [guild name]"],
         cls=Command,
         command_args=[
@@ -488,10 +501,31 @@ class Captcha(Cog):
         *,
         args: Union[ParseArgs, str] = "",
     ):
+        if args == "":
+            return await embed_maker.command_error(ctx)
+
+        if args["pre"] != "":
+            split_pre = args["pre"].split(" ")
+            if len(split_pre) < 4:
+                return await embed_maker.command_error(ctx)
+
+            if split_pre[0].isnumeric() is False:
+                return await embed_maker.command_error(
+                    ctx, "1st Positional Argument (min-uses)"
+                )
+            args["min-uses"] = int(split_pre[0])
+            if split_pre[1].isnumeric() is False:
+                return await embed_maker.command_error(
+                    ctx, "2nd Positional Argument (min-age)"
+                )
+            args["max-age"] = int(split_pre[1])
+            args["temporary"] = False if split_pre[2].lower() == "no" else True
+            args["name"] = " ".join(split_pre[3:])
+
         min_uses: int = 1 if args["min-uses"] is None else args["min-uses"]
         max_age: int = 60 if args["max-age"] is None else args["max-age"]
         temporary: bool = False if args["temporary"] is None else args["temporary"]
-        name = args["pre"] if args["name"] is None else args["name"]
+        name = args["name"]
 
         g_guilds: list[GatewayGuild] = self.bot.captcha.get_gateway_guilds()
 
@@ -522,11 +556,14 @@ class Captcha(Cog):
     @dev_create_cmd.command(
         help="Create a captcha channel, for testing.",
         name="channel",
-        usage="captcha dev create channel Gateway Guild 1",
-        examples=["captcha dev create channel -n Gateway Guild 1 -c 2"],
+        usage="captcha dev create channel TheMasteredPanda Gateway Guild 1",
+        examples=["captcha dev create channel"],
         command_args=[
-            (("--name", "-n", str), "Name of the Gateway Guild"),
-            (("--captcha", "-c", int), "What type of captcha to use in the channel"),
+            (
+                ("--guild", "-g", str),
+                "Name of guild to create the Gateway in. If not supplied it will assume the first Gateway Guild.",
+            ),
+            (("--member", "-m", str), "The name of the user who the channel is for."),
         ],
         cls=Command,
     )
@@ -536,8 +573,41 @@ class Captcha(Cog):
         if args == "":
             return await embed_maker.command_error(ctx)
 
-        guild_name = args["name"] if args["name"] is not None else args["pre"]
-        captcha_id = args["captcha"] if args["captcha"] is not None else 1
+        if args["pre"] != "":
+            split_pre = args["pre"].split(" ")
+            args["member"] = split_pre[0]
+            args["guild"] = "".join(split_pre[1:])
+
+        guild_name = args["guild"]
+        member_name = args["member"]
+        gateway_guilds = self.bot.captcha.get_gateway_guilds()
+        member, ignore_string = await get_member_from_string(ctx, member_name)
+
+        if member is None:
+            return await embed_maker.message(
+                ctx,
+                description=f"Couldn't find member {member_name}.",
+                title="Couldn't find member.",
+                send=True,
+            )
+
+        for g_guild in gateway_guilds:
+            if g_guild.get_name().lower().startswith(guild_name.lower()):
+                captcha_channel = g_guild.create_captcha_channel(member)
+                await captcha_channel.start()
+                return await embed_maker.message(
+                    ctx,
+                    description=f"Created Captcha Channel named {captcha_channel.get_name()} for {member.display_name} on guild {g_guild.get_name()}.",
+                    title="Create Captcha Channel.",
+                    send=True,
+                )
+
+        return await embed_maker.message(
+            ctx,
+            description=f"Couldn't find guild {guild_name}.",
+            title="Couldn't find guild.",
+            send=True,
+        )
 
     @dev_create_cmd.command(
         help="Create a captch image, for testing",
@@ -546,7 +616,7 @@ class Captcha(Cog):
         examples=["captcha dev create image"],
         cls=Command,
     )
-    async def dec_create_captcha_image(self, ctx: Context):
+    async def dev_create_captcha_image(self, ctx: Context):
         captcha_image, captcha_text = self.bot.captcha.create_captcha_image()
         embed: Embed = await embed_maker.message(
             ctx, title="Captcha Image.", description=f"Text: {captcha_text}"
