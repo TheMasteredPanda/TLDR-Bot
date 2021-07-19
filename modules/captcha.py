@@ -73,6 +73,7 @@ class DataManager:
         self._captcha_guilds = self._db.captcha_guilds
         self._captcha_channels = self._db.captcha_channels
         self._captcha_blacklist = self._db.captcha_blacklist
+        self._captcha_counter = self._db.captcha_counter
 
     def add_captcha_channel(self, channel):
         self._captcha_channels.insert_one(
@@ -87,10 +88,29 @@ class DataManager:
             }
         )
 
+    def update_captcha_counter(self, member_id: int, counter: int):
+        entry = self._captcha_counter.find_one({"member_id": member_id})
+        now = time.time()
+        if entry:
+            self._captcha_counter.update_one(
+                {"member_id": member_id},
+                {"counter": {"$add": counter}, "updated_at": now},
+            )
+        else:
+            self._captcha_counter.insert_one(
+                {"member_id": member_id, "counter": counter, "updated_at": now}
+            )
+
+    def get_captcha_counter(self, member_id: int):
+        return self._captcha_counter.find_one({"member_id": member_id})
+
     def get_captcha_channels(self, guild_id: int, only_active: bool = True) -> list:
         return list(
             self._captcha_channels.find({"guild_id": guild_id, "active": only_active})
         )
+
+    def get_captcha_counters(self):
+        return list(self._captcha_counter.find({}))
 
     def update_captcha_channel(self, guild_id: int, channel_id: int, update: dict):
         self._captcha_channels.update(
@@ -217,6 +237,20 @@ class CaptchaChannel:
 
     @timers.loop(seconds=1)
     async def countdown(self):
+        async def alert():
+            minutes = self._ttl % 60
+            time_unit = (
+                ("minutes" if minutes > 1 else "minute")
+                if minutes > 0
+                else ("seconds" if self._ttl > 1 else "second")
+            )
+            embed: discord.Embed = discord.Embed(
+                colour=config.EMBED_COLOUR,
+                description=f"{minutes if minutes > 0 else self._ttl} {time_unit}",
+                title="Alert!",
+            )
+            await self._channel.send(embed=embed)
+
         self._ttl -= 1
         self._internal_clock += 1
         if self._internal_clock >= 60:
@@ -224,6 +258,14 @@ class CaptchaChannel:
                 self._guild.id, self._channel.id, {"ttl": self._ttl}
             )
             self._internal_clock = 0
+
+        if self._ttl >= 600:
+            minutes = self._ttl % 60
+            if minutes in [10, 5, 4, 3, 2, 1]:
+                await alert()
+            if self._ttl in [30, 15, 10, 5]:
+                await alert()
+
         if self._ttl <= 0:
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
@@ -507,6 +549,21 @@ class GatewayGuild:
     async def on_member_leave(self, member: Member):
         if self.has_captcha_channel(member.id):
             await self.delete_captcha_channel(member)
+            is_operator = self._bot.captcha.is_operator(member.id)
+            if is_operator is False:
+                self._data_manager.update_captcha_counter(member.id, 1)
+            settings = self._bot.settings_handler.get_settings(config.MAIN_SERVER)[
+                "modules"
+            ]["captcha"]
+            if (
+                self._data_manager.get_captcha_counter(member.id)
+                >= settings["gateway_rejoin"]["limit"]
+                and is_operator is False
+            ):
+                await member.ban()
+                self._bot.logger.info(
+                    f"Banned member {member.name} for joining and leaving {settings['gateway_rejoin']['limit']} times."
+                )
 
 
 class CaptchaModule:
@@ -598,6 +655,14 @@ class CaptchaModule:
                         f"Found gateway {g_guild.get_name()}/{g_guild.get_id()}. Adding to Gateway Guild List."
                     )
 
+        announcement_channel_id = self._settings_handler.get_settings(
+            config.MAIN_SERVER
+        )["modules"]["captcha"]["main_announcement_channel"]
+        if announcement_channel_id != 0:
+            self._announcement_channel = self._bot.get_guild(
+                config.MAIN_SERVER
+            ).get_channel(announcement_channel_id)
+
     def get_operators(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
             "captcha"
@@ -683,7 +748,7 @@ class CaptchaModule:
             await guild.unban(member_id)
 
     @timers.loop(minutes=5)
-    async def blacklist_unban_task(self):
+    async def unban_task(self):
         blacklist = self._data_manager.get_blacklist()
         now = time.time()
 
@@ -694,6 +759,15 @@ class CaptchaModule:
                     f"Removing {entry['member']['name']}/{entry['member']['id']} from blacklist."
                 )
                 self._data_manager.rm_member_from_blacklist(entry["member"]["id"])
+
+        captcha_counter_entries = self._data_manager.get_captcha_counters()
+        captcha_counter_cooldown_seconds = self._settings_handler.get_settings(
+            config.MAIN_SERVER
+        )["modules"]["captcha"]["gateway_rejoin"]["cooldown"]
+
+        for entry in captcha_counter_entries:
+            if (entry["updated_at"] + captcha_counter_cooldown_seconds) <= time.time():
+                await self.unban(entry["member_id"])
 
     def set_setting(self, path: str, value: object):
         settings = self._settings_handler.get_settings(config.MAIN_SERVER)

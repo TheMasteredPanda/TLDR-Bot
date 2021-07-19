@@ -200,13 +200,14 @@ class Connection:
                 'started': :class:`int`
                 'ends': :class:`int`
             }
-
-    captcha_invites: :class:`pymongo.collection.Collection`
-        The captcha invites collection:
+    captcha_counter: :class:`pymongo.collection.Collection`
+        The captcha counter collection:
             {
                 'member_id': :class:`int`,
-                'invite_code': :class:`str`
+                'counter': :class:`int`,
+                'updated_at': :class:`int`
             }
+
     webhooks: :class:`pymongo.collection.Collection`
         The webhooks collection
             {
@@ -234,7 +235,7 @@ class Connection:
         self.captcha_guilds = self.db["captcha_guilds"]
         self.captcha_channels = self.db["captcha_channels"]
         self.captcha_blacklist = self.db["captcha_blacklist"]
-        self.captcha_invites = self.db["captcha_invites"]
+        self.captcha_counter = self.db["captcha_counter"]
         self.webhooks = self.db["webhooks"]
 
     def clear_bills_tracker_collection(self):
