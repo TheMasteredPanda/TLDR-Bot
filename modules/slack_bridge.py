@@ -417,7 +417,7 @@ class SlackMember:
 
         self.id = data['id']
         # this value should only be used for the slack member info command
-        self.slack_name = data['name']
+        self.slack_name = data['real_name'] if 'real_name' in data else data['profile']['real_name']
         # bool used to check if member has a name set
         self.discord_name = False
         self.name = self.id
