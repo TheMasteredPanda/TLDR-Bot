@@ -137,7 +137,7 @@ class SlackMessage:
             content=text,
             channel=self.channel.discord_channel,
             username=self.member.name,
-            avatar_url=self.member.discord_member.avatar_url if self.member.discord_member else None,
+            avatar_url=str(self.member.avatar_url),
             files=download_files,
             embeds=[],
             edit=self.discord_message_id
@@ -423,6 +423,8 @@ class SlackMember:
         self.name = self.id
 
         self.discord_member = None
+        self.avatar_url = None
+
         self.initialize_data()
 
     def initialize_data(self):
@@ -453,16 +455,19 @@ class SlackMember:
             }},
             {"aliases.$": 1}
         )
-        discord_id = data['aliases'][0]['discord_id'] if len(data['aliases']) > 0 else None
-        discord_name = data['aliases'][0]['discord_name'] if len(data['aliases']) > 0 and 'discord_name' in data['aliases'][0] else None
+        discord_id = data['aliases'][0].get('discord_id', None) if len(data['aliases']) > 0 else None
+        discord_name = data['aliases'][0].get('discord_name', None) if len(data['aliases']) > 0 else None
 
         if discord_id:
             await self.bot.wait_until_ready()
             main_guild = self.bot.get_guild(config.MAIN_SERVER)
-            self.discord_member = discord.utils.get(main_guild.members, id=discord_id)
+            self.discord_member = discord.utils.get(main_guild.members, id=int(discord_id))
             if self.discord_member:
+                self.avatar_url = self.discord_member.avatar_url
                 self.name = self.discord_member.name
         elif discord_name:
+            user_info = await self.get_user_info()
+            self.avatar_url = user_info['user']['profile']['image_512']
             self.name = discord_name
             self.discord_name = True
 
