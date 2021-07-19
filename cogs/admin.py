@@ -115,7 +115,10 @@ class Admin(Cog):
 
         slack_channel = self.bot.slack_bridge.get_channel(slack_channel_id)
         if slack_channel is None:
-            return await embed_maker.error(ctx, f'Unable to find slack chnanel via id [{slack_channel_id}]')
+            return await embed_maker.error(ctx, f'Unable to find slack channel via id [{slack_channel_id}]')
+
+        if slack_channel.discord_channel:
+            return await embed_maker.error(ctx, f'Slack channel [{slack_channel_id}] is already assigned to discord channel [{slack_channel.discord_channel.mention}]')
 
         if discord_channel is None:
             return await embed_maker.command_error(ctx, '[discord channel]')
@@ -135,7 +138,7 @@ class Admin(Cog):
 
         taken = self.bot.slack_bridge.get_channel(discord_id=discord_channel.id)
         if taken:
-            return await embed_maker.error(ctx, f'Channel [{discord_channel.mention}] is already assigned to [{taken.id}]')
+            return await embed_maker.error(ctx, f'Discord channel [{discord_channel.mention}] is already assigned to Slack channel [{taken.id}]')
 
         slack_channel.set_discord_channel(discord_channel)
         return await embed_maker.message(

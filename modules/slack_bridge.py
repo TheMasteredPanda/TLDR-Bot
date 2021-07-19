@@ -52,9 +52,6 @@ class SlackMessage:
         slack.bot.loop.create_task(self.initialise_data())
 
     async def initialise_data(self):
-        if self.member is None:
-            self.member = await self.slack.add_user(self.user_id)
-
         data = db.slack_messages.find_one({'slack_message_id': self.ts})
         if not data:
             db.slack_messages.insert_one({
@@ -120,6 +117,9 @@ class SlackMessage:
 
         if edit and not self.discord_message_id:
             return
+
+        if self.member is None:
+            self.member = await self.slack.add_user(self.user_id)
 
         file_urls = [file['url'] for file in self.files]
         download_files = [
@@ -424,11 +424,16 @@ class SlackMember:
 
         self.discord_member = None
         self.initialize_data()
-        self.bot.loop.create_task(self.get_discord_member())
 
     def initialize_data(self):
         """Initialise slack user in the database if needed."""
-        data = db.slack_bridge.find_one({'aliases': {'$elemMatch': {'slack_id': self.id}}}, {"aliases.$": 1})
+        data = db.slack_bridge.find_one(
+            {'guild_id': config.MAIN_SERVER,
+             'aliases': {
+                 '$elemMatch': {'slack_id': self.id}
+             }},
+            {"aliases.$": 1}
+        )
         if not data:
             member_data = {
                 'slack_id': self.id,
@@ -441,7 +446,13 @@ class SlackMember:
 
     async def get_discord_member(self):
         """Gets slack user alias and sets the alias variables if alias has been set."""
-        data = db.slack_bridge.find_one({'aliases': {'$elemMatch': {'slack_id': self.id}}}, {"aliases.$": 1})
+        data = db.slack_bridge.find_one({
+            'guild_id': config.MAIN_SERVER,
+            'aliases': {
+                '$elemMatch': {'slack_id': self.id}
+            }},
+            {"aliases.$": 1}
+        )
         discord_id = data['aliases'][0]['discord_id'] if len(data['aliases']) > 0 else None
         discord_name = data['aliases'][0]['discord_name'] if len(data['aliases']) > 0 and 'discord_name' in data['aliases'][0] else None
 
@@ -508,7 +519,10 @@ class SlackChannel:
     def initialize_data(self):
         """Initialise data of the channel in the database if needed."""
         data = db.slack_bridge.find_one(
-            {'guild_id': config.MAIN_SERVER, 'bridges': {'$elemMatch': {'slack_channel_id': self.id}}},
+            {'guild_id': config.MAIN_SERVER,
+             'bridges': {
+                 '$elemMatch': {'slack_channel_id': self.id}}
+             },
             {"bridges.$": 1})
         if not data:
             channel_data = {
@@ -604,7 +618,8 @@ class Slack:
 
     async def add_user(self, user_id: str):
         user_data = await self.app.client.users_info(user=user_id)
-        slack_member = SlackMember(user_data, self.bot, self.app)
+        slack_member = SlackMember(user_data['user'], self.bot, self.app)
+        await slack_member.get_discord_member()
         self.members.append(slack_member)
         return slack_member
 
@@ -662,6 +677,7 @@ class Slack:
                 self.message_links[message['slack_message_id']] = message['discord_message_id']
 
         self.messages_cached.set()
+        self.bot.logger.debug(f'{len(self.message_links)} Slack and Discord messages cached')
 
     async def cache_channels(self):
         """Caches channels."""
@@ -675,6 +691,7 @@ class Slack:
             self.channels.append(channel)
 
         self.channels_cached.set()
+        self.bot.logger.debug(f'{len(channels)} Slack channels cached')
 
     async def cache_members(self):
         """Caches members."""
@@ -685,9 +702,11 @@ class Slack:
                 bot=self.bot,
                 app=self.app,
             )
+            self.bot.loop.create_task(member.get_discord_member())
             self.members.append(member)
 
         self.members_cached.set()
+        self.bot.logger.debug(f'{len(members)} Slack member cached')
 
     async def submission(self, ack):
         """Function that acknowledges events."""
@@ -838,6 +857,9 @@ class Slack:
         Function called on on_edit_message event, used for dealing with message edit events on the discord side
         and doing the same on the slack end.
         """
+        if 'content' not in payload.data:
+            return
+
         channel_id = payload.channel_id
 
         slack_channel = self.get_channel(discord_id=channel_id)
