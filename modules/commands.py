@@ -1,9 +1,10 @@
 import discord
+import config
 import copy
 
-from discord.ext import commands
-from modules import database
-from typing import Union
+from discord.ext.commands.core import hooked_wrapped_callback
+from modules import database, embed_maker
+from typing import Callable, Union
 
 db = database.get_connection()
 

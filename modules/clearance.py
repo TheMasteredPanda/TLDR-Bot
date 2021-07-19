@@ -162,7 +162,7 @@ class Clearance:
                 return await self.bot.critical_error(error)
 
             for row in self.clearance_spreadsheet[cog_name][1:]:
-                command_name = row[0]
+                command_name = row[0].strip()
 
                 command = self.bot.get_command(command_name)
                 if not command:

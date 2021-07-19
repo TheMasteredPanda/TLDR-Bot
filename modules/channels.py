@@ -174,8 +174,18 @@ class Channels:
             return
 
         for channel, overwrites in new_overwrites.items():
+            self.bot.logger.debug(f'Applying new overwrites to [{channel.name} | {channel.id}]')
+
+            if channel.overwrites == overwrites or overwrites == 'sync' and channel.permissions_synced:
+                self.bot.logger.debug('┕- Permissions for the channel haven\'t changed')
+                continue
+
             if overwrites == 'sync':
-                await channel.edit(sync_permissions=True)
+                self.bot.logger.debug(f'┕- Channel overwrites are the same as the category, syncing permissions')
+                try:
+                    await channel.edit(sync_permissions=True)
+                except Exception as e:
+                    self.bot.logger.error(e)
                 continue
 
             await channel.edit(overwrites=overwrites)

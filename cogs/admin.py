@@ -86,7 +86,8 @@ class Admin(Cog):
         help='Enables or disables giving non-patreon users the member role when they get the citizen role',
         usage='automember',
         examples=['automember'],
-        cls=commands.Command
+        cls=commands.Command,
+        module_dependency=['leveling_system']
     )
     async def auto_member(self, ctx: Context):
         new_automember = db.get_automember(ctx.guild.id)
@@ -207,13 +208,13 @@ class Admin(Cog):
         if 'emotes' not in args or not args['emotes']:
             return await embed_maker.error(ctx, "Missing emotes arg")
 
-        role = await get_guild_role(ctx.guild, args['role'][0])
-        emotes = args['emotes'][0]
+        role = await get_guild_role(ctx.guild, args['r'][0])
+        emotes = args['e'][0]
 
-        if emotes is None:
+        if not emotes:
             return await embed_maker.command_error(ctx, '[emotes]')
 
-        if role is None:
+        if not role:
             return await embed_maker.command_error(ctx, '[role]')
 
         emote_list = [*filter(lambda e: e is not None, [get_custom_emote(ctx, emote) for emote in emotes.split(' ')])]
@@ -255,7 +256,8 @@ class Admin(Cog):
         help='Archive a ticket channel. Every message will be recorded and put in a google doc',
         usage='archive_channel',
         examples=['archive_channel'],
-        cls=commands.Command
+        cls=commands.Command,
+        module_dependency=['google_drive']
     )
     async def archive_channel(self, ctx: Context):
         # ask the user if they actually want to start the process of archiving a channel
@@ -423,7 +425,8 @@ class Admin(Cog):
         usage='customcommands (sub command) (args)',
         examples=['customcommands', 'customcommands 1'],
         aliases=['cc'],
-        cls=commands.Group
+        cls=commands.Group,
+        module_dependency=['reaction_menus']
     )
     async def customcommands(self, ctx: Context, index: Union[int, str] = None):
         if not ctx.subcommand_passed:

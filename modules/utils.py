@@ -1,7 +1,6 @@
 import discord
 import re
 import asyncio
-import config
 import logging
 import os
 import sys
@@ -77,7 +76,7 @@ class ParseArgs(Converter, dict):
                 result[long[2:]] = None
 
             # create regex to match command args
-            regex = rf'(?:\s|^)--({"|".join(long for long in args.keys())})(?:\s|^)'
+            regex = rf'(?:\s|^)--({"|".join(long for long in args.keys())})(?:\s|$)'
             # split argument with regex
             split_argument = re.split(regex, argument)
             # anything before the first arg is put into result['pre']
@@ -209,6 +208,7 @@ async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[di
 
     member_name = ""
     previous_result = None
+
     for part in string.split():
         member_match = await get_member(ctx, f'{member_name} {part}'.strip(), multi=False, return_message=False)
         if member_match is None:
@@ -218,12 +218,18 @@ async def get_member_from_string(ctx: Context, string: str) -> Tuple[Optional[di
             # if member is None, but previous result is a list, return Normal get_member call and allow user to choose member
             elif type(previous_result) == list:
                 return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
-            elif previous_result == discord.Member:
+            elif type(previous_result) == discord.Member:
                 return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
         else:
             # update variables
             previous_result = member_match
-            member_name = f'{member_name} {part}'
+            member_name = f'{member_name} {part}'.strip()
+
+    if len(string.split()) == 1:
+        if type(previous_result) == list:
+            return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
+        elif type(previous_result) == discord.Member:
+            return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
 
     return previous_result, string.replace(f'{member_name}'.strip(), '').strip()
 
@@ -326,10 +332,13 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
     # if can't find direct name match, check for a match with regex
     if not members:
         # checks for regex match
+        special_chars_map = {i: '\\' + chr(i) for i in b'()[]{}?*+-|^$\\.&~#'}
+        safe_source = source.translate(special_chars_map)
+
         members = list(
             filter(
-                lambda m: re.findall(fr'({source.lower()})', str(m).lower()) or  # regex match name and discriminator
-                          re.findall(fr'({source.lower()})', m.display_name.lower()),  # regex match nickname
+                lambda m: re.findall(fr'({safe_source.lower()})', str(m).lower()) or  # regex match name and discriminator
+                          re.findall(fr'({safe_source.lower()})', m.display_name.lower()),  # regex match nickname
                 ctx.guild.members
             )
         )
