@@ -423,7 +423,7 @@ class SlackMember:
         self.name = self.id
 
         self.discord_member = None
-        self.avatar_url = None
+        self.avatar_url = ''
 
         self.initialize_data()
 
@@ -849,13 +849,12 @@ class Slack:
         await self.messages_cached.wait()
 
         message_id = payload.message_id
-        if message_id in self.discord_messages:
-            discord_message = self.discord_messages[message_id]
-            if not discord_message:
-                discord_message_link = self.message_links[message_id]
-                return await self.delete_slack_message(discord_message_link, channel_id, discord_message_id=message_id)
+        discord_message = self.discord_messages.get(message_id, None)
+        if not discord_message:
+            discord_message_link = self.message_links[message_id]
+            return await self.delete_slack_message(discord_message_link, channel_id, discord_message_id=message_id)
 
-            await discord_message.delete()
+        await discord_message.delete()
 
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent):
         """
