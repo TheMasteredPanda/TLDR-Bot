@@ -19,7 +19,6 @@ db = database.get_connection()
 image_extensions = ['jpg', 'png', 'gif', 'webp', 'tiff', 'bmp', 'jpeg']
 
 
-# TODO: handle replies
 class SlackMessage:
     def __init__(self, data: dict, slack: 'Slack'):
         self.data = data
@@ -27,7 +26,6 @@ class SlackMessage:
 
         event_data = data['event']
         # ignore bot messages
-        # TODO: maybe dont ignore
         if 'subtype' in event_data and event_data['subtype'] == 'bot_message':
             return
 
@@ -80,8 +78,8 @@ class SlackMessage:
 
     async def delete(self):
         if self.discord_message_id and self.channel.discord_channel:
-            discord_message = await self.channel.discord_channel.fetch_message(int(self.discord_message_id))
-            await discord_message.delete()
+            await self.slack.bot.http.delete_message(self.channel.discord_channel.id, self.discord_message_id)
+
             if self.ts in self.slack.slack_messages:
                 del self.slack.slack_messages[self.ts]
 
@@ -144,6 +142,7 @@ class SlackMessage:
             embeds=[],
             edit=self.discord_message_id
         )
+
         if not edit:
             self.discord_message_id = discord_message.id
 
@@ -407,12 +406,10 @@ class DiscordMessage:
                     file=file,
                     filename=file_urls[i]['filename'],
                     channels=slack_channel.id,
-                    title=f'Uploaded by: {self.author_name}',
+                    initial_comment=f'Uploaded by: {self.author_name}'
                 )
 
 
-# TODO: find out how to keep > from formatting to | thing on the slack side for commands
-# TODO: allow slack members to run commands on discord side
 class SlackMember:
     def __init__(self, data, bot, app: AsyncApp):
         self.bot = bot
@@ -696,49 +693,62 @@ class Slack:
         """Function that acknowledges events."""
         await ack()
 
+    async def handle_delete_message(self, event: dict):
+        ts = event['deleted_ts']
+        channel_id = event['channel']
+
+        slack_message = self.slack_messages.get(ts, None)
+        slack_message_link = self.message_links.get(ts, None)
+
+        if not slack_message:
+            slack_channel = self.get_channel(slack_id=channel_id)
+            if not slack_channel.discord_channel or not slack_message_link:
+                return
+            return await self.delete_discord_message(slack_channel.discord_channel.id, slack_message_link, ts=ts)
+
+        return await slack_message.delete()
+
+    async def handle_edit_message(self, event: dict):
+        ts = event['message']['ts']
+        channel_id = event['channel']
+
+        # check if message was edited by the bot
+        edit_message = next(filter(lambda dm: dm.slack_message_id == ts, self.discord_messages.values()), None)
+        if edit_message:
+            return
+
+        slack_message = self.slack_messages.get(ts, None)
+        if not slack_message:
+            slack_message_link = self.message_links[ts] if ts in self.message_links else None
+            slack_message = await self.get_slack_message(channel_id, ts, slack_message_link)
+
+        if slack_message:
+            slack_message.text = event['message']['text']
+            asyncio.create_task(
+                slack_message.send_to_discord(edit=True)
+            )
+
     async def slack_message(self, body):
         """Function called on message even from slack."""
         await self.messages_cached.wait()
 
+        event = body['event']
         is_delete = 'subtype' in body['event'] and body['event']['subtype'] == 'message_deleted'
         is_edit = 'subtype' in body['event'] and body['event']['subtype'] == 'message_changed'
         is_bot_message = 'subtype' in body['event'] and body['event']['subtype'] == 'bot_message'
 
-        event = body['event']
-        ts = event['message']['ts'] if is_edit else event['deleted_ts'] if is_delete else event['ts']
-        channel_id = event['channel']
-
-        # ignore message_changed events if the messages are already cached
         if is_edit:
-            # check if message was edit by the bot
-            edit_message = next(filter(lambda dm: dm.slack_message_id == ts, self.discord_messages.values()), None)
-            if edit_message:
-                return
+            return await self.handle_edit_message(event)
+        if is_delete:
+            return await self.handle_delete_message(event)
 
-        if is_bot_message and not (is_delete or is_edit):
+        if is_bot_message:
             return
 
-        slack_message = self.slack_messages.get(ts, None)
-        if not slack_message and (is_edit or is_delete):
-            slack_message_link = self.message_links[ts] if ts in self.message_links else None
-            slack_message = await self.get_slack_message(channel_id, ts, slack_message_link)
-
-        # delete discord message on slack message delete
-        if is_delete:
-            if not slack_message:
-                return
-            return await slack_message.delete()
-
-        if is_edit:
-            slack_message.text = body['event']['message']['text']
-            asyncio.create_task(
-                slack_message.send_to_discord(edit=True)
-            )
-        else:
-            message = SlackMessage(body, self)
-            asyncio.create_task(
-                message.send_to_discord()
-            )
+        message = SlackMessage(body, self)
+        asyncio.create_task(
+            message.send_to_discord()
+        )
 
     # Retrieve messages
     async def get_slack_message(self, channel_id: str, message_id: str, discord_message_id: int = None) -> Optional[SlackMessage]:
@@ -785,6 +795,24 @@ class Slack:
         else:
             db.slack_messages.delete_one({'discord_message_id': message_id})
 
+    # Delete function needed for deleting when creating/getting SlackMessage or DiscordMessage is not possible
+
+    async def delete_discord_message(self, channel_id: int, message_id: int, *, ts: str = None):
+        await self.bot.http.delete_message(channel_id, message_id)
+
+        if ts in self.slack_messages:
+            del self.slack_messages[ts]
+
+        db.slack_messages.delete_one({'slack_message_id': ts})
+
+    async def delete_slack_message(self,  message_id: str, discord_channel_id: int, *, discord_message_id: int = None):
+        slack_channel = self.get_channel(discord_id=discord_channel_id)
+        await self.app.client.chat_delete(channel=slack_channel.id, ts=message_id)
+        if discord_message_id in self.discord_messages:
+            del self.discord_messages[discord_message_id]
+
+        db.slack_messages.delete_one({'discord_message_id': discord_message_id})
+
     # Discord events
 
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
@@ -801,9 +829,7 @@ class Slack:
             discord_message = self.discord_messages[message_id]
             if not discord_message:
                 discord_message_link = self.message_links[message_id]
-                discord_message = await self.get_discord_message(channel_id, message_id, discord_message_link)
-                if discord_message is None:
-                    return
+                return await self.delete_slack_message(discord_message_link, channel_id, discord_message_id=message_id)
 
             await discord_message.delete()
 
