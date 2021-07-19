@@ -1,5 +1,5 @@
 from modules.captcha import CaptchaChannel
-from modules.custom_commands import Message
+from modules.custom_commands import Guild, Message
 import discord
 import time
 import hashlib
@@ -68,6 +68,8 @@ class Events(Cog):
 
     @Cog.listener()  # TODO: Create Gateway Guild Message listener, to listen for the answers to captchas. Also have to create a listener for members joning and leaving, to handle the kicking off of members on the gateway guild when they join the main TLDR Gateway.
     async def on_message(self, message: discord.Message):
+        if message.content == "":
+            return
         if message.author.bot:
             return
 
@@ -570,31 +572,27 @@ class Events(Cog):
                         )
 
     @Cog.listener()
+    async def on_guild_remove(self, guild: Guild):
+        if self.bot.captcha:
+            if self.bot.captcha.is_gateway_guild(guild):
+                if len(self.bot.captcha.get_gateway_guilds()) == 0:
+                    captcha_settings = self.bot.settings_handler.get_settings(
+                        config.MAIN_SERVER
+                    )["modules"]["captcha"]
+                    if captcha_settings["autospawn_guilds"] == True:
+                        self.bot.logger.info(
+                            "Last Gateway Guild manually removed. Creating new guild. To prevent this set the autospawn_guilds setting to False."
+                        )
+                        g_guild = await self.bot.captcha.create_guild()
+                        await g_guild.load()
+
+    @Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild_id = member.guild.id
         user_id = member.id
 
         if self.bot.captcha:
-            captcha_module = self.bot.captcha
-            if captcha_module.is_gatway_guild(guild_id):
-                print(f"{member.name} entered {member.guild.name}.")
-                print(user_id)
-                if captcha_module.is_operator(user_id):
-                    print(f"{member.name} is on the op list.")
-                    roles = member.guild.roles
-                    op_roles = list(
-                        filter(lambda r: r.name.lower() == "operator", roles)
-                    )
-                    if len(op_roles) != 0:
-                        print("Found op role.")
-                        await member.add_roles(op_roles[0])
-                        self.bot.logger.info(
-                            f"Added Operator role to {member.name} on {member.guild.name} guild."
-                        )
-                else:
-                    print(f"{member.name} is not an operator.")
-
-        # see if user is in left_leveling_users, if they are, move the data back to leveling_users
+                    # see if user is in left_leveling_users, if they are, move the data back to leveling_users
         left_user = db.left_leveling_users.find_one(
             {"guild_id": guild_id, "user_id": user_id}
         )

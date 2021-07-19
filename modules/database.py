@@ -194,13 +194,19 @@ class Connection:
         The captcha blacklist collection:
             {
                 'member': {
-                    'id': :class:`id`,
+                    'id': :class:`int`,
                     'name': :class:`str`
                 },
                 'started': :class:`int`
                 'ends': :class:`int`
             }
 
+    captcha_invites: :class:`pymongo.collection.Collection`
+        The captcha invites collection:
+            {
+                'member_id': :class:`int`,
+                'invite_code': :class:`str`
+            }
     webhooks: :class:`pymongo.collection.Collection`
         The webhooks collection
             {
@@ -228,6 +234,7 @@ class Connection:
         self.captcha_guilds = self.db["captcha_guilds"]
         self.captcha_channels = self.db["captcha_channels"]
         self.captcha_blacklist = self.db["captcha_blacklist"]
+        self.captcha_invites = self.db["captcha_invites"]
         self.webhooks = self.db["webhooks"]
 
     def clear_bills_tracker_collection(self):
