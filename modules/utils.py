@@ -388,13 +388,13 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
         if index.isdigit() and len(members) >= int(index) - 1 >= 0:
             return members[int(index) - 1]
         elif not index.isdigit():
-            return await embed_maker.error(ctx, 'Input is not a number')
+            return await embed_maker.error(ctx, 'Input is not a number') if return_message else None
         elif int(index) - 1 > len(members) or int(index) - 1 < 0:
-            return await embed_maker.error(ctx, 'Input number out of range')
+            return await embed_maker.error(ctx, 'Input number out of range') if return_message else None
 
     except asyncio.TimeoutError:
         await users_embed_message.delete()
-        return await embed_maker.error(ctx, 'Timeout')
+        return await embed_maker.error(ctx, 'Timeout') if return_message else None
 
 
 def get_logger(name: str = 'TLDR-Bot-log'):
