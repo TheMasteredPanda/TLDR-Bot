@@ -1,3 +1,4 @@
+import math
 import asyncio
 import datetime
 import io
@@ -80,7 +81,7 @@ class DataManager:
             {
                 "guild_id": channel.get_gateway_guild().get_guild().id,
                 "channel_id": channel.get_id(),
-                "name": channel.get_name(),
+                "member_id": channel.get_member().id,
                 "tries": channel.get_tries(),
                 "active": channel.is_active(),
                 "ttl": channel.get_ttl(),
@@ -114,7 +115,7 @@ class DataManager:
 
     def update_captcha_channel(self, guild_id: int, channel_id: int, update: dict):
         self._captcha_channels.update(
-            {"guild_id": guild_id, "channel_id": channel_id}, update
+            {"guild_id": guild_id, "channel_id": channel_id}, {"$set": update}
         )
 
     def add_guild(self, guild_id: int, landing_channel_id: int = 0):
@@ -197,7 +198,7 @@ class CaptchaChannel:
         self._member = member
         self._g_guild = g_guild
         self._data_manager: DataManager = bot.captcha.get_data_manager()
-        self._guild = g_guild.get_guild()
+        self._guild: Guild = g_guild.get_guild()
         self._answer_text = None
         self._started = False
         self._member = member
@@ -205,11 +206,12 @@ class CaptchaChannel:
         self._tries = 5
         self._invite = None
         self._completed = False
-        self._ttl = self._bot.settings_handler.get_settings(config.MAIN_SERVER)[
-            "modules"
-        ]["captcha"]["captcha_time_to_live"]
+        self._ttl = bot.captcha.get_config()["captcha_time_to_live"]
         self._internal_clock = 0
         self._active = False
+
+    def get_ttl(self):
+        return self._ttl
 
     def is_active(self):
         return self._active
@@ -221,7 +223,7 @@ class CaptchaChannel:
         return self._channel.name
 
     def get_gateway_guild(self):
-        return self._guild
+        return self._g_guild
 
     def has_completed_captcha(self):
         return self._completed
@@ -235,10 +237,14 @@ class CaptchaChannel:
     def get_tries(self):
         return self._tries
 
+    def get_member(self):
+        return self._member
+
     @timers.loop(seconds=1)
     async def countdown(self):
         async def alert():
-            minutes = self._ttl % 60
+            minutes = math.floor(self._ttl / 60)
+            time_value = minutes if minutes > 0 else self._ttl
             time_unit = (
                 ("minutes" if minutes > 1 else "minute")
                 if minutes > 0
@@ -246,8 +252,14 @@ class CaptchaChannel:
             )
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
-                description=f"{minutes if minutes > 0 else self._ttl} {time_unit}",
-                title="Alert!",
+                description=self._bot.get_config()["messages"][
+                    "countdown_alert_message"
+                ]
+                .replace("{time_unit}", time_unit)
+                .replace("{time_value}", time_value),
+                title=self._bot.get_config()["messages"][
+                    "countdown_alert_message_title"
+                ],
             )
             await self._channel.send(embed=embed)
 
@@ -260,27 +272,45 @@ class CaptchaChannel:
             self._internal_clock = 0
 
         if self._ttl >= 600:
-            minutes = self._ttl % 60
+            minutes = self._ttl / 60
             if minutes in [10, 5, 4, 3, 2, 1]:
                 await alert()
             if self._ttl in [30, 15, 10, 5]:
                 await alert()
 
         if self._ttl <= 0:
+            default_ttl = self._bot.get_config()["captcha_time_to_live"]
+            minutes = math.floor(default_ttl / 60)
+            time_value = minutes if minutes > 0 else default_ttl
+            time_unit = (
+                ("minutes" if minutes > 1 else "minute")
+                if minutes > 0
+                else ("seconds" if default_ttl > 1 else "second")
+            )
+
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
-                title="Timer Elapsed",
-                description="Your time has elapsed. You have had {self._bot.get_settings(config.MAIN_SERVER)['modules']['captcha']['captcha_time_to_live'] % 60} minutes to complete the captcha, you did not. Unfortunately this means you will be blacklisted for 24 hours after which you can rejoin a Gateway Guild and try again.",
+                title=self._bot.get_config()["messages"]["time_elapsed_message_title"],
+                description=self._bot.get_config()["messages"]["time_elapsed_message"]
+                .replace("{time_value}", time_value)
+                .replace("{time_unit}", time_unit),
             )
             await self._channel.send(embed=embed)
             self.countdown.stop()
-            self._data_manager.add_member_to_blacklist(member=self._member)
             self._data_manager.update_captcha_channel(
                 self._guild.id,
                 self._channel.id,
-                {"active": False, "stats": {"completed": False, "failed": True}},
+                {
+                    "active": False,
+                    "stats": {"completed": False, "failed": True},
+                    "ttl": 0,
+                },
             )
-            self._member.ban()
+            if self._bot.captcha.is_operator(self._member.id) is False:
+                self._member.ban()
+                self._data_manager.add_member_to_blacklist(member=self._member)
+
+            await self.destory()
 
     async def start(self, **kwargs):
         if kwargs.get("channel_id") is None:
@@ -301,7 +331,7 @@ class CaptchaChannel:
                 },
             )
         else:
-            self._channel = self._g_guild.get_guild().get_channel(kwargs["channel_id"])
+            self._channel = self._guild.get_channel(kwargs["channel_id"])
 
         if kwargs.get("tries"):
             self._tries = kwargs["tries"]
@@ -329,7 +359,28 @@ class CaptchaChannel:
         self._started = True
         self.countdown.start()
         self._active = True
-        self._data_manager.add_captcha_channel(self)
+
+        if len(kwargs.keys()) == 0:
+            self._data_manager.add_captcha_channel(self)
+        else:
+            minutes = math.floor(self._ttl / 60)
+            time_value = minutes if minutes > 0 else self._ttl
+            time_unit = (
+                ("minutes" if minutes > 1 else "minute")
+                if minutes > 0
+                else ("seconds" if self._ttl > 1 else "second")
+            )
+
+            embed: discord.Embed = discord.Embed(
+                colour=config.EMBED_COLOUR,
+                description=self._bot.get_config()["messages"][
+                    "bot_startup_captcha_message"
+                ]
+                .replace("{time_unit}", time_unit)
+                .replace("{time_value}", time_value),
+                title="Bot started.",
+            )
+            await self._channel.send(embed=embed)
         await self.send_captcha_message()
 
     def construct_embed(self):
@@ -338,8 +389,12 @@ class CaptchaChannel:
         self._answer_text = text
         embed: discord.Embed = discord.Embed(
             colour=config.EMBED_COLOUR,
-            title=f"Try {self._tries}. {self._tries - 1} remaining.",
-            description="Try and type the text presented in the image correctly.",
+            title=self._bot.get_config()["messages"]["captcha_message_embed_title"]
+            .replace("{current_try}", self.get_tries())
+            .replace("{tries_left}", self.get_tries() - 1),
+            description=self._bot.get_config()["messages"][
+                "captcha_message_embed_description"
+            ],
         )
         embed.set_image(url="attachment://captcha.png")
         return embed, image_file
@@ -353,10 +408,14 @@ class CaptchaChannel:
         else:
             embed: discord.Embed = discord.Embed(
                 color=config.EMBED_COLOUR,
-                title="Too many tries.",
-                description="Unfortunately, you have not completed captchas despite three tries. Your account id has been temporarily blacklisted for a day. Please come back after5 minutes and try again :) .",
+                title=self._bot.get_config()["messages"][
+                    "failed_captcha_message_title"
+                ],
+                description=self._bot.get_config()["messages"][
+                    "failed_captcha_message"
+                ],
             )
-            await self._channel.send(embed)
+            await self._channel.send(embed=embed)
 
     async def on_message(self, message: discord.Message):
         if self._started is False:
@@ -368,32 +427,44 @@ class CaptchaChannel:
         if message.content.lower() != self._answer_text:
             await self._channel.send("Incorrect.")
             self._tries = self._tries - 1 if self._tries > 0 else 0
+            self._data_manager.update_captcha_channel(
+                self._guild.id, self._channel.id, {"tries": self._tries}
+            )
             await self.send_captcha_message()
             if self._tries == 0:
-                self._data_manager.add_member_to_blacklist(self._member.id)
                 await asyncio.sleep(10)
                 self._data_manager.update_captcha_channel(
                     self._guild.id,
                     self._channel.id,
                     {"active": False, "stats": {"completed": False, "failed": True}},
                 )
-                await self._member.ban()
+                if self._bot.captcha.is_operator(self._member.id) is False:
+                    self._data_manager.add_member_to_blacklist(self._member.id)
+                    await self._member.ban()
+                await self._channel.delete()
         else:
             self._invite = await self.create_tldr_invite()
             url = self._invite.url
             embed: discord.Embed = discord.Embed(
                 color=config.EMBED_COLOUR,
-                title="Successfully Completed Captcha.",
-                description=f"Successfully completed Captcha, heres the single use, valid for 2 minutes, invitation link to TLDR! Once you join, you will be kicked from this Gateway guild. {url}",
+                title=self._bot.get_config()["messages"][
+                    "completed_captcha_message_title"
+                ],
+                description=self._bot.get_config()["messages"][
+                    "completed_captcha_message"
+                ].replace("{invite_url}", url),
             )
-            self._completed
+            self._completed = True
             await self._channel.send(embed=embed)
+            self._data_manager.update_captcha_channel(
+                self._guild.id,
+                self._channel.id,
+                {"active": False, "stats": {"completed": True}, "ttl": 0},
+            )
 
     async def create_tldr_invite(self):
         main_guild: Guild = discord.utils.get(self._bot.guilds, id=config.MAIN_SERVER)
-        settings = self._bot.settings_handler.get_settings(config.MAIN_SERVER)[
-            "modules"
-        ]["captcha"]
+        settings = self._bot.get_config()
         main_channel: TextChannel = discord.utils.get(
             main_guild.text_channels, id=settings["main_guild_landing_channel"]
         )
@@ -427,8 +498,17 @@ class GatewayGuild:
                 self._kwargs["landing_channel_id"]
             )
         else:
-            landing_channel = await self._guild.create_text_channel("welcome")
+            landing_channel_name = self._bot.get_config()["messages"][
+                "landing_channel_name"
+            ]
+            landing_channel = await self._guild.create_text_channel(
+                landing_channel_name
+            )
+            landing_channel_message = self._bot.get_config()["messages"][
+                "landing_channel"
+            ].replace("{guild_name}", self._guild.name)
             # Add welcome message here; make welcome message configurable.
+            await landing_channel.send(landing_channel_message)
             self._landing_channel: TextChannel = landing_channel
 
         roles = self._guild.roles
@@ -472,9 +552,15 @@ class GatewayGuild:
             f"Banned {banned} users and unbanned {unbanned} users on guild {self._guild.name}."
         )
 
-        for channel in self._guild.text_channels:
-            if channel.name.lower() != "welcome":
-                await channel.delete()
+        main_guild = self._bot.get_guild(config.MAIN_SERVER)
+
+        for member in self._guild.members:
+            if member.bot:
+                continue
+            if self._bot.captcha.is_operator(member.id):
+                continue
+            if main_guild.get_member(member.id):
+                await member.kick()
 
     def get_user_count(self):
         return len(self._guild.members)
@@ -590,9 +676,26 @@ class CaptchaModule:
             settings["modules"]["captcha"] = {
                 "operators": [],
                 "guild_name": "Gateway Guild {number}",
-                "landing_channel": {"name": "welcome", "message": ""},
+                "landing_channel_name": "welcome",
                 "main_guild_landing_channel": None,
+                "main_announcement_channel": 0,
                 "captcha_time_to_live": 900,
+                "blacklist_length": 86400,
+                "messages": {
+                    "landing_channel": "Welcome to {guild_name}! Please follow the following steps by the Family Foundation for the Foundation of Families.",
+                    "captcha_message_embed_title": "Try {curent_try}. {tries_left} Attempts Left.",
+                    "captcha_message_embed_description": "Try and type the text presented in the image correctly.",
+                    "completed_captcha_message": "Well done! You have completed the captcha. Please click the following invite like. You will be kicked from this Gateway Guild once you have joined TLDR!\n\nInvite link: {invite_url}\n\nPS: If you share this invite link, you will be kicked off this guild having not joined the guild. This invite link only works once, and is only valid for the next two minutes.",
+                    "completed_captcha_message_title": "Successfully Completed Captcha.",
+                    "bot_startup_captcha_message": "Sorry for the inconvenence, the bot has now started up again. You have {time_value} {time_unit} remaining, and {try_count} attempts left.",
+                    "incorrect_captcha_message": "Incorrect. Try again :).",
+                    "failed_captcha_message": "You have failed all Captcha attempts this time. You will be blacklisted for 24 hours. After this blacklist time has elapsed, you may come back and try again :).",
+                    "failed_captcha_message_title": "Too many tries.",
+                    "countdown_alert_message": "You have {time_value} {time_unit} remaining.",
+                    "countdown_alert_message_title": "Alert!",
+                    "time_elapsed_message": "Your time has elapsed. You have had {time_value} {time_unit} to complete the captcha, you did not. Unfortunately this means you will be blacklisted for 24 hours after which you can rejoin a Gateway Guild and try again.",
+                    "time_elapsed_message_title": "Timer Elapsed",
+                },
             }
             self._settings_handler.save(settings)
         self._logger.info("Captcha Gateway settings found.")
@@ -641,27 +744,58 @@ class CaptchaModule:
                         pass
 
                     for entry in mongo_captcha_channels:
+                        if guild.get_member(entry["member_id"]) is None:
+                            print(
+                                f"Member under id {entry['member_id']} no longer on Gateway Guild."
+                            )
+                            self._data_manager.update_captcha_channel(
+                                guild.id,
+                                entry["channel_id"],
+                                {
+                                    "active": False,
+                                    "stats": {"completed": True},
+                                    "ttl": 0,
+                                },
+                            )
+                            t_channel = guild.get_channel(entry["channel_id"])
+                            if t_channel:
+                                await t_channel.delete()
+                            continue
+
                         channel = CaptchaChannel(self._bot, g_guild, None)
                         await channel.start(
                             member_id=entry["member_id"],
                             tries=entry["tries"],
-                            completed=entry["completed"],
+                            completed=entry["stats"]["completed"],
                             channel_id=entry["channel_id"],
+                            ttl=entry["ttl"],
                         )
-                        m_guild.add_captcha_channel(entry["member_id"], channel)
+                        g_guild.add_captcha_channel(entry["member_id"], channel)
 
                     self._gateway_guilds.append(g_guild)
                     self._logger.info(
                         f"Found gateway {g_guild.get_name()}/{g_guild.get_id()}. Adding to Gateway Guild List."
                     )
+        if self.set_announcement_channel():
+            self._bot.logger.info("Announcement channel set.")
+        else:
+            self._bot.logger.info("Announcement channel not set.")
 
-        announcement_channel_id = self._settings_handler.get_settings(
-            config.MAIN_SERVER
-        )["modules"]["captcha"]["main_announcement_channel"]
-        if announcement_channel_id != 0:
+    def get_config(self):
+        return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
+            "captcha"
+        ]
+
+    def set_announcement_channel(self) -> bool:
+        captcha_settings = self._settings_handler.get_settings(config.MAIN_SERVER)[
+            "modules"
+        ]["captcha"]
+        if captcha_settings["main_announcement_channel"] != 0:
             self._announcement_channel = self._bot.get_guild(
                 config.MAIN_SERVER
-            ).get_channel(announcement_channel_id)
+            ).get_channel(captcha_settings["main_announcement_channel"])
+            return True
+        return False
 
     def get_operators(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
@@ -810,6 +944,13 @@ class CaptchaModule:
             else:
                 walk(split_path, split_path[0], settings)
 
+    async def on_member_leave(self, member: discord.Member):
+        guild_id = member.guild.id
+
+        for g_guild in self._gateway_guilds:
+            if g_guild.id == guild_id:
+                await g_guild.on_member_leave(member)
+
     async def on_member_join(self, member: discord.Member):
         user_id = member.id
         guild_id = member.guild.id
@@ -820,7 +961,10 @@ class CaptchaModule:
                 main_guild_user is not None
                 and self._bot.captcha.is_operator(user_id) is False
             ):
-                member.guild.kick(member)
+                print(
+                    f"Member {main_guild_user.display_name} on Gateway Guild and Main Guild. Kicking member."
+                )
+                # await member.guild.kick(member)
 
             await self._bot.captcha.get_gateway_guild(guild_id).on_member_join(member)
 
@@ -829,5 +973,5 @@ class CaptchaModule:
                 if g_guild.has_captcha_channel(user_id):
                     channel = g_guild.get_captcha_channel(user_id)
                     if channel.has_completed_captcha():
-                        if channel.get_invite().max_uses == channel.get_invite().uses:
-                            await g_guild.get_guild().kick(member)
+                        await g_guild.get_guild().kick(member)
+                        await channel.destory()

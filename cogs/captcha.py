@@ -184,7 +184,7 @@ class Captcha(Cog):
         if args["pre"] != "":
             split_pre = args["pre"].split(" ")
             args["path"] = split_pre[0]
-            args["value"] = split_pre[1]
+            args["value"] = " ".join(split_pre[1:])
         else:
             if args["path"] is None:
                 return await embed_maker.command_error(ctx, "path")
@@ -576,7 +576,7 @@ class Captcha(Cog):
         if args["pre"] != "":
             split_pre = args["pre"].split(" ")
             args["member"] = split_pre[0]
-            args["guild"] = "".join(split_pre[1:])
+            args["guild"] = " ".join(split_pre[1:])
 
         guild_name = args["guild"]
         member_name = args["member"]

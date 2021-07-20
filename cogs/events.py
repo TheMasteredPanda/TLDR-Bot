@@ -66,6 +66,11 @@ class Events(Cog):
 
         self.bot.first_ready = True
 
+    @Cog.listener()
+    async def on_member_leave(self, member: discord.Member):
+        if self.bot.captcha:
+            await self.bot.captcha.on_member_join(member)
+
     @Cog.listener()  # TODO: Create Gateway Guild Message listener, to listen for the answers to captchas. Also have to create a listener for members joning and leaving, to handle the kicking off of members on the gateway guild when they join the main TLDR Gateway.
     async def on_message(self, message: discord.Message):
         if message.content == "":
@@ -592,7 +597,10 @@ class Events(Cog):
         user_id = member.id
 
         if self.bot.captcha:
-                    # see if user is in left_leveling_users, if they are, move the data back to leveling_users
+            await self.bot.captcha.on_member_join(member)
+
+        # see if user is in left_leveling_users, if they are, move the data back to leveling_users
+
         left_user = db.left_leveling_users.find_one(
             {"guild_id": guild_id, "user_id": user_id}
         )
