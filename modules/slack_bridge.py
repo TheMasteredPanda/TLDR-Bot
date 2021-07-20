@@ -467,7 +467,7 @@ class SlackMember:
                 self.name = self.discord_member.name
         elif discord_name:
             user_info = await self.get_user_info()
-            self.avatar_url = user_info['user']['profile']['image_512']
+            self.avatar_url = user_info['user']['profile']['image_192']
             self.name = discord_name
             self.discord_name = True
 
