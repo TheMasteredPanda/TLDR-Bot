@@ -66,7 +66,7 @@ class TLDR(Bot):
         self.moderation = modules.moderation.ModerationSystem(self) if self.enabled_modules['moderation'] else None
         self.ukparl_module = modules.ukparliament.UKParliamentModule(self) if self.enabled_modules['ukparl_module'] else None
         self.clearance = modules.commands.Clearance(self) if self.enabled_modules['clearance'] else None
-        self.slack_bridge = modules.slack_bridge.Slack(self)
+        self.slack_bridge = modules.slack_bridge.Slack(self) if self.enabled_modules['slack_bridge'] else None
 
         self.first_ready = False
 
