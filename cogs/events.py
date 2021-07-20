@@ -55,7 +55,7 @@ class Events(Cog):
         self.bot.logger.info(f"{self.bot.user} is ready")
 
         if self.bot.webhooks:
-            self.bot.webhooks.initialize()
+            await self.bot.webhooks.initialize()
         if self.bot.watchlist:
             self.bot.watchlist.initialize()
 
@@ -98,12 +98,9 @@ class Events(Cog):
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
         traceback_text = "".join(lines)
 
-        if ctx.command is None:
-            return
-
         # send error to channel where eval was called
-
-        if ctx.command.name == "eval":
+        if ctx.command and ctx.command.name == "eval":
+            print(exception, traceback_text)
             return await ctx.send(f"```py\n{exception}\n{traceback_text}```")
 
         print(traceback_text)
@@ -120,7 +117,7 @@ class Events(Cog):
 
         embed = await embed_maker.message(
             ctx,
-            author={"name": f"{ctx.command.name} - Command Error"},
+            author={"name": f"{ctx.command.name if ctx.command else 'Unknown'} - Command Error"},
             description=f"```{exception}\n{traceback_text}```",
         )
 
