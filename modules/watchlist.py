@@ -102,6 +102,9 @@ class Watchlist:
         if not self.bot.first_ready:
             return
 
+        if not message.guild:
+            return
+
         guild_watchlist_data = self.watchlist_data[message.guild.id]
         user_watchlist_data = guild_watchlist_data[message.author.id] if message.author.id in guild_watchlist_data else None
         watchlist_category = await self.get_watchlist_category(message.guild)
