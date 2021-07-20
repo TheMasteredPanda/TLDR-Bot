@@ -68,6 +68,11 @@ def random_chars(length: int):
 
 
 class DataManager:
+    """
+    The primary MongoDB interface for this feature. This contains within it all functions interacting with the
+    various collections associated with this feature.
+    """
+
     def __init__(self, logger):
         self._logger = logger
         self._db = database.get_connection()
@@ -77,6 +82,14 @@ class DataManager:
         self._captcha_counter = self._db.captcha_counter
 
     def add_captcha_channel(self, channel):
+        """
+        Adds a captcha channel to the relevant collection.
+
+        Parameters
+        ----------
+        channel: :class:`CaptchaChannel`
+            CaptchaChannel instance to store.
+        """
         self._captcha_channels.insert_one(
             {
                 "guild_id": channel.get_gateway_guild().get_guild().id,
@@ -90,12 +103,25 @@ class DataManager:
         )
 
     def update_captcha_counter(self, member_id: int, counter: int):
+        """
+        Updates a captcha counter. A captcha counter being the integer that counts the amount of times
+        a user has left. If this reaches a certain limit they become blacklisted, preventing them from helping
+        someone circumvent the captcha system too much.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member associated with the coutner.
+        counter: :class:`int`
+            Depending on the pre-existentence of a counter, this value is used to either set or update
+            the counter.
+        """
         entry = self._captcha_counter.find_one({"member_id": member_id})
         now = time.time()
         if entry:
             self._captcha_counter.update_one(
                 {"member_id": member_id},
-                {"counter": {"$add": counter}, "updated_at": now},
+                {"$set": {"counter": entry["counter"] + counter, "updated_at": now}},
             )
         else:
             self._captcha_counter.insert_one(
@@ -103,22 +129,86 @@ class DataManager:
             )
 
     def get_captcha_counter(self, member_id: int):
+        """
+        Fetches a captcha counter entry, provided it is there already.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member associated to a counter.
+        """
         return self._captcha_counter.find_one({"member_id": member_id})
 
+    def reset_captcha_counter(self, member_id: int):
+        """
+        Resets the captcha counter to 0.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member associated to a counter.
+        """
+        return self._captcha_counter.update_one(
+            {"member_id": member_id}, {"$set": {"counter": 0}}
+        )
+
     def get_captcha_channels(self, guild_id: int, only_active: bool = True) -> list:
+        """
+        Returns all the captcha channels in a guild.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The id of the Gateway Guild.
+        only_active: :class:`int`
+            If true will return only active captcha channels. If false will return inactive channels.
+
+        Returns
+        -------
+        :class:`list`
+            A list of documents containing key information about captcha channels.
+        """
         return list(
             self._captcha_channels.find({"guild_id": guild_id, "active": only_active})
         )
 
-    def get_captcha_counters(self):
+    def get_captcha_counters(self) -> list:
+        """
+        Returns all the captcha counters.
+
+        Returns
+        -------
+        :class:`list`
+            A list of captcha counter documents.
+        """
         return list(self._captcha_counter.find({}))
 
     def update_captcha_channel(self, guild_id: int, channel_id: int, update: dict):
+        """
+        Updates a captcha channel document with new information from the 'update' parameter.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The id of the guild the captcha channel is in.
+        channel_id: :class:`int`
+
+        """
         self._captcha_channels.update(
             {"guild_id": guild_id, "channel_id": channel_id}, {"$set": update}
         )
 
     def add_guild(self, guild_id: int, landing_channel_id: int = 0):
+        """
+        Add a Gateway Guild to the relevant collection.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The id of the guild.
+        landing_channel_id: :class:`int`
+            The id of the landing channel, the channel the invites are created from.
+        """
         self._captcha_guilds.insert_one(
             {
                 "guild_id": guild_id,
@@ -128,9 +218,31 @@ class DataManager:
         )
 
     def remove_guild(self, guild_id: int):
+        """
+        Remove a guild from the Gateway Guild collection.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The id of the guild.
+        """
         self._captcha_guilds.delete_one({"guild_id": guild_id})
 
     def get_guilds(self, include_stats: bool = False) -> Cursor:
+        """
+        Returns the Cursor the search for all Gateway Guilds.
+
+        Parameters
+        ----------
+        include_stats: :class:`bool`
+            If true, will include the stats for every document.
+            If false will exclude the stats from the document.
+
+        Returns
+        -------
+        :class:`Cursor`
+            Returns the cursor of the search for Gateway Guilds.
+        """
         return (
             self._captcha_guilds.find({}, {"stats": 0})
             if include_stats is False
@@ -138,6 +250,21 @@ class DataManager:
         )
 
     def is_blacklisted(self, **kwargs) -> Tuple[Cursor, list, None]:
+        """
+        Checks if a user is blacklisted.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member to search for.
+        member_name: :class:`int`
+            The name of the member to search for.
+
+        Returns
+        -------
+        :class:`bool`
+            Returns true if blacklisted, else false.
+        """
         member_id: Union[int, None] = (
             kwargs["member_id"] if "member_id" in kwargs else None
         )
@@ -162,30 +289,74 @@ class DataManager:
         return None
 
     def add_member_to_blacklist(self, member: Member, duration: int = 86400):
+        """
+        Add a member to the blacklist.
+
+        Parameters
+        ----------
+        member: :class:`discord.Member`
+            The member to blacklist.
+        duration: :class:`int`
+            The duration the blacklist should be.
+        """
         now = time.time()
         self._captcha_blacklist.insert_one(
             {
                 "member": {"id": member.id, "name": member.display_name},
-                "started": datetime.datetime.now(),
+                "started": now,
                 "ends": now + duration,
             }
         )
 
     def get_blacklisted_member(self, **kwargs) -> Union[Cursor, None]:
-        args = {}
+        """
+        Get a blacklisted member.
 
-        if "name" in kwargs:
-            args["name"] = {"$regex": f"^({kwargs['name']}.*)"}
-        if "member_id" in kwargs:
-            args["member_id"] = kwargs["member_id"]
+        Parameters
+        ----------
+        name: :class:`str`
+            The name of the member to fetch.
+        member_id: :class:`int`
+            The id of the member to fetch.
 
-        return self._captcha_blacklist.find_one({"member": args})
+        Returns
+        -------
+        :class:`Document`
+            The document containing the information of the blacklisted member.
+        """
+        for entry in self._captcha_blacklist.find({}):
+            if kwargs.get("name"):
+                if (
+                    entry["member"]["name"]
+                    .lower()
+                    .startswith(kwargs.get("name").lower())
+                ):
+                    return entry
+            if kwargs.get("member_id"):
+                if entry["member"]["id"] == kwargs.get("member_id"):
+                    return entry
 
     def rm_member_from_blacklist(self, member_id: int):
-        self._captcha_blacklist.delete_one({"member": {"id": member_id}})
+        """
+        Remove a member from the blacklist.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of a member to remove from the blacklist
+        """
+        self._captcha_blacklist.delete_one({"member.id": member_id})
 
     def get_blacklist(self):
-        return self._captcha_blacklist.find({})
+        """
+        Returns all blacklisted member documents.
+
+        Returns
+        -------
+        :class:`list`
+            A list of documents.
+        """
+        return list(self._captcha_blacklist.find({}))
 
 
 class CaptchaChannel:
@@ -195,6 +366,10 @@ class CaptchaChannel:
         g_guild,
         member: Member,
     ):
+        """
+        A Captcha Channel is a Class that handles a Text Channel that'll contain the captcha image for a user to decipher
+        and answer. This entire class managed all interactions the user will have with that captcha image.
+        """
         self._member = member
         self._g_guild = g_guild
         self._data_manager: DataManager = bot.captcha.get_data_manager()
@@ -211,37 +386,72 @@ class CaptchaChannel:
         self._active = False
 
     def get_ttl(self):
+        """
+        Returns the time to live. The amount of time this captcha channel has to live until it gets deleted.
+        """
         return self._ttl
 
     def is_active(self):
+        """
+        Returns whether or not this channel is active. If it is active then the channel is waiting for a user to enter a captcha.
+        If inactive the captcha is done and this channel should have it's channel deleted.
+        """
         return self._active
 
     def has_completed(self):
+        """
+        Returns whether the captcha was completed successfully or not.
+        """
         return self._completed
 
     def get_name(self):
+        """
+        Returns the name of the channel.
+        """
         return self._channel.name
 
     def get_gateway_guild(self):
+        """
+        Returns the gateway guild this channel belongs to.
+        """
         return self._g_guild
 
     def has_completed_captcha(self):
+        """
+        Returns whether the captcha was completed successfully or not.
+        """
         return self._completed
 
     def get_invite(self) -> Union[Invite, None]:
+        """
+        Get the invite created when the Captcha was completed successfully.
+        """
         return self._invite
 
     def get_id(self):
+        """
+        Returns the id of the channel.
+        """
         return self._channel.id
 
     def get_tries(self):
+        """
+        Returns the amount of tries the member associated with this channel has left.
+        """
         return self._tries
 
     def get_member(self):
+        """
+        Returns the member associated with this channel.
+        """
         return self._member
 
     @timers.loop(seconds=1)
     async def countdown(self):
+        """
+        The countdown manages the countdown timer. When this time reaches 0, and the user has no completed the captcha, the channel will be deleted and the user will be blacklisted for a time.
+        """
+
         async def alert():
             minutes = math.floor(self._ttl / 60)
             time_value = minutes if minutes > 0 else self._ttl
@@ -252,12 +462,12 @@ class CaptchaChannel:
             )
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
-                description=self._bot.get_config()["messages"][
+                description=self._bot.captcha.get_config()["messages"][
                     "countdown_alert_message"
                 ]
                 .replace("{time_unit}", time_unit)
                 .replace("{time_value}", time_value),
-                title=self._bot.get_config()["messages"][
+                title=self._bot.captcha.get_config()["messages"][
                     "countdown_alert_message_title"
                 ],
             )
@@ -279,7 +489,7 @@ class CaptchaChannel:
                 await alert()
 
         if self._ttl <= 0:
-            default_ttl = self._bot.get_config()["captcha_time_to_live"]
+            default_ttl = self._bot.captcha.get_config()["captcha_time_to_live"]
             minutes = math.floor(default_ttl / 60)
             time_value = minutes if minutes > 0 else default_ttl
             time_unit = (
@@ -290,8 +500,12 @@ class CaptchaChannel:
 
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
-                title=self._bot.get_config()["messages"]["time_elapsed_message_title"],
-                description=self._bot.get_config()["messages"]["time_elapsed_message"]
+                title=self._bot.captcha.get_config()["messages"][
+                    "time_elapsed_message_title"
+                ],
+                description=self._bot.captcha.get_config()["messages"][
+                    "time_elapsed_message"
+                ]
                 .replace("{time_value}", time_value)
                 .replace("{time_unit}", time_unit),
             )
@@ -313,6 +527,9 @@ class CaptchaChannel:
             await self.destory()
 
     async def start(self, **kwargs):
+        """
+        Starts the Captcha process.
+        """
         if kwargs.get("channel_id") is None:
             channel_name = random_chars(12)
             self._channel: TextChannel = await self._g_guild.get_guild().create_text_channel(
@@ -373,7 +590,7 @@ class CaptchaChannel:
 
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
-                description=self._bot.get_config()["messages"][
+                description=self._bot.captcha.get_config()["messages"][
                     "bot_startup_captcha_message"
                 ]
                 .replace("{time_unit}", time_unit)
@@ -384,15 +601,25 @@ class CaptchaChannel:
         await self.send_captcha_message()
 
     def construct_embed(self):
+        """
+        Constructs the embed that'll contain the captcha image.
+
+        Returns
+        -------
+        :class:`discord.Embed`
+            A Discord Embed that contains a captcha image.
+        """
         image, text = self._bot.captcha.create_captcha_image()
         image_file = discord.File(fp=image, filename="captcha.png")
         self._answer_text = text
         embed: discord.Embed = discord.Embed(
             colour=config.EMBED_COLOUR,
-            title=self._bot.get_config()["messages"]["captcha_message_embed_title"]
-            .replace("{current_try}", self.get_tries())
-            .replace("{tries_left}", self.get_tries() - 1),
-            description=self._bot.get_config()["messages"][
+            title=self._bot.captcha.get_config()["messages"][
+                "captcha_message_embed_title"
+            ]
+            .replace("{current_try}", str(self.get_tries()))
+            .replace("{tries_left}", str(self.get_tries() - 1)),
+            description=self._bot.captcha.get_config()["messages"][
                 "captcha_message_embed_description"
             ],
         )
@@ -400,6 +627,9 @@ class CaptchaChannel:
         return embed, image_file
 
     async def send_captcha_message(self):
+        """
+        Sends the captcha message into the channel.
+        """
         if self._tries != 0:
             tuple_embed = self.construct_embed()
             embed = tuple_embed[0]
@@ -408,16 +638,19 @@ class CaptchaChannel:
         else:
             embed: discord.Embed = discord.Embed(
                 color=config.EMBED_COLOUR,
-                title=self._bot.get_config()["messages"][
+                title=self._bot.captcha.get_config()["messages"][
                     "failed_captcha_message_title"
                 ],
-                description=self._bot.get_config()["messages"][
+                description=self._bot.captcha.get_config()["messages"][
                     "failed_captcha_message"
                 ],
             )
             await self._channel.send(embed=embed)
 
     async def on_message(self, message: discord.Message):
+        """
+        A function called in the cogs/events.py script. Handles the text coming from the user.
+        """
         if self._started is False:
             return
 
@@ -439,7 +672,7 @@ class CaptchaChannel:
                     {"active": False, "stats": {"completed": False, "failed": True}},
                 )
                 if self._bot.captcha.is_operator(self._member.id) is False:
-                    self._data_manager.add_member_to_blacklist(self._member.id)
+                    self._data_manager.add_member_to_blacklist(self._member)
                     await self._member.ban()
                 await self._channel.delete()
         else:
@@ -447,10 +680,10 @@ class CaptchaChannel:
             url = self._invite.url
             embed: discord.Embed = discord.Embed(
                 color=config.EMBED_COLOUR,
-                title=self._bot.get_config()["messages"][
+                title=self._bot.captcha.get_config()["messages"][
                     "completed_captcha_message_title"
                 ],
-                description=self._bot.get_config()["messages"][
+                description=self._bot.captcha.get_config()["messages"][
                     "completed_captcha_message"
                 ].replace("{invite_url}", url),
             )
@@ -463,8 +696,16 @@ class CaptchaChannel:
             )
 
     async def create_tldr_invite(self):
+        """
+        Creates a single use, 2 minute ttl value, invite. Used when they complete the Captcha.
+
+        Returns
+        -------
+        :class:`discord.Invite`
+            A discord invite instance.
+        """
         main_guild: Guild = discord.utils.get(self._bot.guilds, id=config.MAIN_SERVER)
-        settings = self._bot.get_config()
+        settings = self._bot.captcha.get_config()
         main_channel: TextChannel = discord.utils.get(
             main_guild.text_channels, id=settings["main_guild_landing_channel"]
         )
@@ -472,11 +713,18 @@ class CaptchaChannel:
         return invite
 
     async def destory(self):
+        """
+        Deletes the channel.
+        """
         await self._channel.delete()
 
 
 class GatewayGuild:
     def __init__(self, bot, data_manager: DataManager, **kwargs):
+        """
+        A Gateway Guild is a guild that a user first enters to complete a Captcha via a Captcha Channel.
+        This class managed all interactions on a Guild level.
+        """
         self._bot = bot
         self._data_manager = data_manager
         self._kwargs = kwargs
@@ -484,6 +732,9 @@ class GatewayGuild:
         self._captcha_channels = {}
 
     async def load(self):
+        """
+        The functions that loads all information from Mongo collections into instances, or is used in the instantiation of instances, such as captcha channels.
+        """
         if "guild" in self._kwargs:
             self._guild: Guild = self._kwargs["guild"]
             self._id: int = self._guild.id
@@ -498,13 +749,15 @@ class GatewayGuild:
                 self._kwargs["landing_channel_id"]
             )
         else:
-            landing_channel_name = self._bot.get_config()["messages"][
+            landing_channel_name = self._bot.captcha.get_config()[
                 "landing_channel_name"
             ]
             landing_channel = await self._guild.create_text_channel(
-                landing_channel_name
+                landing_channel_name.replace(
+                    "{number}", str(len(self._bot.captcha.get_gateway_guilds()) + 1)
+                )
             )
-            landing_channel_message = self._bot.get_config()["messages"][
+            landing_channel_message = self._bot.captcha.get_config()["messages"][
                 "landing_channel"
             ].replace("{guild_name}", self._guild.name)
             # Add welcome message here; make welcome message configurable.
@@ -525,33 +778,6 @@ class GatewayGuild:
         else:
             self._bot.logger.info(f"Found Operator role on {self._guild.name}.")
 
-        blacklist = self._bot.captcha.get_data_manager().get_blacklist()
-        bans = await self._guild.bans()
-
-        self._bot.logger.info("Syncing with Blacklist...")
-        banned = 0
-        unbanned = 0
-        for entry in blacklist:
-            if entry["ends"] <= time.time():
-                await self._guild.unban(entry["member"]["id"])
-                self._bot.captcha.get_data_manager().rm_member_from_blacklist(
-                    entry["member"]["id"]
-                )
-                unbanned += 1
-                continue
-
-            ban_entry = discord.utils.find(
-                lambda be: be.user.id == entry["member"]["id"], bans
-            )
-
-            if ban_entry is None:
-                banned += 1
-                await self._guild.ban(entry["member"]["id"])
-
-        self._bot.logger.info(
-            f"Banned {banned} users and unbanned {unbanned} users on guild {self._guild.name}."
-        )
-
         main_guild = self._bot.get_guild(config.MAIN_SERVER)
 
         for member in self._guild.members:
@@ -563,18 +789,59 @@ class GatewayGuild:
                 await member.kick()
 
     def get_user_count(self):
+        """
+        Returns the user count.
+
+        Returns
+        -------
+        :class:`int`
+            Returns the number of members on this guild.
+        """
         return len(self._guild.members)
 
     def has_captcha_channel(self, member_id: int) -> bool:
+        """
+        Returns whether or not a member has a captcha channel or not.
+
+        Returns
+        -------
+        :class:`bool`
+            If true the member has a captcha channel, if False the member doesn't have a captcha channel.
+        """
         return member_id in self._captcha_channels.keys()
 
     def get_captcha_channel(self, member_id: int) -> Union[CaptchaChannel, None]:
+        """
+        Fetches a captcha channel assocated with a member.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of a member on the Gateway Guild.
+        Returns
+        -------
+        :class:`CaptchaChannel`
+            Returns a captcha channel instance if the member has one.
+        """
         return self._captcha_channels[member_id]
 
     def add_captcha_channel(self, member_id: int, channel: CaptchaChannel):
+        """
+        Add a captcha channel to the dictionary of captcha channels.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of a member on the Gateway Guild.
+        channel: :class`CaptchaChannel`
+            A Captcha Channel instance.
+        """
         self._captcha_channels[member_id] = channel
 
     async def delete(self):
+        """
+        Deletes a Gateway Guild.
+        """
         self._data_manager.remove_guild(self._id)
         # Need to write in here a better way to delete a gateway guild. I need to check if this is the only guild within the list, then check if people are in the guild doing captchas before I delete the guild.
         try:
@@ -585,9 +852,16 @@ class GatewayGuild:
             return False
 
     def get_landing_channel(self) -> Union[TextChannel, None]:
+        """
+        Returns the landing channel of this guild. This is the channel that invites are created from, usually called
+        'welcome'.
+        """
         return self._landing_channel
 
     def get_main_category(self):
+        """
+        Gets the main category for channels to enter into.
+        """
         if self._category is None:
             for category in self._guild.categories:
                 if category.name.lower() == "tldr gateway":
@@ -596,20 +870,49 @@ class GatewayGuild:
         return self._category
 
     def get_name(self) -> str:
+        """
+        Returns the name of the guild.
+        """
         return self._guild.name
 
     def get_id(self) -> int:
+        """
+        Returns the id of the guild.
+        """
         return self._id
 
     def get_guild(self) -> Guild:
+        """
+        Returns the raw guild instance.
+        """
         return self._guild
 
     def create_captcha_channel(self, for_member: Member):
+        """
+        Creates a Captcha Channel for a member.
+
+        Parameters
+        ----------
+        for_member: :class:`discord.Member`
+
+        Returns
+        -------
+        :class:`CaptchaChannel`
+            Returns a CaptchaChannel instance.
+        """
         captcha_channel = CaptchaChannel(self._bot, self, for_member)
         self._captcha_channels[for_member.id] = captcha_channel
         return captcha_channel
 
     async def delete_captcha_channel(self, member: Member):
+        """
+        Delete a CaptchaChannel.
+
+        Parameters
+        ----------
+        member: :class:`discord.Member`
+            The member the CaptchaChannel was made for.
+        """
         captcha_channel = self._captcha_channels[member.id]
         if captcha_channel is None:
             return
@@ -617,8 +920,24 @@ class GatewayGuild:
         del self._captcha_channels[member.id]
 
     async def on_member_join(self, member: Member):
+        """
+        An event. Handles all guild level interactions for this specific event.
+        """
         captcha_module = self._bot.captcha
         user_id = member.id
+
+        blacklisted_member = (
+            self._bot.captcha.get_data_manager().get_blacklisted_member(
+                member_id=member.id
+            )
+        )
+        if blacklisted_member:
+            await member.ban()
+
+        if len(self._guild.members) in [100, 200, 300, 400, 500]:
+            await captcha_module.announce(
+                f"{self._guild.name} reached {self._guild.members}"
+            )
 
         if captcha_module.is_operator(user_id):
             roles = member.guild.roles
@@ -633,6 +952,9 @@ class GatewayGuild:
             await channel.start()
 
     async def on_member_leave(self, member: Member):
+        """
+        Handles all interactions with this event on a guild level.
+        """
         if self.has_captcha_channel(member.id):
             await self.delete_captcha_channel(member)
             is_operator = self._bot.captcha.is_operator(member.id)
@@ -642,10 +964,17 @@ class GatewayGuild:
                 "modules"
             ]["captcha"]
             if (
-                self._data_manager.get_captcha_counter(member.id)
+                self._data_manager.get_captcha_counter(member.id)["counter"]
                 >= settings["gateway_rejoin"]["limit"]
                 and is_operator is False
             ):
+                self._data_manager.add_member_to_blacklist(
+                    member,
+                    self._bot.captcha.get_config()["gateway_rejoin"][
+                        "blacklist_duration"
+                    ],
+                )
+
                 await member.ban()
                 self._bot.logger.info(
                     f"Banned member {member.name} for joining and leaving {settings['gateway_rejoin']['limit']} times."
@@ -654,12 +983,17 @@ class GatewayGuild:
 
 class CaptchaModule:
     def __init__(self, bot):
+        """
+        This feature is meant to prevent bots from easily invading the server and spammning everyone with friend requests.
+        This feature requests every user to prove they are human by entering into a channel the answer to a classic Captcha image.
+        """
         self._gateway_guilds = []
         self._data_manager = DataManager(bot.logger)
         self._settings_handler: SettingsHandler = bot.settings_handler
         self._bot = bot
         self._logger = bot.logger
         self._image_captcha = ImageCaptcha(width=360, height=120)
+        self._announcement_channel = None
 
         if config.MAIN_SERVER == 0:
             bot.logger.info(
@@ -681,9 +1015,14 @@ class CaptchaModule:
                 "main_announcement_channel": 0,
                 "captcha_time_to_live": 900,
                 "blacklist_length": 86400,
+                "gateway_rejoin": {
+                    "limit": 3,
+                    "blacklist_duration": 86400,
+                    "reset_after_duration": 900,
+                },
                 "messages": {
                     "landing_channel": "Welcome to {guild_name}! Please follow the following steps by the Family Foundation for the Foundation of Families.",
-                    "captcha_message_embed_title": "Try {curent_try}. {tries_left} Attempts Left.",
+                    "captcha_message_embed_title": "Try {current_try}. {tries_left} Attempts Left.",
                     "captcha_message_embed_description": "Try and type the text presented in the image correctly.",
                     "completed_captcha_message": "Well done! You have completed the captcha. Please click the following invite like. You will be kicked from this Gateway Guild once you have joined TLDR!\n\nInvite link: {invite_url}\n\nPS: If you share this invite link, you will be kicked off this guild having not joined the guild. This invite link only works once, and is only valid for the next two minutes.",
                     "completed_captcha_message_title": "Successfully Completed Captcha.",
@@ -702,6 +1041,9 @@ class CaptchaModule:
         self._logger.info("Captcha Gateway Module initiated.")
 
     async def load(self):
+        """
+        Loads primarily Gateway Guilds and aids in the creation of pre-existing CaptchaChannels stored in MongoDB.
+        """
         mongo_guild_ids: list = list(self._data_manager.get_guilds(False))
         valid_guild_ids = list(
             filter(
@@ -780,13 +1122,24 @@ class CaptchaModule:
             self._bot.logger.info("Announcement channel set.")
         else:
             self._bot.logger.info("Announcement channel not set.")
+        self.gateway_reset_task.start()
 
     def get_config(self):
+        """
+        Fetches the module settings for this feature.
+        """
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
             "captcha"
         ]
 
     def set_announcement_channel(self) -> bool:
+        """
+        Sets the announcement channel.
+
+        Returns
+        -------
+        Returns true if set correctly, else False.
+        """
         captcha_settings = self._settings_handler.get_settings(config.MAIN_SERVER)[
             "modules"
         ]["captcha"]
@@ -797,12 +1150,33 @@ class CaptchaModule:
             return True
         return False
 
-    def get_operators(self):
+    async def announce(self, message: str):
+        """Sends an announcement embed on the announcement channel."""
+        if self._announcement_channel:
+            embed: discord.Embed = discord.Embed(
+                colour=config.EMBED_COLOUR,
+                description=message,
+                title=f"Captcha Gateway Announcement on Gateway {self._guild.name}",
+            )
+            await self._announcement_channel.send(embed=embed)
+
+    def get_operators(self) -> list[int]:
+        """
+        Returns a list of operators. Operators are essentially Admins on Gateway Guilds.
+        """
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
             "captcha"
         ]["operators"]
 
     def set_operator(self, member_id: int):
+        """
+        Adds or removes an operator. Depends what they were previously.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member to set.
+        """
         operators: list[int] = self._settings_handler.get_settings(config.MAIN_SERVER)[
             "modules"
         ]["captcha"]["operators"]
@@ -816,6 +1190,13 @@ class CaptchaModule:
         )
 
     def is_operator(self, member_id: int) -> bool:
+        """
+        Check if a member is already an Operator.
+
+        Returns
+        :class:`bool`
+            True if they were already an operator. Else False.
+        """
         return (
             member_id
             in self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
@@ -824,12 +1205,28 @@ class CaptchaModule:
         )
 
     def rm_gateway_guild_from_cache(self, guild_id: int):
+        """
+        Removes a Gateway Guild from the cache.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The id of the Guild that is a Gateway Guild.
+        """
         for g_guild in self._gateway_guilds:
             if g_guild.get_guild().id == guild_id:
                 self._gateway_guilds.remove(g_guild)
                 break
 
     def create_captcha_image(self):
+        """
+        Creates a captcha image.
+
+        Returns
+        -------
+        :class:`tuple`
+            A tuple with first the image in converted into bytes, and second the answer in text (string).
+        """
         text = random_chars(6)
         captcha_image = self._image_captcha.generate_image(text)
         image_bytes = io.BytesIO()
@@ -838,6 +1235,9 @@ class CaptchaModule:
         return image_bytes, text
 
     async def create_guild(self) -> GatewayGuild:
+        """
+        Creates a Gateway Guild.
+        """
         guild_name_format = self._settings_handler.get_settings(config.MAIN_SERVER)[
             "modules"
         ]["captcha"]["guild_name"]
@@ -855,34 +1255,77 @@ class CaptchaModule:
         return g_guild
 
     def get_gateway_guilds(self) -> list[GatewayGuild]:
+        """
+        Returns the Gateway Guilds cache. A list of Gateway Guilds.
+        """
         return self._gateway_guilds
 
     def is_gateway_guild(self, guild_id: int) -> bool:
+        """
+        Checks if a Guild is a Gateway Guild or not.
+
+        Returns
+        -------
+        :class:`bool`
+            Returns True if the Guild is a Gateway Guild, else False.
+        """
         for guild in self._gateway_guilds:
             if guild.get_id() == guild_id:
                 return True
         return False
 
     def get_gateway_guild(self, guild_id: int) -> Union[GatewayGuild, None]:
+        """
+        Returns a Gateway Guild.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            Id of a Guild that is also a Gateway Guild.
+
+        Returns
+        -------
+        :class:`GatewayGuild`
+            Returns a Gateway Guild or None.
+        """
         for g_guild in self._gateway_guilds:
             if g_guild.get_id() == guild_id:
                 return g_guild
         return None
 
     def get_data_manager(self) -> DataManager:
+        """
+        Returns the DataManager instance.
+        """
         return self._data_manager
 
     def get_settings(self):
+        # This will need to be removed at a later date.
         return self._settings_handler.get_settings(config.MAIN_SERVER)
 
     async def unban(self, member_id: int):
+        """
+        Used to unban members on all active Gateway Guilds.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member to unban.
+        """
         # Used primarily to unblacklist a member on all active guilds.
         for g_guild in self._gateway_guilds:
             guild: Guild = g_guild.get_guild()
-            await guild.unban(member_id)
+            guild_bans = await guild.bans()
+
+            for ban in guild_bans:
+                if ban.user.id == member_id:
+                    await guild.unban(user=ban.user)
 
     @timers.loop(minutes=5)
     async def unban_task(self):
+        """
+        Unbans members from Gateway Guilds that were on the blacklist if the time has elapsed.
+        """
         blacklist = self._data_manager.get_blacklist()
         now = time.time()
 
@@ -901,7 +1344,8 @@ class CaptchaModule:
 
         for entry in captcha_counter_entries:
             if (entry["updated_at"] + captcha_counter_cooldown_seconds) <= time.time():
-                await self.unban(entry["member_id"])
+                await self.unban(entry["member"]["id"])
+                self._data_manager.rm_member_from_blacklist(entry["member"]["id"])
 
     def set_setting(self, path: str, value: object):
         settings = self._settings_handler.get_settings(config.MAIN_SERVER)
@@ -944,16 +1388,36 @@ class CaptchaModule:
             else:
                 walk(split_path, split_path[0], settings)
 
+    async def ban(self, member: discord.Member):
+        """
+        Bans a member on all active Guilds.
+
+        Parameters
+        ----------
+        :class:`discord.Member`
+            The member to ban.
+        """
+        for g_guild in self._gateway_guilds:
+            await g_guild.get_guild().ban(member.id)
+
     async def on_member_leave(self, member: discord.Member):
+        """
+        Handles the invocation of GatewayGuild on_member_leave events.
+        """
         guild_id = member.guild.id
 
         for g_guild in self._gateway_guilds:
-            if g_guild.id == guild_id:
+            if g_guild.get_guild().id == guild_id:
+                print("Is gateway Guild.")
                 await g_guild.on_member_leave(member)
 
     async def on_member_join(self, member: discord.Member):
+        """
+        Handles the invocation of GatewayGuild on_member_join events.
+        """
         user_id = member.id
         guild_id = member.guild.id
+
         if self.is_gateway_guild(guild_id):
             main_guild: Guild = self._bot.get_guild(config.MAIN_SERVER)
             main_guild_user = main_guild.get_member(user_id)
@@ -961,10 +1425,11 @@ class CaptchaModule:
                 main_guild_user is not None
                 and self._bot.captcha.is_operator(user_id) is False
             ):
-                print(
+                self._bot.logger.info(
                     f"Member {main_guild_user.display_name} on Gateway Guild and Main Guild. Kicking member."
                 )
                 # await member.guild.kick(member)
+                # return
 
             await self._bot.captcha.get_gateway_guild(guild_id).on_member_join(member)
 
@@ -975,3 +1440,17 @@ class CaptchaModule:
                     if channel.has_completed_captcha():
                         await g_guild.get_guild().kick(member)
                         await channel.destory()
+
+    @timers.loop(minutes=1)
+    async def gateway_reset_task(self):
+        """
+        Resets Captcha Counters after a period of time has elapsed.
+        """
+        for counter_entry in self._data_manager.get_captcha_counters():
+            now = time.time()
+            if (
+                counter_entry["updated_at"]
+                + self._bot.get_config()["gateway_rejoin"]["reset_after_duration"]
+                <= now
+            ):
+                self._data_manager.reset_captcha_counter(counter_entry["member_id"])

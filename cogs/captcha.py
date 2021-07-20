@@ -26,7 +26,13 @@ class Captcha(Cog):
         self.bot = bot
 
     async def construct_blacklist_embed(
-        ctx: Context, blacklist: list, max_page_num: int, page_limit: int, *, page: int
+        self,
+        ctx: Context,
+        blacklist: list,
+        max_page_num: int,
+        page_limit: int,
+        *,
+        page: int,
     ):
         if len(blacklist) == 0:
             return await embed_maker.message(
@@ -48,26 +54,13 @@ class Captcha(Cog):
             )
             formatted_ends = datetime.fromtimestamp(ends).strftime("%Y-%m-%d %H:%M:%S")
             diff = ends - started
-            m, s = divmod(diff, 60)
-            h, d = divmod(m, 60)
-
-            time_bits = []
-
-            if s != 0:
-                time_bits.append(f"{s} {'second' if s != 0 else 'seconds'}")
-            if m != 0:
-                time_bits.append(f"{m} {'minute' if m != 0 else 'minutes'}")
-            if h != 0:
-                time_bits.append(f"{h} {'hour' if h != 0 else 'hours'}")
-            if d != 0:
-                time_bits.append(f"{d} {'day' if d != 0 else 'days'}")
 
             bits.append(
                 "\n".join(
                     [
                         f"- **{member_name}/{member_id}**",
                         f"  **Started:** {formatted_started}",
-                        f"  **Ends:** {formatted_ends} (', '.join(time_bits))",
+                        f"  **Ends:** {formatted_ends} ({timedelta(seconds=diff)})",
                     ]
                 )
             )
@@ -145,21 +138,11 @@ class Captcha(Cog):
         invoke_without_command=True,
     )
     async def config_mod_cmd(self, ctx: Context):
-        config = self.bot.captcha.get_settings().copy()
-        operators = config["modules"]["captcha"]["operators"]
-        new_operators = []
-
-        for op in operators:
-            member = self.bot.get_user(op)
-            if member is None:
-                continue  # For now.
-
-            new_operators.append(f"{op} ({member.display_name})")
-        config["modules"]["captcha"]["operators"] = new_operators
-        config.pop("_id")
+        config_copy = self.bot.captcha.get_settings().copy()
+        # config_copy["modules"]["captcha"].pop("operators")
         return await embed_maker.message(
             ctx,
-            description=f"```{json_util.dumps(config['modules']['captcha'], indent=4)}```",
+            description=f"```{json_util.dumps(config_copy['modules']['captcha'], indent=4)}```",
             title="Captcha Gateway Settings",
             send=True,
         )
@@ -215,7 +198,7 @@ class Captcha(Cog):
         invoke_without_command=True,
     )
     async def blacklist_mod_cmd(self, ctx: Context):
-        blacklist = self.bot.captcha.get_blacklist()
+        blacklist = self.bot.captcha.get_data_manager().get_blacklist()
         max_page_size = 6
         max_page_num = math.ceil(len(blacklist) / max_page_size)
         page_constructor = functools.partial(
@@ -227,17 +210,19 @@ class Captcha(Cog):
         )
 
         embed = await page_constructor(page=1)
-        message = await ctx.send(embed)
+        message = await ctx.send(embed=embed)
         menu = BookMenu(
             message,
             page=1,
             max_page_num=max_page_num,
             page_constructor=page_constructor,
+            author=ctx.author,
         )
         self.bot.reaction_menus.add(menu)
 
     @blacklist_mod_cmd.command(
         help="Add a member to the blacklist.",
+        name="add",
         usage="add",
         examples=[
             "captcha mod blacklist add [name of member] [time (40h20m4s)]",
@@ -334,6 +319,10 @@ class Captcha(Cog):
             member_entry["member"]["id"]
         )
         await self.bot.captcha.unban(member_entry["member"]["id"])
+        print(member_entry["member"]["id"])
+        self.bot.captcha.get_data_manager().rm_member_from_blacklist(
+            member_entry["member"]["id"]
+        )
         await embed_maker.message(
             ctx,
             description=f"Removed {member_entry['member']['name']} from the blacklist.",
@@ -481,7 +470,7 @@ class Captcha(Cog):
         cls=Command,
         command_args=[
             (
-                ("--min-uses", "-mu", int),
+                ("--max-uses", "-mu", int),
                 "The amount of times this invite can be used (0 sets this to infinite)",
             ),
             (
@@ -513,7 +502,7 @@ class Captcha(Cog):
                 return await embed_maker.command_error(
                     ctx, "1st Positional Argument (min-uses)"
                 )
-            args["min-uses"] = int(split_pre[0])
+            args["max-uses"] = int(split_pre[0])
             if split_pre[1].isnumeric() is False:
                 return await embed_maker.command_error(
                     ctx, "2nd Positional Argument (min-age)"
@@ -522,10 +511,10 @@ class Captcha(Cog):
             args["temporary"] = False if split_pre[2].lower() == "no" else True
             args["name"] = " ".join(split_pre[3:])
 
-        min_uses: int = 1 if args["min-uses"] is None else args["min-uses"]
-        max_age: int = 60 if args["max-age"] is None else args["max-age"]
+        max_uses: int = 0 if args["max-uses"] is None else args["max-uses"]
+        max_age: int = 0 if args["max-age"] is None else args["max-age"]
         temporary: bool = False if args["temporary"] is None else args["temporary"]
-        name = args["name"]
+        name = " ".join(args["name"])
 
         g_guilds: list[GatewayGuild] = self.bot.captcha.get_gateway_guilds()
 
@@ -540,7 +529,7 @@ class Captcha(Cog):
                     )
                 invite = await g_guild.get_landing_channel().create_invite(
                     max_age=max_age,
-                    min_uses=min_uses,
+                    max_uses=max_uses,
                     temporary=True if temporary == "yes" else False,
                 )
                 return await embed_maker.message(
