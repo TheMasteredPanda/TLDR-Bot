@@ -23,13 +23,18 @@ class SlackOauth(HTTPMethodView):
                 client_secret=config.SLACK_CLIENT_SECRET,
                 code=code
             )
-        except Exception as e:
+        except:
             return HTTPResponse("Authentication Failed.")
 
         team_id = response['team']['id']
         access_token = response['access_token']
+
+        data = db.slack_bridge.find_one({'team_id': team_id})
+        if not data:
+            db.slack_bridge.insert_one({'team_id': team_id, 'aliases': [], 'bridges': [], 'tokens': {}})
+
         db.slack_bridge.update_one(
-            {'guild_id': config.MAIN_SERVER},
+            {'team_id': team_id},
             {'$set': {'tokens': {team_id: access_token}}}
         )
         return redirect(f'https://app.slack.com/client/{team_id}')
