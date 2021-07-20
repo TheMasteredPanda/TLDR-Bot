@@ -5,9 +5,6 @@ import discord
 import discord.utils
 import config
 
-from sanic import Sanic
-from sanic.views import HTTPMethodView
-
 from cachetools import TTLCache
 from html import unescape
 from typing import Optional
@@ -601,10 +598,6 @@ class Slack:
         self.handler = AsyncSocketModeHandler(self.app, config.SLACK_APP_TOKEN)
         self.bot.loop.create_task(self.handler.start_async())
 
-        self.api = Sanic()
-        self.api.add_route(SlackOauth(self.bot).as_view(), '/slack/ouath')
-        self.bot.loop.create_task(self.api.create_server(host='0.0.0.0', port=80))
-
         self.bot.add_listener(self.on_message, 'on_message')
         self.bot.add_listener(self.on_raw_message_edit, 'on_raw_message_edit')
         self.bot.add_listener(self.on_raw_message_delete, 'on_raw_message_delete')
@@ -629,9 +622,16 @@ class Slack:
     def get_tokens() -> dict:
         data = db.slack_bridge.find_one({'guild_id': config.MAIN_SERVER})
         tokens = {}
-        for team_id, token in data['tokens'].items():
+        for team_id, token in data.get('tokens', {}).items():
             tokens[team_id] = token
         return tokens
+
+    def __getattribute__(self, item):
+        if item == 'tokens':
+            print('test')
+            return self.get_tokens()
+        else:
+            return super(Slack, self).__getattribute__(item)
 
     @staticmethod
     def initialize_data():
@@ -930,24 +930,3 @@ class Slack:
 
         discord_message = DiscordMessage(message, self)
         await discord_message.send_to_slack()
-
-
-class SlackOauth(HTTPMethodView):
-    def __init__(self, bot):
-        self.bot = bot
-        super().__init__()
-
-    def get(self, code):
-        response = self.bot.slack_bridge.app.client.oauth_v2_access(
-            client_id=config.SLACK_CLIENT_ID,
-            client_secret=config.SLACK_CLIENT_SECRET,
-            code=code
-        )
-
-        team_id = response['team']['id']
-        access_token = response['access_token']
-        db.slack_bridge.update_one(
-            {'guild_id': config.MAIN_SERVER},
-            {'$set': {'tokens': {team_id: access_token}}}
-        )
-        self.bot.slack_bridge.tokens[team_id] = access_token
