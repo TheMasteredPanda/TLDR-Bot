@@ -120,11 +120,12 @@ class SlackMessage:
         if self.member is None:
             self.member = await self.slack.add_user(self.team_id, self.user_id)
 
+        token = self.slack.tokens[self.team_id]
         file_urls = [file['url'] for file in self.files]
         download_files = [
             discord.File(file, filename=self.files[i]['name']) for i, file in
             enumerate(
-                await async_file_downloader(file_urls, headers={'Authorization': f'Bearer {config.SLACK_BOT_TOKEN}'})
+                await async_file_downloader(file_urls, headers={'Authorization': f'Bearer {token}'})
             )
         ]
 
@@ -590,7 +591,7 @@ class Slack:
     def __init__(self, bot):
         self.bot = bot
         self.logger = self.bot.logger
-        self.app = AsyncApp(token=config.SLACK_BOT_TOKEN)
+        self.app = AsyncApp()
 
         self.app.view("socket_modal_submission")(self.submission)
         self.app.event("message")(self.slack_message)
