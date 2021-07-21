@@ -123,7 +123,7 @@ class Admin(Cog):
             return await embed_maker.error(ctx, f'Unable to find slack channel via id [{slack_channel_id}]')
 
         if discord_channel.lower() == "none":
-            slack_channel.unset_discord_channel(None)
+            slack_channel.unset_discord_channel()
             return await embed_maker.message(
                 ctx,
                 description=f'Slack channel [{slack_channel_id}] no longer has a discord bridge.',
