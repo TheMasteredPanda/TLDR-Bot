@@ -29,14 +29,15 @@ class SlackOauth(HTTPMethodView):
         team_id = response['team']['id']
         access_token = response['access_token']
 
-        data = db.slack_bridge.find_one({'team_id': team_id})
+        data = db.slack_tokens.find_one({'team_id': team_id})
+        if data and data['token'] != access_token:
+            db.slack_tokens.update_one(
+                {'team_id': team_id},
+                {'$set': {'token': access_token}}
+            )
         if not data:
-            db.slack_bridge.insert_one({'team_id': team_id, 'aliases': [], 'bridges': [], 'tokens': {}})
+            db.slack_tokens.insert_one({'team_id': team_id, 'token': access_token})
 
-        db.slack_bridge.update_one(
-            {'team_id': team_id},
-            {'$set': {'tokens': {team_id: access_token}}}
-        )
         return redirect(f'https://app.slack.com/client/{team_id}')
 
 

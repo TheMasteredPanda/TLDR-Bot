@@ -215,6 +215,12 @@ class Connection:
                 'user_id': :class`str`
                 'timestamp': :class:`int`
             }
+    slack_tokens :class:`pymongo.collection.Collection`
+        The collection for keeping track of access tokens.
+            {
+                'team_id': :class:`str`
+                'token': :class:`str`
+            }
     """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -235,6 +241,7 @@ class Connection:
         self.webhooks = self.db['webhooks']
         self.slack_bridge = self.db['slack_bridge']
         self.slack_messages = self.db['slack_messages']
+        self.slack_tokens = self.db['slack_tokens']
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
