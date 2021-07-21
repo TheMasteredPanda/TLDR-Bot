@@ -832,7 +832,6 @@ class SlackTeam:
             )
 
     async def slack_message(self, body):
-        print(body)
         """Function called on message even from slack."""
         await self.messages_cached.wait()
 
