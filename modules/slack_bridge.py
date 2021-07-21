@@ -800,15 +800,27 @@ class Slack:
         self.bot.add_listener(self.on_raw_message_edit, 'on_raw_message_edit')
         self.bot.add_listener(self.on_raw_message_delete, 'on_raw_message_delete')
 
-        self.tokens = self.get_tokens()
-        self.teams: list[SlackTeam] = []
+        self._teams: list[SlackTeam] = []
         self.cache_teams()
 
+    @property
+    def teams(self):
+        self.cache_teams()
+        return self._teams
+
+    @property
+    def tokens(self):
+        return self.get_tokens()
+
     def get_team(self, team_id: str) -> Optional[SlackTeam]:
+        self.cache_teams()
         return next(filter(lambda team: team.team_id == team_id, self.teams), None)
 
     def cache_teams(self):
         for team_id in self.tokens:
+            if self.get_team(team_id):
+                continue
+
             team = SlackTeam(team_id, self)
             self.teams.append(team)
 
@@ -821,11 +833,12 @@ class Slack:
         tokens = data.get('tokens', {})
         return tokens
 
+    # yes i know this isnt the best way to do this, but it works
     def __getattribute__(self, item):
-        if item == 'tokens':
-            return self.get_tokens()
-        else:
-            return super(Slack, self).__getattribute__(item)
+        if item == 'teams':
+            self.cache_teams()
+
+        return super(Slack, self).__getattribute__(item)
 
     def get_user(self, slack_id: str = None, *, discord_id: int = None) -> Optional[SlackMember]:
         """Get SlackMember via slack id or discord id."""
