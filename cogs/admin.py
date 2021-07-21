@@ -50,20 +50,19 @@ class Admin(Cog):
             description=f'To view more info about channels type:\n`{ctx.prefix}slack channel info [channel id]`'
         )
         unbridge_value = ''
+        bridged_value = ''
         for team in self.bot.slack_bridge.teams:
-            channels = ' | '.join(f"`{channel.id}`" for channel in team.channels if not channel.discord_channel)
-            unbridge_value += (f'\n**{team.name}:** ' + channels) if channels else ''
+            await team.cache_channels()
+            unbridged_channels = ' | '.join(f"`{channel.id}`" for channel in team.channels if not channel.discord_channel)
+            bridged_channels = '\n'.join(f"`{channel.id}` - [<#{channel.discord_channel.id}>]" for channel in team.channels if channel.discord_channel)
+            unbridge_value += (f'\n**{team.name}:** ' + unbridged_channels) if unbridged_channels else ''
+            bridged_value += (f'\n**{team.name}:**\n' + bridged_channels) if bridged_channels else ''
 
         embed.add_field(
             name='>Unbridged slack channels',
             value=unbridge_value if unbridge_value else 'None',
             inline=False
         )
-        bridged_value = ''
-        for team in self.bot.slack_bridge.teams:
-            channels = '\n'.join(f"`{channel.id}` - [<#{channel.discord_channel.id}>]" for channel in team.channels if channel.discord_channel)
-            bridged_value += (f'\n**{team.name}:**\n' + channels) if channels else ''
-
         if bridged_value:
             embed.add_field(
                 name='>Bridged channels',
@@ -167,22 +166,21 @@ class Admin(Cog):
             ctx,
             author={'name': 'Slack Bridge Members'},
         )
+        alias = lambda slack_member: f'<@{slack_member.discord_member.id}>' if slack_member.discord_member else slack_member.name
         unaliased_value = ''
+        aliased_value = ''
         for team in self.bot.slack_bridge.teams:
-            members = ' | '.join(f"`{member.id}`" for member in team.members if not member.discord_member and not member.discord_name)
-            unaliased_value += (f'\n**{team.name}:**' + members) if members else ''
+            await team.cache_members()
+            unaliased_members = ' | '.join(f"`{member.id}`" for member in team.members if not member.discord_member and not member.discord_name)
+            aliased_members = '\n'.join(f"`{member.id}` - [{alias(member)}]" for member in team.members if member.discord_member or member.discord_name)
+            unaliased_value += (f'\n**{team.name}:**' + unaliased_members) if unaliased_members else ''
+            aliased_value += (f'\n**{team.name}:**\n' + aliased_members) if aliased_members else ''
 
         embed.add_field(
             name='>Members Without Aliases',
             value=unaliased_value if unaliased_value else 'None',
             inline=False
         )
-
-        alias = lambda slack_member: f'<@{slack_member.discord_member.id}>' if slack_member.discord_member else slack_member.name
-        aliased_value = ''
-        for team in self.bot.slack_bridge.teams:
-            members = '\n'.join(f"`{member.id}` - [{alias(member)}]" for member in team.members if member.discord_member or member.discord_name)
-            aliased_value += (f'\n**{team.name}:**\n' + members) if members else ''
 
         if aliased_value:
             embed.add_field(

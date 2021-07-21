@@ -701,6 +701,9 @@ class SlackTeam:
         """Caches channels."""
         channels = await self.get_channels()
         for channel_data in channels:
+            if self.get_channel(channel_data['id']):
+                continue
+
             channel = SlackChannel(
                 team=self,
                 channel_id=channel_data['id'],
@@ -715,6 +718,9 @@ class SlackTeam:
         """Caches members."""
         members = await self.get_members()
         for member_data in members:
+            if self.get_user(member_data['id']):
+                continue
+
             member = SlackMember(
                 data=member_data,
                 slack=self.slack,
@@ -927,11 +933,11 @@ class Slack:
         self.get_teams()
 
     @property
-    def teams(self):
+    def teams(self) -> list[SlackTeam]:
         return self.get_teams()
 
     @property
-    def tokens(self):
+    def tokens(self) -> dict:
         return self.get_tokens()
 
     def get_team(self, team_id: str) -> Optional[SlackTeam]:
