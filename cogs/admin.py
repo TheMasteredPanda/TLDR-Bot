@@ -122,12 +122,6 @@ class Admin(Cog):
         if slack_channel is None:
             return await embed_maker.error(ctx, f'Unable to find slack channel via id [{slack_channel_id}]')
 
-        if slack_channel.discord_channel:
-            return await embed_maker.error(ctx, f'Slack channel [{slack_channel_id}] is already assigned to discord channel [{slack_channel.discord_channel.mention}]')
-
-        if discord_channel is None:
-            return await embed_maker.command_error(ctx, '[discord channel]')
-
         if discord_channel.lower() == "none":
             slack_channel.unset_discord_channel(None)
             return await embed_maker.message(
@@ -136,6 +130,12 @@ class Admin(Cog):
                 colour='green',
                 send=True
             )
+
+        if slack_channel.discord_channel:
+            return await embed_maker.error(ctx, f'Slack channel [{slack_channel_id}] is already assigned to discord channel [{slack_channel.discord_channel.mention}]')
+
+        if discord_channel is None:
+            return await embed_maker.command_error(ctx, '[discord channel]')
 
         discord_channel = get_text_channel(ctx, discord_channel)
         if discord_channel is None:
