@@ -89,8 +89,8 @@ class Watchlist:
         embeds = [discord.Embed(description=f'{message.content}\n{message.channel.mention} [link]({message.jump_url})', timestamp=datetime.datetime.now())]
         files = [await attachment.to_file() for attachment in message.attachments]
         await self.bot.webhooks.send(
-            channel,
-            '',
+            channel=channel,
+            content='',
             username=message.author.name,
             avatar_url=message.author.avatar_url,
             files=files,
