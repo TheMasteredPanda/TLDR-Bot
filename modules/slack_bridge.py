@@ -465,8 +465,8 @@ class SlackMember:
             }},
             {"aliases.$": 1}
         )
-        discord_id = data['aliases'][0].get('discord_id', None) if len(data['aliases']) > 0 else None
-        discord_name = data['aliases'][0].get('discord_name', None) if len(data['aliases']) > 0 else None
+        discord_id = data['aliases'][0].get('discord_id', None) if len(data.get('aliases', [])) > 0 else None
+        discord_name = data['aliases'][0].get('discord_name', None) if len(data.get('aliases', [])) > 0 else None
 
         if discord_id:
             await self.slack.bot.wait_until_ready()

@@ -40,7 +40,7 @@ class Tasks:
         team_data = db.slack_bridge.find_one({'team_id': team_id})
         team = slack.get_team(team_id)
         if not team:
-            team = slack.SlackTeam(team_data, slack)
+            team = slack_bridge.SlackTeam(team_data, slack)
             slack.teams.append(team)
         else:
             team.token = team_data['token']
