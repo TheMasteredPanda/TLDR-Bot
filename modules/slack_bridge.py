@@ -1,5 +1,4 @@
 import asyncio
-import json
 import re
 import time
 import discord
@@ -56,6 +55,7 @@ class SlackMessage:
         data = db.slack_messages.find_one({'slack_message_id': self.ts})
         if not data:
             db.slack_messages.insert_one({
+                'team_id': self.team.team_id,
                 'slack_message_id': self.ts,
                 'discord_message_id': self.discord_message_id,
                 'origin': 'slack',
@@ -171,7 +171,12 @@ class DiscordMessage:
     def initialise_data(self):
         data = db.slack_messages.find_one({'discord_message_id': self.id})
         if not data:
+            slack_channel = self.slack.get_channel(discord_id=self.channel_id)
+            if not slack_channel:
+                return
+
             db.slack_messages.insert_one({
+                'team_id': slack_channel.team.team_id,
                 'slack_message_id': self.slack_message_id,
                 'discord_message_id': self.id,
                 'origin': 'discord',
@@ -603,6 +608,7 @@ class SlackTeam:
         self.app.view("socket_modal_submission")(self.submission)
         self.app.event("message")(self.slack_message)
         self.app.event("member_joined_channel")(self.slack_member_joined)
+        self.app.event("channel_left")(self.slack_channel_left)
 
         self.handler = AsyncSocketModeHandler(self.app, config.SLACK_APP_TOKEN)
         self.bot.loop.create_task(self.handler.start_async())
@@ -797,6 +803,18 @@ class SlackTeam:
     async def submission(self, ack):
         """Function that acknowledges events."""
         await ack()
+
+    async def slack_channel_left(self, body: dict):
+        """Function called when bot leaves a channel"""
+        event = body['event']
+        channel_id = event['channel']
+        channel = self.get_channel(channel_id)
+        if channel:
+            db.slack_bridge.update_one(
+                {'team_id': self.team_id},
+                {'$pull': {'bridges': {'slack_channel_id': channel_id}}}
+            )
+            self.channels.remove(channel)
 
     async def slack_member_joined(self, body: dict):
         event = body['event']
