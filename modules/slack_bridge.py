@@ -1,5 +1,4 @@
 import asyncio
-import json
 import re
 import time
 import discord
@@ -56,6 +55,7 @@ class SlackMessage:
         data = db.slack_messages.find_one({'slack_message_id': self.ts})
         if not data:
             db.slack_messages.insert_one({
+                'team_id': self.team.team_id,
                 'slack_message_id': self.ts,
                 'discord_message_id': self.discord_message_id,
                 'origin': 'slack',
@@ -171,7 +171,12 @@ class DiscordMessage:
     def initialise_data(self):
         data = db.slack_messages.find_one({'discord_message_id': self.id})
         if not data:
+            slack_channel = self.slack.get_channel(discord_id=self.channel_id)
+            if not slack_channel:
+                return
+
             db.slack_messages.insert_one({
+                'team_id': slack_channel.team.team_id,
                 'slack_message_id': self.slack_message_id,
                 'discord_message_id': self.id,
                 'origin': 'discord',
