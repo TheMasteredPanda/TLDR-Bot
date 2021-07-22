@@ -215,11 +215,11 @@ class Connection:
                 'user_id': :class`str`
                 'timestamp': :class:`int`
             }
-    slack_tokens :class:`pymongo.collection.Collection`
-        The collection for keeping track of access tokens.
+    tasks :class:`pymongo.collection.Collection`
+        The collection for linking the api and the main bot through running tasks.
             {
-                'team_id': :class:`str`
-                'token': :class:`str`
+                'function': :class:`str`  # name of the function in tasks that will be called
+                'kwargs': :class:`dict`
             }
     """
     def __init__(self):
@@ -241,7 +241,7 @@ class Connection:
         self.webhooks = self.db['webhooks']
         self.slack_bridge = self.db['slack_bridge']
         self.slack_messages = self.db['slack_messages']
-        self.slack_tokens = self.db['slack_tokens']
+        self.tasks = self.db['tasks']
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
