@@ -52,7 +52,6 @@ class Admin(Cog):
         unbridge_value = ''
         bridged_value = ''
         for team in self.bot.slack_bridge.teams:
-            await team.cache_channels()
             unbridged_channels = ' | '.join(f"`{channel.id}`" for channel in team.channels if not channel.discord_channel)
             bridged_channels = '\n'.join(f"`{channel.id}` - [<#{channel.discord_channel.id}>]" for channel in team.channels if channel.discord_channel)
             unbridge_value += (f'\n**{team.name}:** ' + unbridged_channels) if unbridged_channels else ''
@@ -170,7 +169,6 @@ class Admin(Cog):
         unaliased_value = ''
         aliased_value = ''
         for team in self.bot.slack_bridge.teams:
-            await team.cache_members()
             unaliased_members = ' | '.join(f"`{member.id}`" for member in team.members if not member.discord_member and not member.discord_name)
             aliased_members = '\n'.join(f"`{member.id}` - [{alias(member)}]" for member in team.members if member.discord_member or member.discord_name)
             unaliased_value += (f'\n**{team.name}:**' + unaliased_members) if unaliased_members else ''
