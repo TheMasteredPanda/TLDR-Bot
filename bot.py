@@ -221,6 +221,7 @@ class TLDR(Bot):
         if ctx.command is None:
             return
 
+        command = None
         if self.clearance:
             # get the object of the command actually being run, so that can be checked instead of just the parent command
             # Discord.py invokes the parent command, then it looks for any sub commands and invokes those directly, instead of processing them like commands
@@ -240,18 +241,18 @@ class TLDR(Bot):
             ctx.command.docs = ctx.command.get_help(ctx.author)
 
             # check if command has been disabled
-            if ctx.command.disabled or command.disabled:
+            if ctx.command.disabled or (command and command.disabled):
                 return await modules.embed_maker.error(
                     ctx, "This command has been disabled"
                 )
 
             # return if user doesnt have clearance for command
-            if not ctx.command.can_use(ctx.author) or not command.can_use(ctx.author):
+            if not ctx.command.can_use(ctx.author) or (command and not command.can_use(ctx.author)):
                 return
 
         # check if the command has a missing dependency
         ctx_dependency = ctx.command.module_dependency()
-        command_dependency = ctx.command.module_dependency()
+        command_dependency = command.module_dependency() if command else None
         if ctx_dependency:
             return await modules.embed_maker.error(ctx, f'Command missing module dependency [{ctx_dependency}]')
         if command_dependency:
