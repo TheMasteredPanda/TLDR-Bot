@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 import time
 import discord
@@ -9,7 +10,6 @@ from cachetools import TTLCache
 from html import unescape
 from typing import Optional
 from modules import database
-from slack_bolt.oauth.async_oauth_settings import AsyncOAuthSettings
 from slack_bolt.app.async_app import AsyncApp
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from modules.utils import replace_mentions, embed_message_to_text, async_file_downloader, get_member_from_string
@@ -194,7 +194,7 @@ class DiscordMessage:
         if self.slack_message_id:
             slack_channel = self.slack.get_channel(discord_id=self.channel_id)
             team = slack_channel.team
-            await team.app.client.chat_delete(token=team.token, channel=slack_channel.id, ts=self.slack_message_id)
+            await team.app.client.chat_delete(channel=slack_channel.id, ts=self.slack_message_id)
             if self.id in team.discord_messages:
                 del team.discord_messages[self.id]
 
@@ -411,7 +411,6 @@ class DiscordMessage:
             files = await async_file_downloader([a['url'] for a in file_urls])
             for i, file in enumerate(files):
                 await team.app.client.files_upload(
-                    token=team.token,
                     file=file,
                     filename=file_urls[i]['filename'],
                     channels=slack_channel.id,
@@ -447,7 +446,7 @@ class SlackMember:
              }},
             {"aliases.$": 1}
         )
-        if not data:
+        if not data or not data.get('aliases', None):
             member_data = {
                 'slack_id': self.id,
                 'discord_id': None
@@ -515,7 +514,7 @@ class SlackMember:
 
     async def get_user_info(self):
         """Returns slack user info of user."""
-        return await self.team.app.client.users_info(token=self.team.token, user=self.id)
+        return await self.team.app.client.users_info(user=self.id)
 
 
 class SlackChannel:
@@ -540,7 +539,7 @@ class SlackChannel:
                  '$elemMatch': {'slack_channel_id': self.id}}
              },
             {"bridges.$": 1})
-        if not data:
+        if not data or not data.get('bridges', None):
             channel_data = {
                 'slack_channel_id': self.id,
                 'discord_channel_id': None
@@ -552,7 +551,7 @@ class SlackChannel:
 
     async def set_slack_name(self):
         """Set the slack name of the channel."""
-        data = await self.team.app.client.conversations_info(token=self.team.token, channel=self.id)
+        data = await self.team.app.client.conversations_info(channel=self.id)
         self.slack_name = data['channel']['name']
 
     async def get_discord_channel(self):
@@ -590,18 +589,20 @@ class SlackChannel:
 
 
 class SlackTeam:
-    def __init__(self, team_id: str, slack: 'Slack'):
+    def __init__(self, data: dict, slack: 'Slack'):
         self.slack = slack
         self.bot = self.slack.bot
 
-        self.team_id = team_id
-        self.token = self.slack.tokens[team_id]
-        self.name = team_id
+        self.team_id = data['team_id']
+        self.token = data['token']
+        self.bot_id = data['bot_id']
+        self.name = self.team_id
 
         self.app = AsyncApp(token=self.token)
 
         self.app.view("socket_modal_submission")(self.submission)
         self.app.event("message")(self.slack_message)
+        self.app.event("member_joined_channel")(self.slack_member_joined)
 
         self.handler = AsyncSocketModeHandler(self.app, config.SLACK_APP_TOKEN)
         self.bot.loop.create_task(self.handler.start_async())
@@ -640,24 +641,24 @@ class SlackTeam:
             db.slack_bridge.insert_one(data)
 
     async def get_team_info(self):
-        team_data = await self.app.client.team_info(token=self.token)
+        team_data = await self.app.client.team_info()
         self.name = team_data['team']['name']
 
     async def get_channels(self) -> list[dict]:
         """Function for getting channels, makes call to slack api and filters out channels bot isnt member of."""
-        channels_data = await self.app.client.conversations_list(team_id=self.team_id, token=self.token)
+        channels_data = await self.app.client.conversations_list(team_id=self.team_id)
         return [channel for channel in channels_data['channels'] if channel['is_member']]
 
     async def get_members(self) -> list[dict]:
         """Function for getting members, makes call to slack api and filters out bot accounts and slack bot account."""
-        members_data = await self.app.client.users_list(team_id=self.team_id, token=self.token)
+        members_data = await self.app.client.users_list(team_id=self.team_id)
         return [
             member for member in members_data['members']
             if not member['is_bot'] and not member['id'] == 'USLACKBOT'
         ]
 
     async def add_user(self, user_id: str):
-        user_data = await self.app.client.users_info(user=user_id, token=self.token)
+        user_data = await self.app.client.users_info(user=user_id)
         slack_member = SlackMember(user_data['user'], self.slack)
         await slack_member.get_discord_member()
         self.members[slack_member.team_id].append(slack_member)
@@ -742,7 +743,7 @@ class SlackTeam:
     async def delete_slack_message(self, message_id: str, discord_channel_id: int, *, discord_message_id: int = None):
         slack_channel = self.get_channel(discord_id=discord_channel_id)
 
-        await self.app.client.chat_delete(token=self.token, channel=slack_channel.id, ts=message_id)
+        await self.app.client.chat_delete(channel=slack_channel.id, ts=message_id)
         if discord_message_id in self.discord_messages:
             del self.discord_messages[discord_message_id]
 
@@ -753,7 +754,6 @@ class SlackTeam:
             return
 
         result = await self.app.client.conversations_history(
-            token=self.token,
             channel=channel_id,
             inclusive=True,
             oldest=message_id,
@@ -797,6 +797,18 @@ class SlackTeam:
     async def submission(self, ack):
         """Function that acknowledges events."""
         await ack()
+
+    async def slack_member_joined(self, body: dict):
+        event = body['event']
+        channel_id = event['channel']
+        user_id = event['user']
+        if user_id == self.bot_id:
+            channel = SlackChannel(self, channel_id, self.slack)
+            self.channels.append(channel)
+        else:
+            user_data = await self.app.client.users_info(user=user_id)
+            member = SlackMember(user_data['user'], self.slack)
+            self.members.append(member)
 
     async def handle_delete_message(self, body: dict):
         event = body['event']
@@ -929,44 +941,17 @@ class Slack:
         self.bot = bot
         self.logger = self.bot.logger
 
-        self._teams: list[SlackTeam] = []
-        self.get_teams()
-
-    @property
-    def teams(self) -> list[SlackTeam]:
-        return self.get_teams()
-
-    @property
-    def tokens(self) -> dict:
-        return self.get_tokens()
+        self.teams: list[SlackTeam] = []
+        self.cache_teams()
 
     def get_team(self, team_id: str) -> Optional[SlackTeam]:
         return next(filter(lambda team: team.team_id == team_id, self.teams), None)
 
-    def get_teams(self):
-        teams = []
-        for team_id in self.tokens:
-            team = next(filter(lambda t: t.team_id == team_id, self._teams), None)
-            if team:
-                continue
-
-            team = SlackTeam(team_id, self)
-            self._teams.append(team)
-            teams.append(team)
-
-        return self._teams + teams
-
-    @staticmethod
-    def get_tokens() -> dict:
-        data = db.slack_tokens.find({})
-        if not data:
-            return {}
-
-        all_tokens = {}
-        for team_data in data:
-            all_tokens[team_data['team_id']] = team_data['token']
-
-        return all_tokens
+    def cache_teams(self):
+        teams = db.slack_bridge.find({})
+        for team_data in teams:
+            team = SlackTeam(team_data, self)
+            self.teams.append(team)
 
     def get_user(self, slack_id: str = None, *, discord_id: int = None) -> Optional[SlackMember]:
         """Get SlackMember via slack id or discord id."""
