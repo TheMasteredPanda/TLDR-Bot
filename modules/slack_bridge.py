@@ -603,6 +603,7 @@ class SlackTeam:
         self.app.view("socket_modal_submission")(self.submission)
         self.app.event("message")(self.slack_message)
         self.app.event("member_joined_channel")(self.slack_member_joined)
+        self.app.event("channel_left")(self.slack_channel_left)
 
         self.handler = AsyncSocketModeHandler(self.app, config.SLACK_APP_TOKEN)
         self.bot.loop.create_task(self.handler.start_async())
@@ -797,6 +798,18 @@ class SlackTeam:
     async def submission(self, ack):
         """Function that acknowledges events."""
         await ack()
+
+    async def slack_channel_left(self, body: dict):
+        """Function called when bot leaves a channel"""
+        event = body['event']
+        channel_id = event['channel']
+        channel = self.get_channel(channel_id)
+        if channel:
+            db.slack_bridge.update_one(
+                {'team_id': self.team_id},
+                {'$pull': {'bridges': {'slack_channel_id': channel_id}}}
+            )
+            self.channels.remove(channel)
 
     async def slack_member_joined(self, body: dict):
         event = body['event']
