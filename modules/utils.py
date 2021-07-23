@@ -260,7 +260,7 @@ async def get_member_from_string(ctx: Optional[Context], string: str, *, guild: 
             previous_result = member_match
             member_name = f'{member_name} {part}'.strip()
 
-    if len(string.split()) == 1:
+    if len(string.split()) == 1 and type(previous_result) != discord.Member:
         if type(previous_result) == list:
             return await get_member(ctx, f'{member_name}'.strip()), string.replace(f'{member_name}'.strip(), '').strip()
         elif type(previous_result) == discord.Member:
@@ -460,7 +460,7 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
     # only one match, return member
     if len(members) == 1:
         return members[0]
-    elif not multi:
+    elif not multi or not return_message:
         return members
 
     # send embed containing member matches and let member choose which one they meant
