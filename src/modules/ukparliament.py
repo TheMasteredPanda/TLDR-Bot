@@ -1,12 +1,9 @@
 from io import BytesIO
 from cachetools.ttl import TTLCache
-from bot import TLDR
 from datetime import datetime
 import discord
 from discord.embeds import Embed
 from discord.guild import Guild
-import time
-import aiofiles
 import random
 from discord import File
 import string
@@ -26,8 +23,6 @@ from discord.ext import tasks
 from ukparliament.ukparliament import UKParliament
 from modules import database
 import config
-import os
-import configparser
 
 
 class UKParliamentConfig:
@@ -364,7 +359,7 @@ class ConfirmManager:
 
 
 class UKParliamentModule:
-    def __init__(self, bot: TLDR):
+    def __init__(self, bot):
         self._bot = bot
         self._divisions_storage = DivisionMongoStorage()
         self._bills_storage = BillsMongoStorage()

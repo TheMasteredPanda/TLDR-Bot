@@ -1,0 +1,6 @@
+pymongo
+slack_bolt
+sanic
+cachetools
+aiohttp
+python-dotenv

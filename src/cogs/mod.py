@@ -10,7 +10,7 @@ from modules.reaction_menus import BookMenu
 from discord.ext.commands import Cog, command, Context, group
 from typing import Union
 from bot import TLDR
-from modules import commands, database, embed_maker, format_time, reaction_menus
+from modules import embed_maker, format_time, commands, database, reaction_menus
 from modules.utils import (
     ParseArgs,
     get_guild_role,

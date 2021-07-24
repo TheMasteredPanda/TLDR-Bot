@@ -1,5 +1,5 @@
 from bot import TLDR
-from modules import commands, embed_maker
+from modules import embed_maker, commands
 from modules.utils import ParseArgs
 from typing import Union
 from discord.ext.commands import Cog, command, Context

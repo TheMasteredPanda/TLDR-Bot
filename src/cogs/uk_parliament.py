@@ -1,19 +1,15 @@
 from datetime import datetime
 import functools
-from io import BytesIO
 import math
 from typing import Union
 
 from discord.ext.commands.converter import TextChannelConverter
-from discord.file import File
-from modules import database
-from modules.custom_commands import Guild
 from modules.reaction_menus import BookMenu
 from discord import embeds
 
 from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from bot import TLDR
-from modules import embed_maker
+from modules import embed_maker, database
 import modules.commands as cls
 from modules.utils import ParseArgs
 from discord.ext import commands

@@ -1,13 +1,26 @@
 import config
+import pymongo
+import os
 
-from modules import database
+from urllib.parse import quote_plus
 from slack_bolt.app.async_app import AsyncWebClient
 from sanic import Sanic, HTTPResponse
 from sanic.views import HTTPMethodView
 from sanic.response import redirect
 
-db = database.get_connection()
-app = Sanic("TLDR-Bot-api")
+MONGODB_HOST = os.getenv('MONGODB_HOST', 'localhost')
+MONGODB_PORT = os.getenv('MONGODB_PORT', '27017')
+DATABASE_USERNAME = os.getenv('DATABASE_USERNAME', 'tldradmin')
+DATABASE_PASSWORD = os.getenv('DATABASE_PASSWORD', 'rP8P5nw3nOjq7T7LBthBNlB8yKEnmT')
+MONGODB_URL = f'mongodb://{quote_plus(DATABASE_USERNAME)}:{quote_plus(DATABASE_PASSWORD)}@{MONGODB_HOST}:{MONGODB_PORT}/'
+
+
+class Database:
+    def __init__(self):
+        self.mongo_client = pymongo.MongoClient(MONGODB_URL)
+        self.db = self.mongo_client["TLDR"]
+        self.slack_bridge = self.db['slack_bridge']
+        self.tasks = self.db['tasks']
 
 
 class SlackOauth(HTTPMethodView):
@@ -56,6 +69,9 @@ class SlackOauth(HTTPMethodView):
 
         return redirect(f'https://app.slack.com/client/{team_id}')
 
+
+db = Database()
+app = Sanic("TLDR-Bot-api")
 
 app.add_route(SlackOauth.as_view(), '/slack/oauth')
 app.run(

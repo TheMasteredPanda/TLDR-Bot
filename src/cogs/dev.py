@@ -6,7 +6,7 @@ import time
 import traceback
 
 from discord.ext.commands import Cog, command, Context, CommandError
-from modules import database, commands, embed_maker
+from modules import embed_maker, commands, database
 from modules.utils import get_member
 from bot import TLDR
 

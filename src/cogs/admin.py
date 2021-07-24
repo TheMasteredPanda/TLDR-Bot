@@ -7,7 +7,7 @@ import functools
 
 from io import StringIO
 from discord.ext.commands import Cog, command, Context, TextChannelConverter, ChannelNotFound, group
-from modules import commands, database, embed_maker, reaction_menus
+from modules import embed_maker, commands, database, reaction_menus
 from modules.utils import ParseArgs, get_custom_emote, get_guild_role, get_member, get_text_channel, replace_mentions, embed_message_to_text
 from typing import Union
 

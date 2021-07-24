@@ -2,7 +2,7 @@ import config
 import discord
 
 from modules.utils import get_member
-from modules import commands, embed_maker, database
+from modules import embed_maker, commands, database
 from datetime import datetime, date
 from discord.ext.commands import Cog, command, Context
 

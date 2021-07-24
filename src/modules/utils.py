@@ -9,7 +9,7 @@ import requests
 from io import BytesIO
 from logging import handlers
 from typing import Tuple, Union, Optional
-from modules import embed_maker, database, commands
+from modules import embed_maker, commands, database
 from discord.ext.commands import Context, Converter
 
 db = database.get_connection()

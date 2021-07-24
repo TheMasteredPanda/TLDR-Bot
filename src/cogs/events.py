@@ -4,12 +4,10 @@ import hashlib
 import config
 import datetime
 import traceback
-import asyncio
-import re
 
 from bson import ObjectId
 from bot import TLDR
-from modules import database, format_time, embed_maker
+from modules import embed_maker, format_time, database
 from discord.ext.commands import Cog, Context
 
 
@@ -25,7 +23,7 @@ class Events(Cog):
         if self.bot.first_ready:
             return
 
-        bot_game = discord.Game(f">help")
+        bot_game = discord.Game(f"{config.PREFIX}help")
         await self.bot.change_presence(activity=bot_game)
 
         if self.bot.leveling_system:

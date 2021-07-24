@@ -3,7 +3,7 @@ import config
 
 from bot import TLDR
 from discord.ext.commands import Cog, command, Context
-from modules import database, commands, embed_maker, utils
+from modules import embed_maker, commands, database, utils
 from datetime import datetime
 
 db = database.get_connection()

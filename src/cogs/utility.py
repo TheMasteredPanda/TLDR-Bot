@@ -13,7 +13,7 @@ from emoji.unicode_codes.en import EMOJI_UNICODE_ENGLISH, EMOJI_ALIAS_UNICODE_EN
 from timezonefinder import TimezoneFinder
 from typing import Union
 from bson import ObjectId
-from modules import commands, database, embed_maker, format_time
+from modules import embed_maker, format_time, commands, database
 from modules.utils import get_member, ParseArgs, get_custom_emote
 from discord.ext.commands import Cog, command, Context
 from bot import TLDR
@@ -826,7 +826,7 @@ class Utility(Cog):
 
         # pull back indentation
         new_src = ""
-        for line in src.splitlines():
+        for line in splitlines():
             new_src += f"{line.replace('    ', '', 1)}\n"
 
         src = new_src

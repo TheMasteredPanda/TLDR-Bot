@@ -11,7 +11,7 @@ from modules.utils import (
     get_member_from_string
 )
 from typing import Union, Optional
-from modules import embed_maker, commands, database, format_time, leveling
+from modules import embed_maker, format_time, commands, leveling, database
 from random import randint
 from discord.ext.commands import Cog, command, Context, group
 from modules.reaction_menus import BookMenu

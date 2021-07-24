@@ -1,4 +1,3 @@
-import json
 import random
 
 import requests
@@ -9,7 +8,7 @@ import asyncio
 import discord
 
 from modules.utils import get_member
-from modules import commands, embed_maker
+from modules import embed_maker, commands
 from discord.ext.commands import Cog, command, Context
 from io import BytesIO
 

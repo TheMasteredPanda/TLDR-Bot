@@ -1,0 +1,54 @@
+version: '3.4'
+services:
+  db:
+    image: mongo:latest
+    container_name: mongodb
+    volumes:
+      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DATABASE_USERNAME:-tldradmin}
+      MONGO_INITDB_ROOT_PASSWORD: ${DATABASE_PASSWORD:-rP8P5nw3nOjq7T7LBthBNlB8yKEnmT}
+      MONGO_INITDB_DATABASE: admin
+    ports:
+      - "27017:27017"
+
+  bot:
+    image: hattyot/tldr-bot:latest
+    container_name: tldr-bot
+    build:
+      context: .
+      dockerfile: Dockerfile-bot
+    env_file:
+      - ./.env
+    environment:
+      PREFIX: ${PREFIX:->}
+      EMBED_COLOUR: ${EMBED_COLOUR:-0x00a6ad}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-tldradmin}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-rP8P5nw3nOjq7T7LBthBNlB8yKEnmT}
+      MONGODB_HOST: ${MONGODB_HOST:-db}
+      MONGODB_PORT: ${MONGODB_PORT:-27017}
+
+  api:
+    image: hattyot/tldr-api:latest
+    container_name: tldr-api
+    build:
+      context: .
+      dockerfile: Dockerfile-api
+    env_file:
+      - ./.env
+    environment:
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-""}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-""}
+      SLACK_REDIRECT_DOMAIN: ${SLACK_REDIRECT_DOMAIN:-""}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-tldradmin}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-rP8P5nw3nOjq7T7LBthBNlB8yKEnmT}
+      MONGODB_HOST: ${MONGODB_HOST:-db}
+      MONGODB_PORT: ${MONGODB_PORT:-27017}
+    ports:
+      - "443:443"
+
+volumes:
+  mongodb_data_container:

@@ -1,0 +1,26 @@
+FROM ubuntu:18.04
+
+RUN apt-get update \
+    && apt-get install software-properties-common -y \
+    && add-apt-repository ppa:deadsnakes/ppa -y \
+    && apt-get install python3.9 -y \
+    && apt-get install python3-pip -y \
+    && apt-get install python3.9-distutils -y
+
+RUN python3.9 -m pip install --upgrade setuptools pip distlib
+
+RUN apt-get install git -y \
+    && git clone https://github.com/TheMasteredPanda/UK-Parliament-Library.git \
+    && python3.9 -m pip install -e UK-Parliament-Library
+
+WORKDIR /TLDR-Api
+
+COPY src/requierments/requirements-api.txt .
+
+RUN python3.9 -m pip install -r requirements-api.txt
+
+COPY src/ .
+
+ENV IN_DOCKER Yes
+
+ENTRYPOINT ["sh", "-c", "python3.9 api.py"]
