@@ -333,9 +333,7 @@ class Events(Cog):
                 f"The **{who_has_it}** have it. The **{who_has_it}** have it. Unlock!"
             )
         else:
-            results_str = "The vote is a tie.  According to convention, no change will be put forward without majority " \
-                         "support, the position of least change, or the position that encourages " \
-                         "further debate on the topic has it."
+            results_str = "The vote is a tie."
         # send results string in dd poll channel
         return await channel.send(results_str)
 
