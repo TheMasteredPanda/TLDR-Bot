@@ -323,14 +323,19 @@ class Events(Cog):
         noes = results["👎"]
         abstain = results["😐"]
 
-        who_has_it = "noes" if noes > ayes else "ayes"
-        results_str = (
-            f"**ORDER! ORDER!**\n\n"
-            f"The ayes to the right: **{ayes}**\n"
-            f"The noes to the left: **{noes}**\n"
-            f"Abstentions: **{abstain}**\n\n"
-            f"The **{who_has_it}** have it. The **{who_has_it}** have it. Unlock!"
-        )
+        if ayes != noes:
+            who_has_it = "noes" if noes > ayes else "ayes"
+            results_str = (
+                f"**ORDER! ORDER!**\n\n"
+                f"The ayes to the right: **{ayes}**\n"
+                f"The noes to the left: **{noes}**\n"
+                f"Abstentions: **{abstain}**\n\n"
+                f"The **{who_has_it}** have it. The **{who_has_it}** have it. Unlock!"
+            )
+        else:
+            results_str = "The vote is a tie.  According to convention, no change will be put forward without majority " \
+                         "support, the position of least change, or the position that encourages " \
+                         "further debate on the topic has it."
         # send results string in dd poll channel
         return await channel.send(results_str)
 
