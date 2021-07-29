@@ -1,4 +1,4 @@
-from modules.captcha import CaptchaChannel
+from modules.captcha_verification import CaptchaChannel
 from modules.custom_commands import Guild, Message
 import discord
 import time

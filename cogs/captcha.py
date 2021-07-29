@@ -2,23 +2,19 @@ import re
 import functools
 import math
 from modules.reaction_menus import BookMenu
-from time import time
-import config
 from datetime import datetime, timedelta
 from bson import json_util
-import json
 from typing import Union
 
 from discord.embeds import Embed
 from discord.file import File
-from discord.member import Member
 from bot import TLDR
-from modules import commands, embed_maker, captcha
-from discord.ext.commands import Cog, command, group, Context
+from modules import embed_maker
+from discord.ext.commands import Cog, group, Context
 from discord.guild import Guild
 from modules.commands import Command, Group
 from modules.utils import ParseArgs, get_member_from_string
-from modules.captcha import GatewayGuild
+from modules.captcha_verification import GatewayGuild
 
 
 class Captcha(Cog):
@@ -269,7 +265,7 @@ class Captcha(Cog):
                 send=True,
             )
 
-        member, rest = get_member_from_string(args["pre"])
+        member, rest = get_member_from_string(ctx, args["pre"])
         amount_string = args["duration"]
         if amount_string is None:
             if rest is not None:
