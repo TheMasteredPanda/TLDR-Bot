@@ -89,8 +89,8 @@ class Watchlist:
         embeds = [discord.Embed(description=f'{message.content}\n{message.channel.mention} [link]({message.jump_url})', timestamp=datetime.datetime.now())]
         files = [await attachment.to_file() for attachment in message.attachments]
         await self.bot.webhooks.send(
-            channel,
-            '',
+            channel=channel,
+            content='',
             username=message.author.name,
             avatar_url=message.author.avatar_url,
             files=files,
@@ -100,6 +100,9 @@ class Watchlist:
     async def on_message(self, message: discord.Message):
         """Function run on every message to check if user is on watchlist and send their message."""
         if not self.bot.first_ready:
+            return
+
+        if not message.guild:
             return
 
         guild_watchlist_data = self.watchlist_data[message.guild.id]

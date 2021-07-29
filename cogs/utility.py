@@ -506,8 +506,7 @@ class Utility(Cog):
     async def reminders(self, ctx: Context, action: str = None, *, index: str = None):
         user_reminders = sorted(
             [
-                r
-                for r in db.timers.find(
+                r for r in db.timers.find(
                     {
                         "guild_id": ctx.guild.id,
                         "event": "reminder",
