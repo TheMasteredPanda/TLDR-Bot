@@ -1,6 +1,5 @@
 import math
 import asyncio
-import datetime
 import io
 import time
 from captcha.image import ImageCaptcha
@@ -11,11 +10,10 @@ from discord.colour import Colour
 from discord.invite import Invite
 from pymongo.cursor import Cursor
 import config
-from enum import Enum
-from typing import Tuple, Union
+from typing import Union, Optional
 from discord.errors import Forbidden, HTTPException
 from discord.guild import Guild
-from discord.channel import CategoryChannel, TextChannel
+from discord.channel import TextChannel
 from discord import Member
 import modules.database as database
 from modules.utils import SettingsHandler
@@ -249,7 +247,7 @@ class DataManager:
             else self._captcha_guilds.find({}, {"stats": 0})
         )
 
-    def is_blacklisted(self, **kwargs) -> Tuple[Cursor, list, None]:
+    def is_blacklisted(self, **kwargs) -> Union[Cursor, list, None]:
         """
         Checks if a user is blacklisted.
 
@@ -364,7 +362,7 @@ class CaptchaChannel:
         self,
         bot,
         g_guild,
-        member: Member,
+        member: Optional[Member],
     ):
         """
         A Captcha Channel is a Class that handles a Text Channel that'll contain the captcha image for a user to decipher
@@ -521,7 +519,7 @@ class CaptchaChannel:
                 },
             )
             if self._bot.captcha.is_operator(self._member.id) is False:
-                self._member.ban()
+                await self._member.ban()
                 self._data_manager.add_member_to_blacklist(member=self._member)
 
             await self.destory()
@@ -631,9 +629,7 @@ class CaptchaChannel:
         Sends the captcha message into the channel.
         """
         if self._tries != 0:
-            tuple_embed = self.construct_embed()
-            embed = tuple_embed[0]
-            image_file = tuple_embed[1]
+            embed, image_file = self.construct_embed()
             await self._channel.send(file=image_file, embed=embed)
         else:
             embed: discord.Embed = discord.Embed(
@@ -740,7 +736,7 @@ class GatewayGuild:
             self._id: int = self._guild.id
 
         if "guild_id" in self._kwargs:
-            self._guild: Guild = self._bot.get_guild(self.kwargs["guild_id"])
+            self._guild: Guild = self._bot.get_guild(self._kwargs["guild_id"])
             if self._guild is not None:
                 self.id: int = self._guild.id
 
@@ -936,7 +932,8 @@ class GatewayGuild:
 
         if len(self._guild.members) in [100, 200, 300, 400, 500]:
             await captcha_module.announce(
-                f"{self._guild.name} reached {self._guild.members}"
+                f"{self._guild.name} reached {self._guild.members}",
+                self._guild
             )
 
         if captcha_module.is_operator(user_id):
@@ -1150,13 +1147,13 @@ class CaptchaModule:
             return True
         return False
 
-    async def announce(self, message: str):
+    async def announce(self, message: str, guild: discord.Guild):
         """Sends an announcement embed on the announcement channel."""
         if self._announcement_channel:
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
                 description=message,
-                title=f"Captcha Gateway Announcement on Gateway {self._guild.name}",
+                title=f"Captcha Gateway Announcement on Gateway {guild.name}",
             )
             await self._announcement_channel.send(embed=embed)
 

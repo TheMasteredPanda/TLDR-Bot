@@ -10,7 +10,7 @@ import modules.database
 import modules.leveling
 import modules.embed_maker
 import modules.ukparliament
-import modules.captcha
+import modules.captcha_verification
 import modules.webhooks
 import modules.watchlist
 import modules.google_drive
@@ -114,7 +114,7 @@ class TLDR(Bot):
         )
 
         self.captcha = (
-            modules.captcha.CaptchaModule(self)
+            modules.captcha_verification.CaptchaModule(self)
             if self.enabled_modules["captcha"]
             else None
         )
