@@ -70,8 +70,6 @@ class TLDR(Bot):
         self.slack_bridge = modules.slack_bridge.Slack(self) if self.enabled_modules['slack_bridge'] else None
         self.tasks = modules.tasks.Tasks(self) if self.enabled_modules['tasks'] else None
 
-        self.first_ready = False
-
     def add_cog(self, cog):
         """Overwrites the orginal add_cog method to add a line for the commandSystem"""
         self.command_system.initialize_cog(cog)
@@ -158,7 +156,7 @@ class TLDR(Bot):
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
 
-        if not self.first_ready:
+        if not self._ready.is_set():
             return
 
         # no bots allowed

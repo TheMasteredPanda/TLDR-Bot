@@ -4,8 +4,6 @@ import hashlib
 import config
 import datetime
 import traceback
-import asyncio
-import re
 
 from bson import ObjectId
 from bot import TLDR
@@ -22,74 +20,13 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_ready(self):
-        if self.bot.first_ready:
-            return
-
         bot_game = discord.Game(f">help")
         await self.bot.change_presence(activity=bot_game)
 
-        if self.bot.leveling_system:
-            await self.check_left_members()
-        else:
+        if not self.bot.leveling_system:
             self.bot.left_check.set()
 
-        if self.bot.timers:
-            await self.bot.timers.run_old()
-
-        if self.bot.invite_logger:
-            await self.bot.invite_logger.initialize_invites()
-
-        if self.bot.clearance:
-            await self.bot.clearance.parse_clearance_spreadsheet()
-
-        if self.bot.leveling_system:
-            self.bot.leveling_system.initialise_guilds()
-
-        if self.bot.ukparl_module:
-            self.bot.ukparl_module.set_guild(self.bot.get_guild(config.MAIN_SERVER))
-            await self.bot.ukparl_module.load()
-            self.bot.get_cog("UK").load()
-            self.bot.ukparl_module.load_trackers()
-            self.bot.ukparl_module.tracker_event_loop.start()
-
         self.bot.logger.info(f"{self.bot.user} is ready")
-
-        if self.bot.webhooks:
-            await self.bot.webhooks.initialize()
-        if self.bot.watchlist:
-            self.bot.watchlist.initialize()
-
-        self.bot.first_ready = True
-
-    async def check_left_members(self):
-        self.bot.logger.info(f"Checking Guilds for left members.")
-        left_member_count = 0
-        # check if any users have left while the bot was offline
-        for guild in self.bot.guilds:
-            initial_left_members = left_member_count
-            guild_members = [
-                m.id for m in await guild.fetch_members(limit=None).flatten()
-            ]
-            leveling_users = db.leveling_users.find({"guild_id": guild.id})
-
-            self.bot.logger.debug(
-                f"Checking {guild.name} [{guild.id}] for left members. Guild members: {len(guild_members)} Leveling Users: {leveling_users.count()}"
-            )
-
-            for user in leveling_users:
-                # if true, user has left the server while the bot was offline
-                if int(user["user_id"]) not in guild_members:
-                    left_member_count += 1
-                    self.transfer_leveling_data(user)
-
-            self.bot.logger.debug(
-                f"{left_member_count - initial_left_members} members left guild."
-            )
-
-        self.bot.left_check.set()
-        self.bot.logger.info(
-            f"Left members have been checked - Total {left_member_count} members left guilds."
-        )
 
     @Cog.listener()
     async def on_command_error(self, ctx: Context, exception: Exception):
@@ -339,7 +276,7 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_message_edit(self, before, after):
-        if not self.bot.first_ready:
+        if not self.bot._ready.is_set():
             return
         
         # re run command if command was edited
@@ -591,20 +528,6 @@ class Events(Cog):
                         for role in up_to_role:
                             await leveling_member.add_role(role)
 
-    def transfer_leveling_data(self, leveling_user):
-        db.leveling_users.delete_many(leveling_user)
-        db.left_leveling_users.delete_many(leveling_user)
-        db.left_leveling_users.insert_one(leveling_user)
-
-        data_expires = round(time.time()) + 30 * 24 * 60 * 60  # 30 days
-
-        self.bot.timers.create(
-            guild_id=leveling_user["guild_id"],
-            expires=data_expires,
-            event="leveling_data_expires",
-            extras={"user_id": leveling_user["user_id"]},
-        )
-
     @Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         leveling_user = db.leveling_users.find_one(
@@ -614,7 +537,7 @@ class Events(Cog):
         if not leveling_user:
             return
 
-        self.transfer_leveling_data(leveling_user)
+        self.bot.leveling_system.transfer_leveling_data(leveling_user)
 
     @Cog.listener()
     async def on_leveling_data_expires_timer_over(self, timer: dict):

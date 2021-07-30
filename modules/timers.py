@@ -79,7 +79,11 @@ class Timers:
 
     def __init__(self, bot):
         self.bot = bot
+        self.bot.add_listener(self.on_ready, 'on_ready')
         self.bot.logger.info('Timers module has been initiated')
+
+    async def on_ready(self):
+        await self.run_old()
 
     async def run_loop(self, loop: Loop):
         await loop.started.wait()
