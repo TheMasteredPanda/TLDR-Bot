@@ -18,6 +18,10 @@ class Watchlist:
         self.members = {}
         self.watchlist_data = {}
         self.bot.add_listener(self.on_message, 'on_message')
+        self.bot.add_listener(self.on_ready, 'on_ready')
+
+    async def on_ready(self):
+        self.bot.watchlist.initialize()
 
     def initialize(self):
         """Cache all the existing webhook users."""
@@ -99,7 +103,7 @@ class Watchlist:
 
     async def on_message(self, message: discord.Message):
         """Function run on every message to check if user is on watchlist and send their message."""
-        if not self.bot.first_ready:
+        if not self.bot._ready.is_set():
             return
 
         if not message.guild:

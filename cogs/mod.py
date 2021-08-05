@@ -57,7 +57,7 @@ class Mod(Cog):
                                f'**By:** <@{case.moderator_id}>\n' \
                                f'**Reason:** {reason}\n\n'
         else:
-            description = f'This user has no {case_type}s'
+            description = f'This user has no {case_type if case_type else "case"}s'
 
         name_switch = {
             'warn': 'Warnings',
