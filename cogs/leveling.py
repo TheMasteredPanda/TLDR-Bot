@@ -453,14 +453,14 @@ class Leveling(Cog):
             return await embed_maker.message(ctx, description=channel_list_str, send=True)
 
     @honours_channels.command(
-        name='add',
-        help='Add an honours channel',
-        usage='honours_channels add [#channel]',
-        examples=['honours_channels add #Tech-Lobby'],
+        name='remove',
+        help='Remove an honours channel',
+        usage='honours_channels remove [#channel]',
+        examples=['honours_channels remove #Tech-Lobby'],
         cls=commands.Command,
         module_dependency=['leveling_system']
     )
-    async def honours_channels_add(self, ctx: Context, channel=None):
+    async def honours_channels_remove(self, ctx: Context, channel=None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
@@ -477,14 +477,14 @@ class Leveling(Cog):
         return await embed_maker.message(ctx, description=msg, colour='green', send=True)
 
     @honours_channels.command(
-        name='remove',
-        help='Remove an honours channel',
-        usage='honours_channels remove [#channel]',
-        examples=['honours_channels remove #Tech-Lobby'],
+        name='add',
+        help='Add an honours channel',
+        usage='honours_channels add [#channel]',
+        examples=['honours_channels add #Tech-Lobby'],
         cls=commands.Command,
         module_dependency=['leveling_system']
     )
-    async def honours_channels_remove(self, ctx: Context, channel=None):
+    async def honours_channels_add(self, ctx: Context, channel=None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
