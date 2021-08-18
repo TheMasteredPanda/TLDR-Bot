@@ -13,7 +13,7 @@ from modules.utils import (
 from typing import Union, Optional
 from modules import embed_maker, commands, database, format_time, leveling
 from random import randint
-from discord.ext.commands import Cog, command, Context, group, TextChannel
+from discord.ext.commands import Cog, command, Context, group
 from modules.reaction_menus import BookMenu
 db = database.get_connection()
 
@@ -460,7 +460,7 @@ class Leveling(Cog):
         cls=commands.Command,
         module_dependency=['leveling_system']
     )
-    async def honours_channels_remove(self, ctx: Context, channel: TextChannel = None):
+    async def honours_channels_remove(self, ctx: Context, channel: discord.TextChannel = None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
@@ -484,7 +484,7 @@ class Leveling(Cog):
         cls=commands.Command,
         module_dependency=['leveling_system']
     )
-    async def honours_channels_add(self, ctx: Context, channel: TextChannel = None):
+    async def honours_channels_add(self, ctx: Context, channel: discord.TextChannel = None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
