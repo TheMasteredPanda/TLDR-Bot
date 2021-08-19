@@ -460,7 +460,7 @@ class Leveling(Cog):
         cls=commands.Command,
         module_dependency=['leveling_system']
     )
-    async def honours_channels_remove(self, ctx: Context, channel=None):
+    async def honours_channels_remove(self, ctx: Context, channel: discord.TextChannel = None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
@@ -484,7 +484,7 @@ class Leveling(Cog):
         cls=commands.Command,
         module_dependency=['leveling_system']
     )
-    async def honours_channels_add(self, ctx: Context, channel=None):
+    async def honours_channels_add(self, ctx: Context, channel: discord.TextChannel = None):
         if channel is None:
             return await embed_maker.command_error(ctx)
 
@@ -492,7 +492,7 @@ class Leveling(Cog):
             return await embed_maker.command_error(ctx, '[#channel]')
 
         leveling_guild = self.bot.leveling_system.get_guild(ctx.guild.id)
-
+        
         if channel.id in leveling_guild.honours_channels:
             return await embed_maker.message(ctx, description='That channel is already on the list', colour='red', send=True)
 
