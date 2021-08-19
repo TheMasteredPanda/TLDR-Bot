@@ -568,9 +568,12 @@ class Utility(Cog):
             extras={"reminder": reminder, "member_id": ctx.author.id},
         )
 
+        timestamp = datetime.datetime.utcfromtimestamp(expires)
+        strftimestamp = timestamp.strftime('%H:%M:%S %Y-%m-%d (GMT)')
+
         return await embed_maker.message(
             ctx,
-            description=f"Alright, in {format_time.seconds(remind_time, accuracy=10)} I will remind you: `{reminder}`",
+            description=f"Alright, in {format_time.seconds(remind_time, accuracy=10)} [{strftimestamp}] I will remind you: `{reminder}`",
             send=True,
         )
 
