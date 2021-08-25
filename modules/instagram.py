@@ -41,14 +41,17 @@ class Listener:
 
     async def runner(self):
         while not self.stop_event.is_set():
-            start = time.time()
-            if not self.last_post_code:
-                self.get_last_post()
+            try:
+                start = time.time()
+                if not self.last_post_code:
+                    self.get_last_post()
 
-            await self.new_posts()
-            end = time.time()
+                await self.new_posts()
+                end = time.time()
 
-            await asyncio.sleep(self.interval - (end - start))
+                await asyncio.sleep(self.interval - (end - start))
+            except:
+                await asyncio.sleep(self.interval)
 
     def get_last_post(self):
         last_post = self.instagram.igram.get_medias_by_user_id(self.user_id, count=1)
@@ -74,7 +77,7 @@ class Listener:
 
         new_posts = new_posts[::-1]
 
-        self.last_post_code = new_posts[0].short_code
+        self.last_post_code = new_posts[-1].short_code
         is_await = inspect.iscoroutinefunction(self.callback)
         if is_await:
             await self.callback(new_posts)

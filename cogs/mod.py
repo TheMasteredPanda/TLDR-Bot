@@ -283,7 +283,7 @@ class Mod(Cog):
 
             if tweet.thumbnail:
                 embed.set_image(url=tweet.thumbnail)
-            elif tweet.card_data:
+            elif tweet.card_data and tweet.card_data.thumbnail:
                 embed.set_image(url=tweet.card_data.thumbnail)
 
             await self.bot.webhooks.send(
