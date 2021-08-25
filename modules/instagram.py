@@ -45,8 +45,6 @@ class Listener:
             if not self.last_post_code:
                 self.get_last_post()
 
-            self.last_post_code = 'CS9vm37su1i'
-
             await self.new_posts()
             end = time.time()
 
