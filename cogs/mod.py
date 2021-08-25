@@ -147,7 +147,7 @@ class Mod(Cog):
             if tweet.retweet:
                 embed.set_footer(
                     text='Twitter',
-                    icon_url='https://cdn3.iconfinder.com/data/icons/flat-icons-web/40/Retweet-512.png'
+                    icon_url='https://cdn.discordapp.com/attachments/856815506325897216/880046218707865640/retweet-centered.png'
                 )
 
             if tweet.quote:
