@@ -1,23 +1,26 @@
-import math
 import asyncio
 import io
-import time
-from captcha.image import ImageCaptcha
-import string
+import math
 import random
-import discord
-from discord.colour import Colour
-from discord.invite import Invite
-from pymongo.cursor import Cursor
+import re
+import string
+import time
+from typing import Optional, Union
+
 import config
-from typing import Union, Optional
+import discord
+from captcha.image import ImageCaptcha
+from discord import Member
+from discord.channel import TextChannel
+from discord.colour import Colour
 from discord.errors import Forbidden, HTTPException
 from discord.guild import Guild
-from discord.channel import TextChannel
-from discord import Member
+from discord.invite import Invite
+from pymongo.cursor import Cursor
+
 import modules.database as database
-from modules.utils import SettingsHandler
 import modules.timers as timers
+from modules.utils import SettingsHandler
 
 """
 A Captcha Gateway System to prevent continuous bot attacks.
@@ -78,6 +81,7 @@ class DataManager:
         self._captcha_channels = self._db.captcha_channels
         self._captcha_blacklist = self._db.captcha_blacklist
         self._captcha_counter = self._db.captcha_counter
+        self._member_cache = self._db.captcha_member_cache
 
     def add_captcha_channel(self, channel):
         """
@@ -114,16 +118,16 @@ class DataManager:
             Depending on the pre-existentence of a counter, this value is used to either set or update
             the counter.
         """
-        entry = self._captcha_counter.find_one({"member_id": member_id})
+        entry = self._captcha_counter.find_one({"mid": member_id})
         now = time.time()
         if entry:
             self._captcha_counter.update_one(
-                {"member_id": member_id},
+                {"mid": member_id},
                 {"$set": {"counter": entry["counter"] + counter, "updated_at": now}},
             )
         else:
             self._captcha_counter.insert_one(
-                {"member_id": member_id, "counter": counter, "updated_at": now}
+                {"mid": member_id, "counter": counter, "updated_at": now}
             )
 
     def get_captcha_counter(self, member_id: int):
@@ -147,7 +151,7 @@ class DataManager:
             The id of the member associated to a counter.
         """
         return self._captcha_counter.update_one(
-            {"member_id": member_id}, {"$set": {"counter": 0}}
+            {"mid": member_id}, {"$set": {"counter": 0}}
         )
 
     def get_captcha_channels(self, guild_id: int, only_active: bool = True) -> list:
@@ -166,9 +170,88 @@ class DataManager:
         :class:`list`
             A list of documents containing key information about captcha channels.
         """
-        return list(
-            self._captcha_channels.find({"guild_id": guild_id, "active": only_active})
+        return (
+            list(
+                self._captcha_channels.find(
+                    {"guild_id": guild_id, "active": only_active}
+                )
+            )
+            if only_active is True
+            else list(self._captcha_channels.find({"guild_id": guild_id}))
         )
+
+    def add_blacklisted_member(self, member: Member):
+        """
+        Add a blacklisted member to the user cache.
+
+        Parameters
+        ----------
+        :class:`Member`
+            The member that was just blacklied.
+        """
+
+        self._member_cache.insert_one({"mid": member.id, "name": member.display_name})
+
+    def get_blacklisted_member(self, member_id: int) -> Union[Cursor, None]:
+        """
+        Fetch information on one cached member.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member.
+
+        Returns
+        -------
+        :class:`object`
+            A document associated with the member id provided or `None`.
+        """
+        return self._member_cache.find_one({"mid": member_id})
+
+    def delete_blacklisted_members(self, mids: list[int]) -> None:
+        """Deletes more than one member from the cache. Used primarily in the unban_task.
+
+        Parameters
+        ----------
+        :class:`mids`
+            A list of member ids.
+        """
+        self._member_cache.delete_many({"mid": mids})
+
+    def get_blacklisted_members(self, username: str = "", member_id: int = 0):
+        """
+        Fetches a list of blacklisted members. If a username or member id is supplied then it will preform a
+        'starts with' filter, and return the list of members whose username starts with the string supplied
+        or whose id starts with the id supplied.
+
+        Parameters
+        ----------
+        username: :class:`str`
+            The starting characters of a username.
+        member_id: :class:`int`
+            The starting characters of a member id.
+
+        Returns
+        -------
+        :class:`list`
+            A list of documents that starts with the username provided or the id provided.
+        """
+        if username == "" and member_id == 0:
+            return self._member_cache.find({})
+
+        return (
+            self._member_cache.find(
+                {"name": re.compile(f"^{username}.*", re.IGNORECASE)}
+            )
+            if username != ""
+            else self._member_cache.find({"mid": f"/^{member_id}.*/is"})
+        )
+
+    def remove_blacklisted_member(self, member_id: int):
+        """
+        Removes a blacklisted member from the cache. Used usually after a member has been removed from the blacklist.
+        """
+        self._member_cache.remove({"mid": member_id})
 
     def get_captcha_counters(self) -> list:
         """
@@ -247,7 +330,7 @@ class DataManager:
             else self._captcha_guilds.find({}, {"stats": 0})
         )
 
-    def is_blacklisted(self, **kwargs) -> Union[Cursor, list, None]:
+    def is_blacklisted(self, member_id: int) -> Union[Cursor, list, None]:
         """
         Checks if a user is blacklisted.
 
@@ -255,40 +338,21 @@ class DataManager:
         ----------
         member_id: :class:`int`
             The id of the member to search for.
-        member_name: :class:`int`
-            The name of the member to search for.
 
         Returns
         -------
         :class:`bool`
             Returns true if blacklisted, else false.
         """
-        member_id: Union[int, None] = (
-            kwargs["member_id"] if "member_id" in kwargs else None
-        )
-        member_name: Union[str, None] = (
-            kwargs["member_name"] if "member_name" in kwargs else None
-        )
-        member: Union[Member, None] = kwargs["member"] if "member" in kwargs else None
 
-        if member_id is not None:
-            return self._captcha_blacklist.find_one({"member": {"id": member_id}})
+        return self._captcha_blacklist.find_one({"mid": member_id}) is not None
 
-        if member_name is not None:
-            return list(
-                self._captcha_blacklist.find(
-                    {"member": {{"name": {"$regex": f"^({member_name}.*)"}}}}
-                )
-            )
-
-        if member is not None:
-            return self._captcha_blacklist.find({"member": {"id": member.id}})
-
-        return None
-
-    def add_member_to_blacklist(self, member: Member, duration: int = 86400):
+    def add_member_to_blacklist(
+        self, member: Member, duration: int = 86400, reason: str = "No reason provided."
+    ):
         """
-        Add a member to the blacklist.
+        Add a member to the blacklist. This will store the date in which the member was blacklisted, the time which
+        the blacklist will end, and the id of the member who is being blacklisted.
 
         Parameters
         ----------
@@ -299,21 +363,16 @@ class DataManager:
         """
         now = time.time()
         self._captcha_blacklist.insert_one(
-            {
-                "member": {"id": member.id, "name": member.display_name},
-                "started": now,
-                "ends": now + duration,
-            }
+            {"mid": member.id, "started": now, "ends": now + duration, "reason": reason}
         )
 
-    def get_blacklisted_member(self, **kwargs) -> Union[Cursor, None]:
+    def get_blacklisted_member_info(self, member_id: int) -> Union[Cursor, None]:
         """
-        Get a blacklisted member.
+        Returns the temporal data associated with a member who has been blacklisted. This data is the full date the
+        user was blacklisted (banned) as well as the date in which the blacklist will be over.
 
         Parameters
         ----------
-        name: :class:`str`
-            The name of the member to fetch.
         member_id: :class:`int`
             The id of the member to fetch.
 
@@ -322,19 +381,9 @@ class DataManager:
         :class:`Document`
             The document containing the information of the blacklisted member.
         """
-        for entry in self._captcha_blacklist.find({}):
-            if kwargs.get("name"):
-                if (
-                    entry["member"]["name"]
-                    .lower()
-                    .startswith(kwargs.get("name").lower())
-                ):
-                    return entry
-            if kwargs.get("member_id"):
-                if entry["member"]["id"] == kwargs.get("member_id"):
-                    return entry
+        return self._captcha_blacklist.find_one({"mid": member_id})
 
-    def rm_member_from_blacklist(self, member_id: int):
+    def remove_member_from_blacklist(self, member_id: int):
         """
         Remove a member from the blacklist.
 
@@ -343,7 +392,7 @@ class DataManager:
         member_id: :class:`int`
             The id of a member to remove from the blacklist
         """
-        self._captcha_blacklist.delete_one({"member.id": member_id})
+        self._captcha_blacklist.delete_one({"mid": member_id})
 
     def get_blacklist(self):
         """
@@ -382,6 +431,7 @@ class CaptchaChannel:
         self._ttl = bot.captcha.get_config()["captcha_time_to_live"]
         self._internal_clock = 0
         self._active = False
+        self._logger = bot.logger
 
     def get_ttl(self):
         """
@@ -519,8 +569,10 @@ class CaptchaChannel:
                 },
             )
             if self._bot.captcha.is_operator(self._member.id) is False:
-                await self._member.ban()
-                self._data_manager.add_member_to_blacklist(member=self._member)
+                await self._member.ban(reason="Failed to complete Captcha assessment.")
+                self._data_manager.add_member_to_blacklist(
+                    self._member, 900, "Failed to complete Captcha assessment."
+                )
 
             await self.destory()
 
@@ -645,7 +697,7 @@ class CaptchaChannel:
 
     async def on_message(self, message: discord.Message):
         """
-        A function called in the cogs/events.py script. Handles the text coming from the user.
+        The on_message function called in the cogs/events.py script. Handles the text coming from the user.
         """
         if self._started is False:
             return
@@ -668,9 +720,19 @@ class CaptchaChannel:
                     {"active": False, "stats": {"completed": False, "failed": True}},
                 )
                 if self._bot.captcha.is_operator(self._member.id) is False:
-                    self._data_manager.add_member_to_blacklist(self._member)
-                    await self._member.ban()
-                await self._channel.delete()
+                    self._data_manager.add_blacklisted_member(self._member)
+                    reason = (
+                        "Failed to complete Captcha assessment; failed to complete the assessment in time..",
+                    )
+
+                    self._data_manager.add_member_to_blacklist(
+                        self._member, 900, reason
+                    )
+                    self._logger.info(
+                        f"Banning member {self._member.display_name}/{self._member.id} for failing to complete Captcha."
+                    )
+                    await self._member.ban(reason=reason)
+                # await self._channel.delete() - Not quite sure why this is here.
         else:
             self._invite = await self.create_tldr_invite()
             url = self._invite.url
@@ -722,6 +784,7 @@ class GatewayGuild:
         This class managed all interactions on a Guild level.
         """
         self._bot = bot
+        self._logger = bot.logger
         self._data_manager = data_manager
         self._kwargs = kwargs
         self._category = None
@@ -782,6 +845,10 @@ class GatewayGuild:
             if self._bot.captcha.is_operator(member.id):
                 continue
             if main_guild.get_member(member.id):
+                self._logger.info(
+                    f"Kicked user {member.display_name}/{member.id} from {self._guild.name} beacuse they were"
+                    "already on the main guild."
+                )
                 await member.kick()
 
     def get_user_count(self):
@@ -923,17 +990,14 @@ class GatewayGuild:
         user_id = member.id
 
         blacklisted_member = (
-            self._bot.captcha.get_data_manager().get_blacklisted_member(
-                member_id=member.id
-            )
+            self._bot.captcha.get_data_manager().get_blacklisted_member(member.id)
         )
         if blacklisted_member:
-            await member.ban()
+            await member.ban(reason="Is a blacklisted member. Banned on join attempt.")
 
         if len(self._guild.members) in [100, 200, 300, 400, 500]:
             await captcha_module.announce(
-                f"{self._guild.name} reached {self._guild.members}",
-                self._guild
+                f"{self._guild.name} reached {self._guild.members}", self._guild
             )
 
         if captcha_module.is_operator(user_id):
@@ -965,17 +1029,23 @@ class GatewayGuild:
                 >= settings["gateway_rejoin"]["limit"]
                 and is_operator is False
             ):
+                bans = await self._guild.bans()
+
+                for ban in bans:
+                    if ban.user.id == member.id:
+                        return
+
                 self._data_manager.add_member_to_blacklist(
                     member,
                     self._bot.captcha.get_config()["gateway_rejoin"][
                         "blacklist_duration"
                     ],
+                    "Rejoined a Gateway Guild too often.",
                 )
 
-                await member.ban()
-                self._bot.logger.info(
-                    f"Banned member {member.name} for joining and leaving {settings['gateway_rejoin']['limit']} times."
-                )
+                reason = f"Banned member {member.name} for joining and leaving {settings['gateway_rejoin']['limit']} times."
+                await member.ban(reason=reason)
+                self._bot.logger.info(reason)
 
 
 class CaptchaModule:
@@ -1076,7 +1146,7 @@ class CaptchaModule:
                     await g_guild.load()
 
                     mongo_captcha_channels = self._data_manager.get_captcha_channels(
-                        m_guild_id
+                        m_guild_id, False
                     )
 
                     if len(mongo_captcha_channels) > 0:
@@ -1084,7 +1154,7 @@ class CaptchaModule:
 
                     for entry in mongo_captcha_channels:
                         if guild.get_member(entry["member_id"]) is None:
-                            print(
+                            self._logger.info(
                                 f"Member under id {entry['member_id']} no longer on Gateway Guild."
                             )
                             self._data_manager.update_captcha_channel(
@@ -1324,15 +1394,27 @@ class CaptchaModule:
         Unbans members from Gateway Guilds that were on the blacklist if the time has elapsed.
         """
         blacklist = self._data_manager.get_blacklist()
+
         now = time.time()
+        cache_members_to_remove = []
 
         for entry in blacklist:
             if entry["ends"] <= now:
-                await self.unban(entry["member"]["id"])
-                self._logger.info(
-                    f"Removing {entry['member']['name']}/{entry['member']['id']} from blacklist."
+                await self.unban(entry["mid"])
+                blacklist_member = self._data_manager.get_blacklisted_member(
+                    entry["mid"]
                 )
-                self._data_manager.rm_member_from_blacklist(entry["member"]["id"])
+
+                if blacklist_member:
+                    self._logger.info(
+                        f"Removing {blacklist_member['name']}/{blacklist_member['mid']} from blacklist."
+                    )
+                else:
+                    self._logger.info(
+                        f"Removed a member from blacklist. Failed to find username associated with the member in the cache."
+                    )
+                self._data_manager.remove_member_from_blacklist(entry["mid"])
+                cache_members_to_remove.append(entry["mid"])
 
         captcha_counter_entries = self._data_manager.get_captcha_counters()
         captcha_counter_cooldown_seconds = self._settings_handler.get_settings(
@@ -1341,8 +1423,22 @@ class CaptchaModule:
 
         for entry in captcha_counter_entries:
             if (entry["updated_at"] + captcha_counter_cooldown_seconds) <= time.time():
-                await self.unban(entry["member"]["id"])
-                self._data_manager.rm_member_from_blacklist(entry["member"]["id"])
+                await self.unban(entry["mid"])
+                self._data_manager.remove_member_from_blacklist(entry["mid"])
+                blacklist_member = self._data_manager.get_blacklisted_member(
+                    entry["mid"]
+                )
+                cache_members_to_remove.append(entry["mid"])
+                await self.unban(entry["mid"])
+                if blacklist_member:
+                    self._logger.info(
+                        f"Removing {blacklist_member['name']}/{blacklist_member['mid']} from blacklist and resetting relog counter."
+                    )
+                else:
+                    self._logger.info(
+                        f"Removing member from blacklist and resetting relog counter."
+                    )
+        self._data_manager.delete_blacklisted_members(cache_members_to_remove)
 
     def set_setting(self, path: str, value: object):
         settings = self._settings_handler.get_settings(config.MAIN_SERVER)
@@ -1385,7 +1481,7 @@ class CaptchaModule:
             else:
                 walk(split_path, split_path[0], settings)
 
-    async def ban(self, member: discord.Member):
+    async def ban(self, member: discord.Member, reason: str = "No reason"):
         """
         Bans a member on all active Guilds.
 
@@ -1395,7 +1491,7 @@ class CaptchaModule:
             The member to ban.
         """
         for g_guild in self._gateway_guilds:
-            await g_guild.get_guild().ban(member.id)
+            await g_guild.get_guild().ban(member.id, reason=reason)
 
     async def on_member_leave(self, member: discord.Member):
         """
@@ -1405,7 +1501,6 @@ class CaptchaModule:
 
         for g_guild in self._gateway_guilds:
             if g_guild.get_guild().id == guild_id:
-                print("Is gateway Guild.")
                 await g_guild.on_member_leave(member)
 
     async def on_member_join(self, member: discord.Member):
@@ -1417,7 +1512,8 @@ class CaptchaModule:
 
         if self.is_gateway_guild(guild_id):
             main_guild: Guild = self._bot.get_guild(config.MAIN_SERVER)
-            main_guild_user = main_guild.get_member(user_id)
+            main_guild_user: Union[Member, None] = main_guild.get_member(user_id)
+
             if (
                 main_guild_user is not None
                 and self._bot.captcha.is_operator(user_id) is False
@@ -1433,12 +1529,15 @@ class CaptchaModule:
         if guild_id == config.MAIN_SERVER:
             for g_guild in self._bot.captcha.get_gateway_guilds():
                 if g_guild.has_captcha_channel(user_id):
-                    channel = g_guild.get_captcha_channel(user_id)
+                    channel: CaptchaChannel = g_guild.get_captcha_channel(user_id)
                     if channel.has_completed_captcha():
+                        self._bot.logger.info(
+                            f"Member {main_guild_user.display_name} completed Captcha but was still on {channel.get_gateway_guild().get_guild().get_name()}. Kicking member."
+                        )
                         await g_guild.get_guild().kick(member)
                         await channel.destory()
 
-    @timers.loop(minutes=1)
+    @timers.loop(minutes=5)
     async def gateway_reset_task(self):
         """
         Resets Captcha Counters after a period of time has elapsed.
@@ -1450,4 +1549,4 @@ class CaptchaModule:
                 + self._bot.get_config()["gateway_rejoin"]["reset_after_duration"]
                 <= now
             ):
-                self._data_manager.reset_captcha_counter(counter_entry["member_id"])
+                self._data_manager.reset_captcha_counter(counter_entry["mid"])

@@ -1,34 +1,31 @@
-from io import BytesIO
-from modules.utils import SettingsHandler
-from cachetools.ttl import TTLCache
-from bot import TLDR
-from datetime import datetime
-import discord
-from discord.embeds import Embed
-from discord.guild import Guild
-import time
-import aiofiles
+import configparser
+import os
 import random
-from discord import File
 import string
+import time
+from datetime import datetime
+from io import BytesIO
 from typing import Union
+
+import aiofiles
+import config
+import discord
+from bot import TLDR
+from cachetools.ttl import TTLCache
+from discord import File
+from discord.embeds import Embed
+from discord.ext import tasks
+from discord.guild import Guild
+
+from modules import database
+from modules.utils import SettingsHandler
+from ukparliament.bills_tracker import (BillsStorage, Conditions, Feed,
+                                        FeedUpdate, PublicationUpdate)
+from ukparliament.divisions_tracker import DivisionStorage
 from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from ukparliament.structures.members import ElectionResult, PartyMember
-from ukparliament.bills_tracker import (
-    Conditions,
-    Feed,
-    FeedUpdate,
-    BillsStorage,
-    PublicationUpdate,
-)
-from ukparliament.divisions_tracker import DivisionStorage
-from ukparliament.utils import BetterEnum
-from discord.ext import tasks
 from ukparliament.ukparliament import UKParliament
-from modules import database
-import config
-import os
-import configparser
+from ukparliament.utils import BetterEnum
 
 
 class UKParliamentConfig:

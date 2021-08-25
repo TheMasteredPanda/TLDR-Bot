@@ -1,10 +1,11 @@
-import pymongo
+from typing import Union
+
 import config
+import pymongo
+from bson import ObjectId
 
 from ukparliament.bills_tracker import FeedUpdate
-from ukparliament.divisions_tracker import LordsDivision, CommonsDivision
-from typing import Union
-from bson import ObjectId
+from ukparliament.divisions_tracker import CommonsDivision, LordsDivision
 
 active_connection = None
 
@@ -249,7 +250,14 @@ class Connection:
                 'function': :class:`str`  # name of the function in tasks that will be called
                 'kwargs': :class:`dict`
             }
+    captcha_member_cache: :class:`pymongo.collection.Collection`
+        The collection for storing the last known username of a blacklisted member.
+            {
+                'member_id': :class:`int`
+                'member_name': :class:`str`
+            }
     """
+
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
         self.db = self.mongo_client["TLDR"]
@@ -270,11 +278,12 @@ class Connection:
         self.captcha_channels = self.db["captcha_channels"]
         self.captcha_blacklist = self.db["captcha_blacklist"]
         self.captcha_counter = self.db["captcha_counter"]
+        self.captcha_member_cache = self.db["captcha_member_cache"]
         self.webhooks = self.db["webhooks"]
-        self.webhooks = self.db['webhooks']
-        self.slack_bridge = self.db['slack_bridge']
-        self.slack_messages = self.db['slack_messages']
-        self.tasks = self.db['tasks']
+        self.webhooks = self.db["webhooks"]
+        self.slack_bridge = self.db["slack_bridge"]
+        self.slack_messages = self.db["slack_messages"]
+        self.tasks = self.db["tasks"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
