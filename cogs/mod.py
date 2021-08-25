@@ -5,7 +5,6 @@ import dateparser
 import discord
 import functools
 
-from functools import partial
 from twtsc import Tweet
 from bson import ObjectId
 from modules.reaction_menus import BookMenu
@@ -43,8 +42,9 @@ class Mod(Cog):
             description = ''
             listeners = db.tweet_listeners.find({})
             for listener_data in listeners:
-                listener = self.bot.twtsc.listeners.get(listener_data['twitter_username'])
-                description += f'[{listener["twitter_username"]}]({listener.user.link}) - <#{listener_data["discord_channel_id"]}>\n'
+                for listener_user, listener in self.bot.twtsc.listeners.items():
+                    if listener_user == listener_data['twitter_username']:
+                        description += f'[{listener.user.name}]({listener.user.link}) - <#{listener_data["discord_channel_id"]}>\n'
 
             if not description:
                 description = 'No Tweetfeed :('
