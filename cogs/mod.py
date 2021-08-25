@@ -72,8 +72,9 @@ class Mod(Cog):
         if twitter_username is None:
             return await embed_maker.error(ctx, "Missing twitter username arg.")
 
-        if twitter_username in self.bot.twtsc.listeners:
-            return await embed_maker.error(ctx, "Currently twitter users can only be associated with one channel")
+        for listener_user, listener in self.bot.twtsc.listeners.items():
+            if listener_user == twitter_username:
+                return await embed_maker.error(ctx, "Currently twitter users can only be associated with one channel")
 
         twitter_user = await self.bot.twtsc.get_user(username=twitter_username)
         if twitter_user is None:
