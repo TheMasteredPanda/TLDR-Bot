@@ -221,6 +221,12 @@ class Connection:
                 'function': :class:`str`  # name of the function in tasks that will be called
                 'kwargs': :class:`dict`
             }
+    tweet_listeners :class:`pymongo.collection.Collection`
+        The collection that holds the data for tweet listeners.
+            {
+                'twitter_username': :class:`str`
+                'discord_channel_id': :class:`int`
+            }
     """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -242,6 +248,7 @@ class Connection:
         self.slack_bridge = self.db['slack_bridge']
         self.slack_messages = self.db['slack_messages']
         self.tasks = self.db['tasks']
+        self.tweet_listeners = self.db['tweet_listeners']
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})

@@ -5,6 +5,7 @@ import config
 import datetime
 import traceback
 
+from functools import partial
 from bson import ObjectId
 from bot import TLDR
 from modules import database, format_time, embed_maker
@@ -26,7 +27,29 @@ class Events(Cog):
         if not self.bot.leveling_system:
             self.bot.left_check.set()
 
+        if self.bot.twtsc:
+            await self.load_tweetfeed()
+
         self.bot.logger.info(f"{self.bot.user} is ready")
+
+    async def load_tweetfeed(self):
+        bot = self.bot
+        def new_tweet(tweets, *, discord_channel: discord.TextChannel):
+            bot.dispatch('new_tweets', tweets, discord_channel)
+
+        tweet_listeners = db.tweet_listeners.find({})
+        for listener_data in tweet_listeners:
+            discord_channel = self.bot.get_channel(listener_data['discord_channel_id'])
+            if discord_channel is None:
+                db.tweet_listeners.delete_one(listener_data)
+
+            twitter_username = listener_data['twitter_username']
+            twitter_user = await self.bot.twtsc.get_user(username=twitter_username)
+            if twitter_user is None:
+                db.tweet_listeners.delete_one(listener_data)
+
+            partial_callback = partial(new_tweet, discord_channel=discord_channel)
+            self.bot.twtsc.create_tweet_listener(twitter_user, partial_callback)
 
     @Cog.listener()
     async def on_command_error(self, ctx: Context, exception: Exception):

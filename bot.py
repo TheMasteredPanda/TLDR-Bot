@@ -21,6 +21,8 @@ import modules.commands
 import modules.slack_bridge
 import modules.tasks
 
+from twtsc import Twtsc
+
 from datetime import datetime
 from discord.ext.commands import when_mentioned_or, Bot
 
@@ -69,6 +71,7 @@ class TLDR(Bot):
         self.clearance = modules.commands.Clearance(self) if self.enabled_modules['clearance'] else None
         self.slack_bridge = modules.slack_bridge.Slack(self) if self.enabled_modules['slack_bridge'] else None
         self.tasks = modules.tasks.Tasks(self) if self.enabled_modules['tasks'] else None
+        self.twtsc = Twtsc() if self.enabled_modules['twtsc'] else None
 
     def add_cog(self, cog):
         """Overwrites the orginal add_cog method to add a line for the commandSystem"""
