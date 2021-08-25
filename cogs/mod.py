@@ -85,7 +85,7 @@ class Mod(Cog):
 
         self.bot.twtsc.create_tweet_listener(twitter_user, new_tweet)
         db.tweet_listeners.insert_one({
-            'twitter_username':  twitter_username,
+            'twitter_username':  twitter_user.screen_name,
             'discord_channel_id': discord_channel.id
         })
 
@@ -110,13 +110,12 @@ class Mod(Cog):
         for listener_user, listener in self.bot.twtsc.listeners.items():
             if listener_user == twitter_username:
                 listener.stop()
+                db.tweet_listeners.delete_one({
+                    'twitter_username': listener_user.screen_name
+                })
                 break
         else:
             return await embed_maker.error(ctx, f"Twitter user [{twitter_username}] is not associated with any channels.")
-
-        db.tweet_listeners.delete_one({
-            'twitter_username': twitter_username
-        })
 
         return await embed_maker.message(
             ctx,
