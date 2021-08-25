@@ -5,9 +5,11 @@ import dateparser
 import discord
 import functools
 
+from functools import partial
+from twtsc import Tweet
 from bson import ObjectId
 from modules.reaction_menus import BookMenu
-from discord.ext.commands import Cog, command, Context, group
+from discord.ext.commands import Cog, command, Context, group, TextChannelConverter
 from typing import Union
 from bot import TLDR
 from modules import commands, database, embed_maker, format_time, reaction_menus
@@ -25,6 +27,150 @@ db = database.get_connection()
 class Mod(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+
+    @command(
+        invoke_without_command=True,
+        help='Manage the server\'s tweet feeds.',
+        usage='tweetfeed (sub command) (args)',
+        examples=['tweetfeed add #tldr-tweets TLDRNewsUS', 'tweetfeed remove TLDRNewsUS'],
+        aliases=['tf'],
+        cls=commands.Group,
+    )
+    async def tweetfeed(self, ctx: Context):
+        if ctx.subcommand_passed is None:
+            embed = await embed_maker.message(ctx, author={'name': "Tweetfeed"})
+
+            description = ''
+            listeners = db.tweet_listeners.find({})
+            for listener_data in listeners:
+                listener = self.bot.twtsc.listeners.get(listener_data['twitter_username'])
+                description += f'[{listener["twitter_username"]}]({listener.user.link}) - <#{listener_data["discord_channel_id"]}>\n'
+
+            if not description:
+                description = 'No Tweetfeed :('
+
+            embed.description = description
+
+            return await ctx.send(embed=embed)
+
+    @tweetfeed.command(
+        name='add',
+        help='Add to the tweetfeed',
+        usage='tweetfeed add [#discord-channel] [twitter username]',
+        examples=['tweetfeed add TLDRNewsUS #tldr-tweets'],
+        cls=commands.Command,
+    )
+    async def tweetfeed_add(self, ctx: Context, discord_channel: str = None, twitter_username: str = None):
+        if discord_channel is None:
+            return await embed_maker.command_error(ctx)
+
+        try:
+            discord_channel = await TextChannelConverter().convert(ctx, discord_channel)
+        except:
+            return await embed_maker.error(ctx, "Invalid discord channel.")
+
+        if twitter_username is None:
+            return await embed_maker.error(ctx, "Missing twitter username arg.")
+
+        if twitter_username in self.bot.twtsc.listeners:
+            return await embed_maker.error(ctx, "Currently twitter users can only be associated with one channel")
+
+        twitter_user = await self.bot.twtsc.get_user(username=twitter_username)
+        if twitter_user is None:
+            return await embed_maker.error(ctx, "Invalid twitter username")
+
+        def new_tweet(tweets: list[Tweet]):
+            self.bot.dispatch('new_tweets', tweets, discord_channel)
+
+        self.bot.twtsc.create_tweet_listener(twitter_user, new_tweet)
+        db.tweet_listeners.insert_one({
+            'twitter_username':  twitter_username,
+            'discord_channel_id': discord_channel.id
+        })
+
+        return await embed_maker.message(
+            ctx,
+            description=f'Twitter user [{twitter_username}] has been added to the tweetfeed with channel [<#{discord_channel.id}>]',
+            colour='green',
+            send=True
+        )
+
+    @tweetfeed.command(
+        name='remove',
+        help='Remove from the tweetfeed',
+        usage='tweetfeed remove [twitter username]',
+        examples=['tweetfeed remove #tldr-tweets'],
+        cls=commands.Command,
+    )
+    async def tweetfeed_remove(self, ctx: Context, twitter_username: str = None):
+        if twitter_username is None:
+            return await embed_maker.command_error(ctx)
+
+        if twitter_username not in self.bot.twtsc.listeners:
+            return await embed_maker.error(ctx, f"Twitter user [{twitter_username}] is not associated with any channels.")
+
+        listener = self.bot.twtsc.listeners[twitter_username]
+        listener.stop()
+
+        db.tweet_listeners.delete_one({
+            'twitter_username': twitter_username
+        })
+
+        return await embed_maker.message(
+            ctx,
+            description=f'Twitter user [{twitter_username}] has been removed from the tweetfeed.',
+            colour='green',
+            send=True
+        )
+
+    @Cog.listener('on_new_tweets')
+    async def on_new_tweets(self, tweets: list[Tweet], discord_channel: discord.TextChannel):
+        for tweet in tweets:
+            embed = discord.Embed(colour=0x1DA1F2, timestamp=datetime.datetime.fromtimestamp(tweet.unix_timestamp))
+
+            if tweet.retweet:
+                user = tweet.retweet_data
+                embed.description = tweet.retweet_data.tweet_text
+
+                embed.add_field(name='Retweets', value=tweet.retweet_data.retweets_count)
+                embed.add_field(name='Likes', value=tweet.retweet_data.likes_count)
+                embed.set_image(url=tweet.retweet_data.thumbnail)
+
+            else:
+                user = tweet.user
+                embed.description = tweet.tweet_text
+                embed.set_footer(text='Twitter', icon_url="https://abs.twimg.com/icons/apple-touch-icon-192x192.png")
+
+            embed.set_author(name=f'{user.screen_name} (@{user.name})', icon_url=user.avatar)
+
+            if tweet.retweet:
+                embed.set_footer(
+                    text='Twitter',
+                    icon_url='https://cdn3.iconfinder.com/data/icons/flat-icons-web/40/Retweet-512.png'
+                )
+
+            if tweet.quote:
+                embed.set_footer(
+                    text="Twitter",
+                    icon_url="https://cdn.discordapp.com/attachments/856815506325897216/880030728140783616/quote-centered.png"
+                )
+
+            if tweet.reply:
+                embed.set_footer(
+                    text='Twitter',
+                    icon_url="https://cdn.discordapp.com/attachments/856815506325897216/880030248455008256/reply-centered.png"
+                )
+
+            if tweet.thumbnail:
+                embed.set_image(url=tweet.thumbnail)
+
+            await self.bot.webhooks.send(
+                channel=discord_channel,
+                content=tweet.link,
+                username=tweet.name,
+                avatar_url=tweet.user.avatar,
+                embeds=[embed]
+            )
 
     @staticmethod
     async def construct_cases_embed(ctx: Context, member: discord.Member, cases: dict, case_type: str,
