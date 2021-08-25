@@ -30,7 +30,29 @@ class Events(Cog):
         if self.bot.twtsc:
             await self.load_tweetfeed()
 
+        if self.bot.instagram:
+            await self.load_instafeed()
+
         self.bot.logger.info(f"{self.bot.user} is ready")
+
+    async def load_instafeed(self):
+        bot = self.bot
+        def new_insta_posts(posts, *, discord_channel: discord.TextChannel):
+            bot.dispatch('new_insta_posts', posts, discord_channel)
+
+        insta_listener = db.insta_listeners.find({})
+        for listener_data in insta_listener:
+            discord_channel = self.bot.get_channel(listener_data['discord_channel_id'])
+            if discord_channel is None:
+                db.tweet_listeners.delete_one(listener_data)
+
+            insta_user_id = listener_data['insta_user_id']
+            insta_user = self.bot.instagram.get_user(user_id=insta_user_id)
+            if insta_user is None:
+                db.tweet_listeners.delete_one(listener_data)
+
+            partial_callback = partial(new_insta_posts, discord_channel=discord_channel)
+            self.bot.instagram.create_listener(insta_user.identifier, partial_callback)
 
     async def load_tweetfeed(self):
         bot = self.bot

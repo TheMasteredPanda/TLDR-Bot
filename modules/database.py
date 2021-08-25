@@ -227,6 +227,12 @@ class Connection:
                 'twitter_username': :class:`str`
                 'discord_channel_id': :class:`int`
             }
+    insta_listeners :class:`pymongo.collection.Collection`
+        The collection that holds the data for insta listeners.
+            {
+                'insta_user_id': :class:`str`
+                'discord_channel_id': :class:`int`
+            }
     """
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
@@ -249,6 +255,7 @@ class Connection:
         self.slack_messages = self.db['slack_messages']
         self.tasks = self.db['tasks']
         self.tweet_listeners = self.db['tweet_listeners']
+        self.insta_listeners = self.db['insta_listeners']
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
