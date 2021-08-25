@@ -44,7 +44,7 @@ class Mod(Cog):
             for listener_data in listeners:
                 for listener_user, listener in self.bot.twtsc.listeners.items():
                     if listener_user == listener_data['twitter_username']:
-                        description += f'[{listener.user.name}]({listener.user.link}) - <#{listener_data["discord_channel_id"]}>\n'
+                        description += f'[{listener.user.screen_name}]({listener.user.link}) - <#{listener_data["discord_channel_id"]}>\n'
 
             if not description:
                 description = 'No Tweetfeed :('
@@ -106,11 +106,12 @@ class Mod(Cog):
         if twitter_username is None:
             return await embed_maker.command_error(ctx)
 
-        if twitter_username not in self.bot.twtsc.listeners:
+        for listener_user, listener in self.bot.twtsc.listeners.items():
+            if listener_user == twitter_username:
+                listener.stop()
+                break
+        else:
             return await embed_maker.error(ctx, f"Twitter user [{twitter_username}] is not associated with any channels.")
-
-        listener = self.bot.twtsc.listeners[twitter_username]
-        listener.stop()
 
         db.tweet_listeners.delete_one({
             'twitter_username': twitter_username
