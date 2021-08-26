@@ -139,7 +139,7 @@ class DataManager:
         member_id: :class:`int`
             The id of the member associated to a counter.
         """
-        return self._captcha_counter.find_one({"member_id": member_id})
+        return self._captcha_counter.find_one({"mid": member_id})
 
     def reset_captcha_counter(self, member_id: int):
         """
@@ -721,12 +721,12 @@ class CaptchaChannel:
                 )
                 if self._bot.captcha.is_operator(self._member.id) is False:
                     self._data_manager.add_blacklisted_member(self._member)
-                    reason = (
-                        "Failed to complete Captcha assessment; failed to complete the assessment in time..",
-                    )
+                    reason = "Failed to complete Captcha assessment; failed to complete the assessment in time.."
 
                     self._data_manager.add_member_to_blacklist(
-                        self._member, 900, reason
+                        self._member,
+                        self._bot.captcha.get_config()["blacklist_length"],
+                        reason,
                     )
                     self._logger.info(
                         f"Banning member {self._member.display_name}/{self._member.id} for failing to complete Captcha."
@@ -989,10 +989,10 @@ class GatewayGuild:
         captcha_module = self._bot.captcha
         user_id = member.id
 
-        blacklisted_member = (
-            self._bot.captcha.get_data_manager().get_blacklisted_member(member.id)
+        blacklist_entry = (
+            self._bot.captcha.get_data_manager().get_blacklisted_member_info(member.id)
         )
-        if blacklisted_member:
+        if blacklist_entry:
             await member.ban(reason="Is a blacklisted member. Banned on join attempt.")
 
         if len(self._guild.members) in [100, 200, 300, 400, 500]:
@@ -1024,9 +1024,10 @@ class GatewayGuild:
             settings = self._bot.settings_handler.get_settings(config.MAIN_SERVER)[
                 "modules"
             ]["captcha"]
+            counter_entry = self._data_manager.get_captcha_counter(member.id)
             if (
-                self._data_manager.get_captcha_counter(member.id)["counter"]
-                >= settings["gateway_rejoin"]["limit"]
+                counter_entry is not None
+                and counter_entry["counter"] >= settings["gateway_rejoin"]["limit"]
                 and is_operator is False
             ):
                 bans = await self._guild.bans()
@@ -1061,6 +1062,7 @@ class CaptchaModule:
         self._logger = bot.logger
         self._image_captcha = ImageCaptcha(width=360, height=120)
         self._announcement_channel = None
+        self.unban_task.start()
 
         if config.MAIN_SERVER == 0:
             bot.logger.info(
@@ -1154,9 +1156,7 @@ class CaptchaModule:
 
                     for entry in mongo_captcha_channels:
                         if guild.get_member(entry["member_id"]) is None:
-                            self._logger.info(
-                                f"Member under id {entry['member_id']} no longer on Gateway Guild."
-                            )
+
                             self._data_manager.update_captcha_channel(
                                 guild.id,
                                 entry["channel_id"],
@@ -1168,6 +1168,9 @@ class CaptchaModule:
                             )
                             t_channel = guild.get_channel(entry["channel_id"])
                             if t_channel:
+                                self._logger.info(
+                                    f"Member under id {entry['member_id']} no longer on Gateway Guild."
+                                )
                                 await t_channel.delete()
                             continue
 
@@ -1388,7 +1391,7 @@ class CaptchaModule:
                 if ban.user.id == member_id:
                     await guild.unban(user=ban.user)
 
-    @timers.loop(minutes=5)
+    @timers.loop(minutes=1)
     async def unban_task(self):
         """
         Unbans members from Gateway Guilds that were on the blacklist if the time has elapsed.

@@ -42,9 +42,16 @@ class Captcha(Cog):
         for i, entry in enumerate(
             blacklist[page_limit * (page - 1) : page_limit * page]
         ):
-            member = entry["member"]
-            member_name = member["name"]
-            member_id = member["id"]
+            mid = entry["mid"]
+            member_cache_entry = (
+                self.bot.captcha.get_data_manager().get_blacklisted_member(mid)
+            )
+            if member_cache_entry is None:
+                self.bot.logger.info(f"Failed to find associated name for {mid}.")
+
+            member_name = (
+                member_cache_entry["name"] if member_cache_entry is not None else mid
+            )
             started = entry["started"]
             ends = entry["ends"]
             formatted_started = datetime.fromtimestamp(started).strftime(
@@ -56,7 +63,9 @@ class Captcha(Cog):
             bits.append(
                 "\n".join(
                     [
-                        f"- **{member_name}/{member_id}**",
+                        f"- **{member_name}/{mid}**"
+                        if member_cache_entry is not None
+                        else f"-  **{member_name}**",
                         f"  **Started:** {formatted_started}",
                         f"  **Ends:** {formatted_ends} ({timedelta(seconds=diff)})",
                     ]
@@ -305,7 +314,7 @@ class Captcha(Cog):
             return await embed_maker.command_error(ctx)
 
         data_manager = self.bot.captcha.get_data_manager()
-        blacklisted_members = (
+        blacklisted_members = list(
             data_manager.get_blacklisted_members(username=argument)
             if argument.isnumeric() is False
             else data_manager.get_blacklisted_members(member_id=int(argument))
@@ -335,10 +344,10 @@ class Captcha(Cog):
 
         member_entry = blacklisted_members[0]
 
-        await self.bot.captcha.unban(member_id=member_entry["id"])
-        data_manager.reset_captcha_counter(member_id=member_entry["id"])
-        data_manager.remove_blacklisted_user(member_entry["id"])
-        data_manager.remove_member_from_blacklist(member_entry["id"])
+        await self.bot.captcha.unban(member_id=member_entry["mid"])
+        data_manager.reset_captcha_counter(member_id=member_entry["mid"])
+        data_manager.remove_blacklisted_member(member_entry["mid"])
+        data_manager.remove_member_from_blacklist(member_entry["mid"])
 
         await embed_maker.message(
             ctx,
@@ -527,7 +536,7 @@ class Captcha(Cog):
             )
 
         data_manager.reset_captcha_counter(member_id=blacklisted_members[0]["mid"])
-        data_manager.remove_blacklisted_user(member_id=blacklisted_members[0]["mid"])
+        data_manager.remove_blacklisted_member(member_id=blacklisted_members[0]["mid"])
         return await embed_maker.message(
             ctx,
             description=f"Removed member {blacklisted_members[0]['name']} from blacklist and reset relog counter.",
