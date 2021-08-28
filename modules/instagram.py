@@ -51,7 +51,7 @@ class Listener:
 
                 await asyncio.sleep(self.interval - (end - start))
             except Exception as e:
-                self.instagram.bot.on_event_error(e, 'instagram', loop=True)
+                await self.instagram.bot.on_event_error(e, 'instagram', loop=True)
                 await asyncio.sleep(self.interval)
 
     def get_last_post(self):
