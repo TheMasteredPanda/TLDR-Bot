@@ -30,8 +30,8 @@ class Events(Cog):
         if self.bot.twtsc:
             await self.load_tweetfeed()
 
-        if self.bot.instagram:
-            await self.load_instafeed()
+        # if self.bot.instagram:
+        #     await self.load_instafeed()
 
         self.bot.logger.info(f"{self.bot.user} is ready")
 
