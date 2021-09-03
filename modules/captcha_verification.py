@@ -5,6 +5,7 @@ import random
 import re
 import string
 import time
+from datetime import datetime
 from typing import Optional, Union
 
 import config
@@ -19,6 +20,7 @@ from discord.invite import Invite
 from pymongo.cursor import Cursor
 
 import modules.database as database
+import modules.embed_maker as embed_maker
 import modules.timers as timers
 from modules.utils import SettingsHandler
 
@@ -82,6 +84,7 @@ class DataManager:
         self._captcha_blacklist = self._db.captcha_blacklist
         self._captcha_counter = self._db.captcha_counter
         self._member_cache = self._db.captcha_member_cache
+        self._invitation_cache = self._db.captcha_invitation_cache
 
     def add_captcha_channel(self, channel):
         """
@@ -101,6 +104,7 @@ class DataManager:
                 "active": channel.is_active(),
                 "ttl": channel.get_ttl(),
                 "stats": {"completed": False, "failed": False},
+                "created_at": time.time(),
             }
         )
 
@@ -153,6 +157,38 @@ class DataManager:
         return self._captcha_counter.update_one(
             {"mid": member_id}, {"$set": {"counter": 0}}
         )
+
+    def get_all_captcha_channels(
+        self, *, from_date: float = -1, before_date: float = -1
+    ):
+        """
+        Gets all captchas channels across all guilds. If no parameters are supplied then this function will
+        returns as many captcha channels as the Mongo Server will allow.
+
+        Parameters
+        ----------
+        from_date: :class:`float`
+            Used to fetch all captcha channels that were created from a date onwards.
+        from_date: :class:`float`
+            Used to fetch all captcha channels that were created before a date backwards.
+
+        Returns
+        -------
+        :class:`Cursor`
+            Returns a cursor or None in the event that nothing is in the collection.
+        """
+        if from_date == -1 and before_date == -1:
+            return self._captcha_channels.find({})
+        else:
+            params = {}
+
+            if from_date != -1 and before_date == -1:
+                params["created_at"] = {"$gte": from_date}
+            elif before_date != -1 and from_date == -1:
+                params["created_at"] = {"$lte": before_date}
+            else:
+                params["created_at"] = {"$gte": from_date, "$lte": before_date}
+            return self._captcha_channels.find(params)
 
     def get_captcha_channels(self, guild_id: int, only_active: bool = True) -> list:
         """
@@ -275,6 +311,10 @@ class DataManager:
         channel_id: :class:`int`
 
         """
+
+        if "last_updated" not in update.keys():
+            update["last_updated"] = time.time()
+
         self._captcha_channels.update(
             {"guild_id": guild_id, "channel_id": channel_id}, {"$set": update}
         )
@@ -404,6 +444,223 @@ class DataManager:
             A list of documents.
         """
         return list(self._captcha_blacklist.find({}))
+
+    def add_invite(self, invite_code: str, invite_uses: int, register: bool = False):
+        """
+        Adds an invite to the invitation cache. An unregistered invite will kick people off the main server
+        and send them a configurable message telling them to join through a Gateway Guilds.
+
+        Parameters
+        ----------
+        :class:`Invite`
+            The invite instance.
+        """
+        self._invitation_cache.insert_one(
+            {
+                "code": invite_code,
+                "registered": register,
+                "created_at": time.time(),
+                "uses": invite_uses,
+            }
+        )
+
+    def update_invite_uses(self, invite_code: str, invite_uses: int):
+        """
+        Update an invite entry with the correct uses.
+
+        Parameters
+        ----------
+        'invite' :class:`Invite`
+            The invite instance.
+        """
+        self._invitation_cache.update_one(
+            {"code": invite_code}, {"uses": invite_uses, "updated_at": time.time()}
+        )
+
+    def get_invites(self):
+        return self._invitation_cache.find({})
+
+    def register_invite(self, invite_code: str):
+        """
+        Registers an invite already added to the cache.
+
+        Parameters
+        ----------
+        'invite_code' :class:`str`
+            The code part of the invitation.
+        """
+        self._invitation_cache.update_one({"code": invite_code}, {"register": True})
+
+
+class TrackerManager:
+    """
+    Tracks all invitations on the main guild. This is used to determine if a user joined through a registered or
+    unregistered invitations.
+    """
+
+    def __init__(self, bot):
+        captcha_module = bot.captcha
+        self._data_manager: DataManager = captcha_module.get_data_manager()
+        self._module = bot.captcha
+        self._logger = bot.logger
+        self._main_guild: Guild = bot.get_guild(config.MAIN_SERVER)
+        self._cache = {}  # To keep all information on invites only.
+        self._temporal_cache = {}  # To keep all temporal information on invites.
+        self._minimum_member_count = 0  # This is the number of members that can join with n number of seconds before it is considered to be a bot attack.
+        self._member_join_timeout = 0  # This is the number of seconds, the 'timeout' that is used to determine whether a bot attack is happening on a unprotected invitiation.
+
+    def is_temporal_entry(self, invite_code: str):
+        return invite_code in self._temporal_cache.keys()
+
+    def add_temporal_entry(self, invite_code: str):
+        self._temporal_cache[invite_code] = {
+            "started": time.time(),
+            "finished": (time.time() + self._member_join_timeout),
+            "uses": [],
+        }
+
+    def add_member_to_temporal_entry(self, invite_code: str, member_id: int):
+        """
+        Adds a member to the temporal entry of a cached invitation.
+
+        Parameters
+        ----------
+        `invite_code` :class:`str`
+            The code part of an invitation url.
+        `member_id` :class:`int`
+            The id of the member that used the invitation.
+        """
+        self._temporal_cache[invite_code]["uses"].append(member_id)
+
+    def get_temporal_entry(self, invite_code: str) -> object:
+        return self._temporal_cache[invite_code]
+
+    def remove_temporal_entry(self, invite_code: str):
+        del self._temporal_cache[invite_code]
+
+    async def is_cached(self, invite_code: str) -> bool:
+        return invite_code in self._cache.keys()
+
+    async def load(self):
+        self._logger.info("Loading the TrackerManager.")
+        mongo_invites = list(self._data_manager.get_invites())
+
+        if len(mongo_invites) > 0:
+            self._logger.info("No invites in TackerManager Mongo collection.")
+            for invite in mongo_invites:
+                self._cache[invite["code"]] = {
+                    "uses": invite["uses"],
+                    "registered": invite["registered"],
+                }
+        discord_invites: list[Invite] = await self._main_guild.invites()
+
+        if len(discord_invites) > len(mongo_invites):
+            self._logger.info(
+                "New invitations found. Caching new invitations with TackerManager..."
+            )
+            mongo_invite_ids = map(lambda entry: entry["code"], mongo_invites)
+            new_invites = filter(
+                lambda entry: entry.id in mongo_invite_ids, discord_invites
+            )
+
+            for n_invite in new_invites:
+                self._data_manager.add_invite(n_invite.id, n_invite.uses)
+                self._cache[n_invite.id] = {"uses": n_invite.uses, "registered": False}
+
+            self._logger.info(
+                f"{len(list(new_invites))} invitations cached in TrakerManager."
+            )
+
+    async def sync(self):
+        self._logger.info(
+            "Syncing cached data from memory cache in TrackerManager to Mongo collection..."
+        )
+        mongo_invites = list(self._data_manager.get_invites())
+
+        def get_mongo_invite(code: str) -> object:
+            for entry in mongo_invites:
+                if entry["code"] == code:
+                    return entry
+            return None
+
+        mongo_invite_codes = map(lambda entry: entry["code"], mongo_invites)
+        new_invites = filter(
+            lambda entry: entry["code"] not in mongo_invite_codes, self._cache
+        )
+        updated_invites = filter(
+            lambda entry: entry["uses"] != get_mongo_invite(entry["code"]), self._cache
+        )
+
+        def update_task(entry):
+            self._data_manager.update_invite_uses(entry["code"], entry["uses"])
+
+        def insert_task(entry):
+            self._data_manager.add_invite(entry["code"], entry["uses"])
+
+        tasks = []
+
+        for a_entry in new_invites:
+            tasks.append(insert_task(a_entry))
+
+        for u_entry in updated_invites:
+            tasks.append(update_task(u_entry))
+
+        await asyncio.gather(*tasks)
+        if len(list(new_invites)) != 0 and len(list(updated_invites)) != 0:
+            self._logger.info(
+                f"{len(list(new_invites))} new invitations cached and {len(list(updated_invites))} cached."
+            )
+
+    @timers.loop(minutes=1)
+    async def scheduled_sync_task(self):
+        await self.sync()
+
+    async def on_member_join(self, member: Member):
+        guild_id = member.guild.id
+
+        if guild_id != config.MAIN_SERVER:
+            return
+
+        invites = await self._main_guild.invites()  # The Discord invites.
+        invite_used = None  # The invitation used in this event.
+
+        for invite in invites:
+            cached_invite = self._cache[invite.id]
+            cached_invite_uses = cached_invite["uses"]
+            if invite.uses > cached_invite_uses:
+                invite_used = cached_invite
+                break
+
+        if invite_used is None:
+            return
+
+        if invite_used["registered"]:
+            return
+
+        if self.is_temporal_entry(invite_used["code"]) is False:
+            self.add_temporal_entry(invite_used["code"])
+
+        self.add_member_to_temporal_entry(invite_used["code"], member.id)
+        entry = self.get_temporal_entry(invite_used["code"])
+
+        if entry["finished"] <= time.time():
+            if len(entry["uses"]) >= self._minimum_member_count:
+
+                used_unregistered_message = self._module.get_module_settings()[
+                    "messages"
+                ]["used_unregistered_message"]
+
+                for member_id in entry["uses"]:
+                    e_member = member.guild.get_member(member_id)
+                    dm_channel: Union[TextChannel, None] = e_member.dm_channel
+                    if dm_channel is None:
+                        dm_channel = await e_member.create_dm()
+
+                    invite: Invite = self._module.get_invitation_to_gateway()
+                    await dm_channel.send(
+                        used_unregistered_message.replace("{invite}", invite.url)
+                    )
+                self.remove_temporal_entry(invite_used["code"])
 
 
 class CaptchaChannel:
@@ -644,7 +901,8 @@ class CaptchaChannel:
                     "bot_startup_captcha_message"
                 ]
                 .replace("{time_unit}", time_unit)
-                .replace("{time_value}", time_value),
+                .replace("{time_value}", str(time_value))
+                .replace("{try_count}", str(self._tries)),
                 title="Bot started.",
             )
             await self._channel.send(embed=embed)
@@ -750,7 +1008,11 @@ class CaptchaChannel:
             self._data_manager.update_captcha_channel(
                 self._guild.id,
                 self._channel.id,
-                {"active": False, "stats": {"completed": True}, "ttl": 0},
+                {
+                    "active": False,
+                    "stats": {"completed": True, "failed": False},
+                    "ttl": 0,
+                },
             )
 
     async def create_tldr_invite(self):
@@ -767,6 +1029,12 @@ class CaptchaChannel:
         main_channel: TextChannel = discord.utils.get(
             main_guild.text_channels, id=settings["main_guild_landing_channel"]
         )
+        if main_channel is None:
+            self._logger(
+                "WARNING: main_guild_landing_channel config variable in Captcha Gateway Config not set. This variable should point to the landing channel on the main server."
+            )
+            return
+
         invite: Invite = await main_channel.create_invite(max_age=120, max_uses=1)
         return invite
 
@@ -814,7 +1082,12 @@ class GatewayGuild:
             landing_channel = await self._guild.create_text_channel(
                 landing_channel_name.replace(
                     "{number}", str(len(self._bot.captcha.get_gateway_guilds()) + 1)
-                )
+                ),
+                overwrites={
+                    self.get_guild().default_role: discord.PermissionOverwrite(
+                        read_messages=True, send_messages=False, view_channel=True
+                    )
+                },
             )
             landing_channel_message = self._bot.captcha.get_config()["messages"][
                 "landing_channel"
@@ -850,6 +1123,14 @@ class GatewayGuild:
                     "already on the main guild."
                 )
                 await member.kick()
+
+    async def get_permantent_invite(self) -> Union[Invite, None]:
+        invites: list[Invite] = await self._guild.invites()
+
+        for invite in invites:
+            if invite.max_uses == 0 and invite.max_age == 0:
+                return invite
+        return None
 
     def get_user_count(self):
         """
@@ -997,7 +1278,7 @@ class GatewayGuild:
 
         if len(self._guild.members) in [100, 200, 300, 400, 500]:
             await captcha_module.announce(
-                f"{self._guild.name} reached {self._guild.members}", self._guild
+                f"{self._guild.name} reached {self._guild.members} members", self._guild
             )
 
         if captcha_module.is_operator(user_id):
@@ -1084,6 +1365,10 @@ class CaptchaModule:
                 "main_announcement_channel": 0,
                 "captcha_time_to_live": 900,
                 "blacklist_length": 86400,
+                "announcements": {
+                    "announcement_channel": None,
+                    "scheduled_report": {"last_report": None, "interval": 86400},
+                },
                 "gateway_rejoin": {
                     "limit": 3,
                     "blacklist_duration": 86400,
@@ -1103,6 +1388,7 @@ class CaptchaModule:
                     "countdown_alert_message_title": "Alert!",
                     "time_elapsed_message": "Your time has elapsed. You have had {time_value} {time_unit} to complete the captcha, you did not. Unfortunately this means you will be blacklisted for 24 hours after which you can rejoin a Gateway Guild and try again.",
                     "time_elapsed_message_title": "Timer Elapsed",
+                    "used_unregistered_message": "You have used an unregistered invitation to join the main server, what is more the bot has identified you as a potential bot in a bot attack. Apologises if this is incorect. In order to rejoin, please go through our Captcha Process. {invite}",
                 },
             }
             self._settings_handler.save(settings)
@@ -1162,7 +1448,7 @@ class CaptchaModule:
                                 entry["channel_id"],
                                 {
                                     "active": False,
-                                    "stats": {"completed": True},
+                                    "stats": {"completed": True, "failed": False},
                                     "ttl": 0,
                                 },
                             )
@@ -1174,6 +1460,8 @@ class CaptchaModule:
                                 await t_channel.delete()
                             continue
 
+                        if entry["active"] is False:
+                            continue
                         channel = CaptchaChannel(self._bot, g_guild, None)
                         await channel.start(
                             member_id=entry["member_id"],
@@ -1373,6 +1661,9 @@ class CaptchaModule:
         # This will need to be removed at a later date.
         return self._settings_handler.get_settings(config.MAIN_SERVER)
 
+    def get_module_settings(self):
+        return self.get_settings()["modules"]["captcha"]
+
     async def unban(self, member_id: int):
         """
         Used to unban members on all active Gateway Guilds.
@@ -1484,6 +1775,61 @@ class CaptchaModule:
             else:
                 walk(split_path, split_path[0], settings)
 
+    def construct_scheduled_report_embed(self, automatic: bool = False):
+        last_update = self.get_settings()["modules"]["captcha"]["announcements"][
+            "scheduled_report"
+        ]["last_report"]
+        formatted_last_update = (
+            datetime.fromtimestamp(last_update).strftime("%Y-%m-%d %H:%M:%S")
+            if last_update is not None
+            else None
+        )
+        channels = list(
+            (
+                self._data_manager.get_all_captcha_channels(from_date=last_update)
+                if last_update is not None
+                else self._data_manager.get_all_captcha_channels()
+            )
+            if automatic
+            else self._data_manager.get_all_captcha_channels(
+                from_date=(
+                    time.time()
+                    - self.get_settings()["modules"]["captcha"]["announcements"][
+                        "scheduled_report"
+                    ]["interval"]
+                )
+            )
+        )
+        embed: discord.Embed = discord.Embed(
+            color=config.EMBED_COLOUR, timestamp=datetime.now()
+        )
+
+        if len(channels) == 0:
+            embed.description = (
+                f"No Captcha Channels have been created since {formatted_last_update}"
+            )
+
+            embed.title = "No Captcha Channels Found."
+        else:
+            successful = list(
+                filter(lambda entry: entry["stats"]["completed"] is True, channels)
+            )
+            unsuccessful = list(
+                filter(lambda entry: entry["stats"]["failed"] is True, channels)
+            )
+
+            embed.description = (
+                f"{len(successful)} Captches"
+                + "\n"
+                + f"{len(unsuccessful)} Unsuccesful Captchas"
+            )
+            embed.title = "Captcha Gateway Daily Report"
+
+        if automatic:
+            self.set_setting("announcements.scheduled_report.last_report", time.time())
+        embed.set_author(name="Captcha Gateway")
+        return embed
+
     async def ban(self, member: discord.Member, reason: str = "No reason"):
         """
         Bans a member on all active Guilds.
@@ -1513,6 +1859,10 @@ class CaptchaModule:
         user_id = member.id
         guild_id = member.guild.id
 
+        if guild_id == config.MAIN_SERVER:
+
+            return
+
         if self.is_gateway_guild(guild_id):
             main_guild: Guild = self._bot.get_guild(config.MAIN_SERVER)
             main_guild_user: Union[Member, None] = main_guild.get_member(user_id)
@@ -1524,8 +1874,8 @@ class CaptchaModule:
                 self._bot.logger.info(
                     f"Member {main_guild_user.display_name} on Gateway Guild and Main Guild. Kicking member."
                 )
-                # await member.guild.kick(member)
-                # return
+                await member.guild.kick(member)
+                return
 
             await self._bot.captcha.get_gateway_guild(guild_id).on_member_join(member)
 
@@ -1534,11 +1884,16 @@ class CaptchaModule:
                 if g_guild.has_captcha_channel(user_id):
                     channel: CaptchaChannel = g_guild.get_captcha_channel(user_id)
                     if channel.has_completed_captcha():
+
                         self._bot.logger.info(
-                            f"Member {main_guild_user.display_name} completed Captcha but was still on {channel.get_gateway_guild().get_guild().get_name()}. Kicking member."
+                            f"Member {member.display_name} completed Captcha but was still on {channel.get_gateway_guild().get_name()}. Kicking member."
                         )
                         await g_guild.get_guild().kick(member)
-                        await channel.destory()
+
+    async def get_invitation_to_gateway(self):
+        for g_guild in self._gateway_guilds:
+            if g_guild.get_user_count() < 500:
+                return await g_guild.get_permantent_invite()
 
     @timers.loop(minutes=5)
     async def gateway_reset_task(self):
@@ -1553,3 +1908,18 @@ class CaptchaModule:
                 <= now
             ):
                 self._data_manager.reset_captcha_counter(counter_entry["mid"])
+
+    async def scheduled_report_task(self):
+        """
+        A task used to announce a daily report of successful and unsuccessful captchas.
+        """
+        announcement_config = self.get_settings()["modules"]["captcha"]["announcements"]
+        last_report = announcement_config["scheduled_report"]["last_report"]
+        interval = announcement_config["scheduled_report"]["interval"]
+        announcement_channel_id = announcement_config["announcement_channel"]
+
+        if (last_report + interval) <= last_report:
+            embed: discord.Embed = self.construct_scheduled_report_embed(True)
+            await self._bot.get_guild(config.MAIN_SERVER).get_channel(
+                announcement_channel_id
+            ).send(embed=embed)

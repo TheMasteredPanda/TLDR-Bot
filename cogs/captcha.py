@@ -136,6 +136,16 @@ class Captcha(Cog):
     async def mod_cmd(self, ctx: Context):
         return await embed_maker.command_error(ctx)
 
+    @mod_cmd.command(
+        help="Get a report on how many successful and unsuccessful captchas happened. The data set is determined by what the interval value is set as.",
+        name="report",
+        usage="captcha mod report",
+        examples=["captcha mod report"],
+        cls=Command,
+    )
+    async def report_mod_cmd(self, ctx: Context):
+        return await ctx.send(embed=self.bot.captcha.construct_scheduled_report_embed())
+
     @mod_cmd.group(
         help="A set of commands used to configure the configurable elements of this feature.",
         name="config",
@@ -153,6 +163,16 @@ class Captcha(Cog):
             title="Captcha Gateway Settings",
             send=True,
         )
+
+    @mod_cmd.command(
+        help="Resets the welcome message to whatever is set in the configuration document",
+        name="resetwelcomemessage",
+        uage="captcha mod config resetwelcomemessage",
+        examples=["captcha mod config restwelcomemessage"],
+        cls=Command,
+    )
+    async def reset_welcome_message_config_cmd(self, ctx: Context):
+        pass
 
     @config_mod_cmd.group(
         help="Set a value of a configuration variable.",
@@ -232,6 +252,7 @@ class Captcha(Cog):
         name="reset",
         usage="reset [Member Name or Member ID]",
         examples=["reset TheMasteredPanda"],
+        cls=Command,
     )
     async def blacklist_counter_reset(self, ctx: Context, argument: str = ""):
         member = None
@@ -337,6 +358,7 @@ class Captcha(Cog):
             return await embed_maker.message(
                 ctx,
                 description=f"Found multiple members starting with name or id {argument}. Please be more specific. Members found: "
+                + "\n"
                 + "\n".join(bits),
                 title="Multiple members found.",
                 send=True,

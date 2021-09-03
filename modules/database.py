@@ -279,6 +279,7 @@ class Connection:
         self.captcha_blacklist = self.db["captcha_blacklist"]
         self.captcha_counter = self.db["captcha_counter"]
         self.captcha_member_cache = self.db["captcha_member_cache"]
+        self.captcha_invitation_cache = self.db["catpcha_invitation_cache"]
         self.webhooks = self.db["webhooks"]
         self.webhooks = self.db["webhooks"]
         self.slack_bridge = self.db["slack_bridge"]
