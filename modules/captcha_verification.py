@@ -456,11 +456,8 @@ class TrackerManager:
     """
 
     def __init__(self, bot):
-        captcha_module = bot.captcha
-        self._data_manager: DataManager = captcha_module.get_data_manager()
-        self._module = bot.captcha
+        self._bot = bot
         self._logger = bot.logger
-        self._main_guild: Guild = bot.get_guild(config.MAIN_SERVER)
         self._cache = {}  # To keep all information on invites only.
         self._invite_cache = {}
         self._temporal_cache = {}  # To keep all temporal information on invites.
@@ -591,7 +588,10 @@ class TrackerManager:
         used when a user joins the guild.
         """
         self._logger.info("Loading the TrackerManager.")
-        invites: list[Invite] = await self._bot.invites()
+        self._main_guild = self._bot.get_guild(config.MAIN_SERVER)
+        self._module = self._bot.captcha
+        self._data_manager = self._module.get_data_manager()
+        invites: list[Invite] = await self._main_guild.invites()
         for invite in invites:
             self._invite_cache[invite.id] = invite.uses
         self._logger.info(f"Loaded {len(invites)} invites into memory.")
@@ -1486,6 +1486,7 @@ class CaptchaModule:
             self._bot.logger.info("Announcement channel set.")
         else:
             self._bot.logger.info("Announcement channel not set.")
+        await self._tracker_manager.load()
         self.gateway_reset_task.start()
 
     def get_config(self):
