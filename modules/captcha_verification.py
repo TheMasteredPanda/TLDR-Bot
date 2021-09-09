@@ -448,6 +448,12 @@ class DataManager:
     def is_registered_invitation(self, invite_code: str):
         return self._registered_invitations.find({"code": invite_code}) is not None
 
+    def add_registered_invitation(self, invite_code: str):
+        self._registered_invitations.insert_one({"code": invite_code})
+
+    def remove_registered_invitation(self, invite_code: str):
+        self._registered_invitations.delete_one({"code": invite_code})
+
 
 class TrackerManager:
     """

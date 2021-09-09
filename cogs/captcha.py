@@ -7,7 +7,7 @@ from typing import Union
 import modules.commands as commands
 from bot import TLDR
 from bson import json_util
-from discord import Member
+from discord import Invite, Member, NotFound
 from discord.embeds import Embed
 from discord.ext.commands import Cog, Context, group
 from discord.file import File
@@ -136,6 +136,52 @@ class Captcha(Cog):
     async def mod_cmd(self, ctx: Context):
         return await embed_maker.command_error(ctx)
 
+    @captcha_cmd.command(
+        help="A set of commands used to manage invitations that should not be tracked by the Tracker Manager. A Manager written to detect potential bot attacks from unregistered invitations and delete said invitations.",
+        name="invite",
+        examples=["captcha mod invite list"],
+        usage="captcha mod invite [sub command]",
+        cls=Group,
+        invoke_without_command=True,
+    )
+    async def invite_mod_cmd(self, ctx: Context):
+        return await embed_maker.command_error(ctx)
+
+    @captcha_cmd.command(
+        help="Registers invitations with the Captcha Gateway Feature. Any invitations registered would not be tracked by the Tracker Manager. This manager tracks all unregistered invitations for potential bot attacks then deletes said invite after detecting an attack.",
+        name="register",
+        examples=["captcha mod invite register [invite url]"],
+        usage="captcha mod invite register [invite url]",
+        cls=Command,
+    )
+    async def register_invite_cmd(self, ctx: Context, invite_url: str):
+        data_manager = self.bot.captcha.get_data_manager()
+
+        try:
+            invite: Union[Invite, None] = await self.bot.fetch_invite(invite_url)
+            if data_manager.is_registered_invitation(invite.id):
+                return await embed_maker.message(
+                    ctx,
+                    description=f"Already registered invitation supplied.",
+                    title="Already Registered.",
+                    send=True,
+                )
+            else:
+                data_manager.add_registered_invitation(invite.id)
+                return await embed_maker.message(
+                    ctx,
+                    description=f"Added invitation to the registered invitations collection.",
+                    title="Registered invite.",
+                    send=True,
+                )
+        except NotFound:
+            return await embed_maker.message(
+                ctx,
+                description=f"Couldn't check the validity of invite {invite_url}. The invite has either expired or is invalid.",
+                title="Invalid invite link.",
+                send=True,
+            )
+
     @mod_cmd.command(
         help="Get a report on how many successful and unsuccessful captchas happened. The data set is determined by what the interval value is set as.",
         name="report",
@@ -225,6 +271,16 @@ class Captcha(Cog):
         invoke_without_command=True,
     )
     async def blacklist_mod_cmd(self, ctx: Context):
+        return await embed_maker.command_error(ctx)
+
+    @blacklist_mod_cmd.command(
+        help="List all blacklisted users. Learn their reasons and for how long their blacklist lasts for.",
+        name="list",
+        usage="captcha mod blacklist list",
+        examples=["captcha mod blacklist list"],
+        cls=Command,
+    )
+    async def blacklist_list_mod_cmd(self, ctx: Context):
         blacklist = self.bot.captcha.get_data_manager().get_blacklist()
         max_page_size = 6
         max_page_num = math.ceil(len(blacklist) / max_page_size)
