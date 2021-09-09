@@ -10,7 +10,6 @@ from typing import Union
 import aiofiles
 import config
 import discord
-from bot import TLDR
 from cachetools.ttl import TTLCache
 from discord import File
 from discord.embeds import Embed
@@ -353,7 +352,7 @@ class ConfirmManager:
 
 
 class UKParliamentModule:
-    def __init__(self, bot: TLDR):
+    def __init__(self, bot):
         self._bot = bot
         self._divisions_storage = DivisionMongoStorage()
         self._bills_storage = BillsMongoStorage()
