@@ -84,7 +84,7 @@ class DataManager:
         self._captcha_blacklist = self._db.captcha_blacklist
         self._captcha_counter = self._db.captcha_counter
         self._member_cache = self._db.captcha_member_cache
-        self._invitation_cache = self._db.captcha_invitation_cache
+        self._registered_invitations = self._db.captcha_registered_invitations
 
     def add_captcha_channel(self, channel):
         """
@@ -445,51 +445,8 @@ class DataManager:
         """
         return list(self._captcha_blacklist.find({}))
 
-    def add_invite(self, invite_code: str, invite_uses: int, register: bool = False):
-        """
-        Adds an invite to the invitation cache. An unregistered invite will kick people off the main server
-        and send them a configurable message telling them to join through a Gateway Guilds.
-
-        Parameters
-        ----------
-        :class:`Invite`
-            The invite instance.
-        """
-        self._invitation_cache.insert_one(
-            {
-                "code": invite_code,
-                "registered": register,
-                "created_at": time.time(),
-                "uses": invite_uses,
-            }
-        )
-
-    def update_invite_uses(self, invite_code: str, invite_uses: int):
-        """
-        Update an invite entry with the correct uses.
-
-        Parameters
-        ----------
-        'invite' :class:`Invite`
-            The invite instance.
-        """
-        self._invitation_cache.update_one(
-            {"code": invite_code}, {"uses": invite_uses, "updated_at": time.time()}
-        )
-
-    def get_invites(self):
-        return self._invitation_cache.find({})
-
-    def register_invite(self, invite_code: str):
-        """
-        Registers an invite already added to the cache.
-
-        Parameters
-        ----------
-        'invite_code' :class:`str`
-            The code part of the invitation.
-        """
-        self._invitation_cache.update_one({"code": invite_code}, {"register": True})
+    def is_registered_invitation(self, invite_code: str):
+        return self._registered_invitations.find({"code": invite_code}) is not None
 
 
 class TrackerManager:
@@ -505,14 +462,64 @@ class TrackerManager:
         self._logger = bot.logger
         self._main_guild: Guild = bot.get_guild(config.MAIN_SERVER)
         self._cache = {}  # To keep all information on invites only.
+        self._invite_cache = {}
         self._temporal_cache = {}  # To keep all temporal information on invites.
         self._minimum_member_count = 0  # This is the number of members that can join with n number of seconds before it is considered to be a bot attack.
         self._member_join_timeout = 0  # This is the number of seconds, the 'timeout' that is used to determine whether a bot attack is happening on a unprotected invitiation.
+        self._bot = bot
 
-    def is_temporal_entry(self, invite_code: str):
+    def has_temporal_entry(self, invite_code: str):
+        """
+        Checks if an invitation url already has an assocated temporal entry.
+
+        Parameters
+        ----------
+        `invite_code`: :class:`str`
+            The invite code part of an invitation url.
+
+        Returns
+        -------
+        :class:`bool`
+            True if there is an associated temporal entry, else False.
+        """
         return invite_code in self._temporal_cache.keys()
 
-    def add_temporal_entry(self, invite_code: str):
+    def is_registered(self, invite_code: str) -> bool:
+        """
+        Checks if an inviation link is registered.
+
+        Parameters
+        ----------
+        `invite_code`: :class:`str`
+            The invite code part of an invitation url.
+
+        Returns
+        -------
+        :class:`bool`
+            True if the invite link is registered, else false.
+        """
+        return self._data_manager.is_registered_invitation(invite_code)
+
+    def create_temporal_entry(self, invite_code: str):
+        """
+        Creates a temporal entry.
+
+        A temporal entry is a dictionary entry comprosing of time sensitive data, used in the determination
+        process of potential bot attacks on invitation urls that are not registered with the feature, thus
+        allowing users to join the main guild without going through captcha.
+
+        The follwing data is stored in a temporal entry:
+        1. 'started'
+            This is a variable that stored the time the temporal entry was first created. The value is the time of
+            creation in seconds.
+        2. 'finished'
+            This is a variable that stores the time the temporal entry was first created in seconds and adds the timeout
+            value to the time value, creating the time that the temporal entry will expire.
+        3. 'uses'
+            This varliable is a list of members who have used the invitation url associated with this temporal entry.
+            What is stored is their member id, so that it can be references when the member limit has been met or
+            exceeded on this invitation url.
+        """
         self._temporal_cache[invite_code] = {
             "started": time.time(),
             "finished": (time.time() + self._member_join_timeout),
@@ -532,126 +539,111 @@ class TrackerManager:
         """
         self._temporal_cache[invite_code]["uses"].append(member_id)
 
-    def get_temporal_entry(self, invite_code: str) -> object:
+    def get_temporal_entry(self, invite_code: str) -> dict:
+        """
+        Fetches a temporal entry if the entry associated with the supplied invite code
+        is present in the cache.
+
+        Parameters
+        ----------
+        `invite_code`: :class:`str`
+            The invite code part of the invitation url.
+
+        Returns
+        -------
+        :class:`dict`
+            A dictionary object or None if the invite_code doesn't associate with any temporal entry.
+        """
         return self._temporal_cache[invite_code]
 
     def remove_temporal_entry(self, invite_code: str):
+        """
+        Removes a temporal entry from the temporal entry cache.
+
+        Parameters
+        ----------
+        `invite_cache`: :class:`str`
+            The invite code part of the invitation url.
+
+        """
         del self._temporal_cache[invite_code]
 
     async def is_cached(self, invite_code: str) -> bool:
+        """
+        Checks if an invitation is in the cache.
+
+        Parameters
+        ----------
+        `invite_code`: :class:`str`
+            The invite code part of the invitation url.
+
+        Returns
+        -------
+        :class:`bool`
+            True if the invite code is in the cache, else False.
+        """
         return invite_code in self._cache.keys()
 
     async def load(self):
+        """
+        Loads all invites and the current number of uses into a cache.
+        This cache will be used in the process of determining which invite was
+        used when a user joins the guild.
+        """
         self._logger.info("Loading the TrackerManager.")
-        mongo_invites = list(self._data_manager.get_invites())
-
-        if len(mongo_invites) > 0:
-            self._logger.info("No invites in TackerManager Mongo collection.")
-            for invite in mongo_invites:
-                self._cache[invite["code"]] = {
-                    "uses": invite["uses"],
-                    "registered": invite["registered"],
-                }
-        discord_invites: list[Invite] = await self._main_guild.invites()
-
-        if len(discord_invites) > len(mongo_invites):
-            self._logger.info(
-                "New invitations found. Caching new invitations with TackerManager..."
-            )
-            mongo_invite_ids = map(lambda entry: entry["code"], mongo_invites)
-            new_invites = filter(
-                lambda entry: entry.id in mongo_invite_ids, discord_invites
-            )
-
-            for n_invite in new_invites:
-                self._data_manager.add_invite(n_invite.id, n_invite.uses)
-                self._cache[n_invite.id] = {"uses": n_invite.uses, "registered": False}
-
-            self._logger.info(
-                f"{len(list(new_invites))} invitations cached in TrakerManager."
-            )
-
-    async def sync(self):
-        self._logger.info(
-            "Syncing cached data from memory cache in TrackerManager to Mongo collection..."
-        )
-        mongo_invites = list(self._data_manager.get_invites())
-
-        def get_mongo_invite(code: str) -> object:
-            for entry in mongo_invites:
-                if entry["code"] == code:
-                    return entry
-            return None
-
-        mongo_invite_codes = map(lambda entry: entry["code"], mongo_invites)
-        new_invites = filter(
-            lambda entry: entry["code"] not in mongo_invite_codes, self._cache
-        )
-        updated_invites = filter(
-            lambda entry: entry["uses"] != get_mongo_invite(entry["code"]), self._cache
-        )
-
-        def update_task(entry):
-            self._data_manager.update_invite_uses(entry["code"], entry["uses"])
-
-        def insert_task(entry):
-            self._data_manager.add_invite(entry["code"], entry["uses"])
-
-        tasks = []
-
-        for a_entry in new_invites:
-            tasks.append(insert_task(a_entry))
-
-        for u_entry in updated_invites:
-            tasks.append(update_task(u_entry))
-
-        await asyncio.gather(*tasks)
-        if len(list(new_invites)) != 0 and len(list(updated_invites)) != 0:
-            self._logger.info(
-                f"{len(list(new_invites))} new invitations cached and {len(list(updated_invites))} cached."
-            )
-
-    @timers.loop(minutes=1)
-    async def scheduled_sync_task(self):
-        await self.sync()
+        invites: list[Invite] = await self._bot.invites()
+        for invite in invites:
+            self._invite_cache[invite.id] = invite.uses
+        self._logger.info(f"Loaded {len(invites)} invites into memory.")
 
     async def on_member_join(self, member: Member):
+        """
+        Handles the on_member_join event on the TrackerManager level. This will manage adding member ids to 'uses'
+        as well as checking if a member has joined on a invitation link before the timeout on that link has elapsed.
+        If they join before the elapsed time then the TrackerManager will consider all previous joins that joined
+        within the timeout time to be bots and kick them. It will also send a direct message to those kicked asking
+        for them to join through a Gateway Guild. The invite they used will also be removed too.
+        """
         guild_id = member.guild.id
 
         if guild_id != config.MAIN_SERVER:
             return
 
         invites = await self._main_guild.invites()  # The Discord invites.
-        invite_used = None  # The invitation used in this event.
+        invite_used = None
 
         for invite in invites:
-            cached_invite = self._cache[invite.id]
-            cached_invite_uses = cached_invite["uses"]
-            if invite.uses > cached_invite_uses:
-                invite_used = cached_invite
-                break
+            if invite.code not in self._invite_cache.keys():
+                self._invite_cache[invite.id] = invite.uses
+            else:
+                uses = self._invite_cache[invite.id]
+                if invite.uses > uses:
+                    invite_used = invite
 
         if invite_used is None:
+            self._logger.info(
+                f"Couldn't determine which invite member {member.display_name} joined with."
+            )
             return
 
-        if invite_used["registered"]:
+        if self.is_registered(invite_used.id):
             return
 
-        if self.is_temporal_entry(invite_used["code"]) is False:
-            self.add_temporal_entry(invite_used["code"])
+        if self.has_temporal_entry(invite_used.id) is False:
+            self.create_temporal_entry(invite_used.id)
 
-        self.add_member_to_temporal_entry(invite_used["code"], member.id)
-        entry = self.get_temporal_entry(invite_used["code"])
+        self.add_member_to_temporal_entry(invite_used.id, member.id)
+        entry = self.get_temporal_entry(invite_used.id)
 
         if entry["finished"] <= time.time():
             if len(entry["uses"]) >= self._minimum_member_count:
-
+                self._logger.info(f"Potential bot attack detected on {invite_used.id}.")
                 used_unregistered_message = self._module.get_module_settings()[
                     "messages"
                 ]["used_unregistered_message"]
 
                 for member_id in entry["uses"]:
-                    e_member = member.guild.get_member(member_id)
+                    e_member: discord.Member = member.guild.get_member(member_id)
                     dm_channel: Union[TextChannel, None] = e_member.dm_channel
                     if dm_channel is None:
                         dm_channel = await e_member.create_dm()
@@ -660,7 +652,20 @@ class TrackerManager:
                     await dm_channel.send(
                         used_unregistered_message.replace("{invite}", invite.url)
                     )
-                self.remove_temporal_entry(invite_used["code"])
+                    await e_member.kick(
+                        reason=f"Considered a bot by Captcha Gateway, using invite {invite.url}."
+                    )
+
+                self.remove_temporal_entry(invite_used.id)
+                self._logger.info(
+                    f"Deleting invitation link {invite_used.url} as it was determined by Tracker Manager in Captcha Gateway to be used for a potential bot attack."
+                )
+                await invite_used.delete(reason="Used in a potential bot attack.")
+        elif entry["finished"] > time.time():
+            self._logger.info(
+                f"Removing temporal entry associated with {invite_used.url} because a potential bot attack was not detected."
+            )
+            self.remove_temporal_entry(invite_used.id)
 
 
 class CaptchaChannel:
@@ -1344,6 +1349,7 @@ class CaptchaModule:
         self._image_captcha = ImageCaptcha(width=360, height=120)
         self._announcement_channel = None
         self.unban_task.start()
+        self._tracker_manager = TrackerManager(bot)
 
         if config.MAIN_SERVER == 0:
             bot.logger.info(
@@ -1860,7 +1866,7 @@ class CaptchaModule:
         guild_id = member.guild.id
 
         if guild_id == config.MAIN_SERVER:
-
+            await self._tracker_manager.on_member_join(member)
             return
 
         if self.is_gateway_guild(guild_id):

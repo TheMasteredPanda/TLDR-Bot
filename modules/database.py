@@ -256,6 +256,11 @@ class Connection:
                 'member_id': :class:`int`
                 'member_name': :class:`str`
             }
+    captcha_registered_invitations: :class:`pymongo.collection.Collection`
+        The collection for storing invitations registered as acceptable to use.
+            {
+                'code': :class:`str`
+            }
     """
 
     def __init__(self):
@@ -279,7 +284,7 @@ class Connection:
         self.captcha_blacklist = self.db["captcha_blacklist"]
         self.captcha_counter = self.db["captcha_counter"]
         self.captcha_member_cache = self.db["captcha_member_cache"]
-        self.captcha_invitation_cache = self.db["catpcha_invitation_cache"]
+        self.captcha_registered_invitations = self.db["catpcha_registered_invitations"]
         self.webhooks = self.db["webhooks"]
         self.webhooks = self.db["webhooks"]
         self.slack_bridge = self.db["slack_bridge"]
