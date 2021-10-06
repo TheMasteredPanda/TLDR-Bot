@@ -639,28 +639,36 @@ class UK(commands.Cog):
                 ctx,
                 description=f"Couldn't find latest elections results for"
                 f" {'Borough' if args['borough'] != '' and args['borough'] is not None else 'MP'}"
-                f" {args['borough'] if args['borough'] != '' and args['borough'] is not None else args['pre']}",
+                f" {args['borough'] if args['borough'] != '' and args['borough'] is not None else (args['pre'] if args['pre'] != '' else args['name'])}",
                 send=True,
             )
 
         next_line = "\n"
         results = await self.parliament.get_election_results(member)
         result = results[0]
+        if args["historical"] is not None:
+            found_result = False
 
-        if args["historical"] != "" and args["historical"] is not None:
-            historical_bits = [
-                f"- {er.get_election_date().strftime('%Y')}" for er in results
-            ]
-            return await embed_maker.message(
-                ctx,
-                title=f"Recorded Eletion Results of the Borough {member.get_membership_from()}",
-                description=f"**Elections:** {next_line}{next_line.join(historical_bits)}",
-                send=True,
-            )
-        else:
-            for h_result in results:
-                if h_result.get_election_date().strftime("%Y") == args["historical"]:
-                    result = h_result
+            if args["historical"] != "":
+                for h_result in results:
+                    if (
+                        h_result.get_election_date().strftime("%Y")
+                        == args["historical"]
+                    ):
+                        result = h_result
+                        found_result = True
+
+            if found_result is False:
+                historical_bits = [
+                    f"- {er.get_election_date().strftime('%Y')}" for er in results
+                ]
+
+                return await embed_maker.message(
+                    ctx,
+                    title=f"Recorded Election Results of the Borough {member.get_membership_from()}",
+                    description=f"**Elections:** {next_line}{next_line.join(historical_bits)}",
+                    send=True,
+                )
 
         others_formatted = []
         the_rest_formatted = []
@@ -989,8 +997,8 @@ class UK(commands.Cog):
         help="Search for lords divisions",
         usage="uk divisions lsearch [search term]",
         examples=["uk divisions lsearch European"],
-        cls=cls.Command,
-        module_dependency=['ukparl_module']
+        clearence="User",
+        cls=cls.Command
     )
     async def division_lords_search(self, ctx: commands.Context, *, search_term=""):
         if self.loaded is False:

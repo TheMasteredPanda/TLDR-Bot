@@ -1,16 +1,15 @@
-import discord
-import time
-import hashlib
-import config
 import datetime
+import hashlib
+import time
 import traceback
-
 from functools import partial
-from bson import ObjectId
-from bot import TLDR
-from modules import database, format_time, embed_maker
-from discord.ext.commands import Cog, Context
 
+import config
+import discord
+from bot import TLDR
+from bson import ObjectId
+from discord.ext.commands import Cog, Context
+from modules import database, embed_maker, format_time
 
 db = database.get_connection()
 
@@ -37,16 +36,17 @@ class Events(Cog):
 
     async def load_instafeed(self):
         bot = self.bot
+
         def new_insta_posts(posts, *, discord_channel: discord.TextChannel):
-            bot.dispatch('new_insta_posts', posts, discord_channel)
+            bot.dispatch("new_insta_posts", posts, discord_channel)
 
         insta_listener = db.insta_listeners.find({})
         for listener_data in insta_listener:
-            discord_channel = self.bot.get_channel(listener_data['discord_channel_id'])
+            discord_channel = self.bot.get_channel(listener_data["discord_channel_id"])
             if discord_channel is None:
                 db.tweet_listeners.delete_one(listener_data)
 
-            insta_user_id = listener_data['insta_user_id']
+            insta_user_id = listener_data["insta_user_id"]
             insta_user = self.bot.instagram.get_user(user_id=insta_user_id)
             if insta_user is None:
                 db.tweet_listeners.delete_one(listener_data)
@@ -56,16 +56,17 @@ class Events(Cog):
 
     async def load_tweetfeed(self):
         bot = self.bot
+
         def new_tweet(tweets, *, discord_channel: discord.TextChannel):
-            bot.dispatch('new_tweets', tweets, discord_channel)
+            bot.dispatch("new_tweets", tweets, discord_channel)
 
         tweet_listeners = db.tweet_listeners.find({})
         for listener_data in tweet_listeners:
-            discord_channel = self.bot.get_channel(listener_data['discord_channel_id'])
+            discord_channel = self.bot.get_channel(listener_data["discord_channel_id"])
             if discord_channel is None:
                 db.tweet_listeners.delete_one(listener_data)
 
-            twitter_username = listener_data['twitter_username']
+            twitter_username = listener_data["twitter_username"]
             twitter_user = await self.bot.twtsc.get_user(username=twitter_username)
             if twitter_user is None:
                 db.tweet_listeners.delete_one(listener_data)
@@ -99,7 +100,9 @@ class Events(Cog):
 
         embed = await embed_maker.message(
             ctx,
-            author={"name": f"{ctx.command.name if ctx.command else 'Unknown'} - Command Error"},
+            author={
+                "name": f"{ctx.command.name if ctx.command else 'Unknown'} - Command Error"
+            },
             description=f"```{exception}\n{traceback_text}```",
         )
 
@@ -323,7 +326,7 @@ class Events(Cog):
     async def on_message_edit(self, before, after):
         if not self.bot._ready.is_set():
             return
-        
+
         # re run command if command was edited
         if before.content != after.content and after.content.startswith(config.PREFIX):
             return await self.bot.process_command(after)
@@ -540,8 +543,10 @@ class Events(Cog):
         if left_user:
 
             # transfer back data
-            db.left_leveling_users.delete_many({'guild_id': guild_id, 'user_id': user_id})
-            del left_user['_id']
+            db.left_leveling_users.delete_many(
+                {"guild_id": guild_id, "user_id": user_id}
+            )
+            del left_user["_id"]
             db.leveling_users.insert_one(left_user)
 
             # delete timer
