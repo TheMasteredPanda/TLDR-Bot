@@ -1,9 +1,9 @@
 import asyncio
 import datetime
 import hashlib
-import re
 import time
 import traceback
+from functools import partial
 
 import config
 import discord
@@ -24,107 +24,59 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_ready(self):
-        if self.bot.first_ready:
-            return
-
         bot_game = discord.Game(f">help")
         await self.bot.change_presence(activity=bot_game)
 
-        if self.bot.leveling_system:
-            await self.check_left_members()
-        else:
+        if not self.bot.leveling_system:
             self.bot.left_check.set()
 
-        if self.bot.timers:
-            await self.bot.timers.run_old()
+        if self.bot.twtsc:
+            await self.load_tweetfeed()
 
-        if self.bot.invite_logger:
-            await self.bot.invite_logger.initialize_invites()
-
-        if self.bot.clearance:
-            await self.bot.clearance.parse_clearance_spreadsheet()
-
-        if self.bot.leveling_system:
-            self.bot.leveling_system.initialise_guilds()
-
-        if self.bot.captcha:
-            await self.bot.captcha.load()
-
-        if self.bot.ukparl_module:
-            self.bot.ukparl_module.set_guild(self.bot.get_guild(config.MAIN_SERVER))
-            await self.bot.ukparl_module.load()
-            self.bot.get_cog("UK").load()
-            self.bot.ukparl_module.load_trackers()
-            self.bot.ukparl_module.tracker_event_loop.start()
+        # if self.bot.instagram:
+        #     await self.load_instafeed()
 
         self.bot.logger.info(f"{self.bot.user} is ready")
 
-        if self.bot.webhooks:
-            await self.bot.webhooks.initialize()
-        if self.bot.watchlist:
-            self.bot.watchlist.initialize()
+    async def load_instafeed(self):
+        bot = self.bot
 
-        self.bot.first_ready = True
+        def new_insta_posts(posts, *, discord_channel: discord.TextChannel):
+            bot.dispatch("new_insta_posts", posts, discord_channel)
 
-    @Cog.listener()
-    async def on_invite_create(self, invite: Invite):
-        if self.bot.captcha:
-            await self.bot.captcha.on_invite_create(invite)
+        insta_listener = db.insta_listeners.find({})
+        for listener_data in insta_listener:
+            discord_channel = self.bot.get_channel(listener_data["discord_channel_id"])
+            if discord_channel is None:
+                db.tweet_listeners.delete_one(listener_data)
 
-    @Cog.listener()
-    async def on_invite_delete(self, invite: Invite):
-        if self.bot.captcha:
-            await self.bot.captcha.on_invite_delete(invite)
+            insta_user_id = listener_data["insta_user_id"]
+            insta_user = self.bot.instagram.get_user(user_id=insta_user_id)
+            if insta_user is None:
+                db.tweet_listeners.delete_one(listener_data)
 
-    @Cog.listener()  # TODO: Create Gateway Guild Message listener, to listen for the answers to captchas. Also have to create a listener for members joning and leaving, to handle the kicking off of members on the gateway guild when they join the main TLDR Gateway.
-    async def on_message(self, message: discord.Message):
-        if message.content == "":
-            return
-        if message.author.bot:
-            return
+            partial_callback = partial(new_insta_posts, discord_channel=discord_channel)
+            self.bot.instagram.create_listener(insta_user.identifier, partial_callback)
 
-        captcha_module = self.bot.captcha
+    async def load_tweetfeed(self):
+        bot = self.bot
 
-        if captcha_module.is_gateway_guild(message.guild.id) is False:
-            return
+        def new_tweet(tweets, *, discord_channel: discord.TextChannel):
+            bot.dispatch("new_tweets", tweets, discord_channel)
 
-        g_guild = captcha_module.get_gateway_guild(message.guild.id)
+        tweet_listeners = db.tweet_listeners.find({})
+        for listener_data in tweet_listeners:
+            discord_channel = self.bot.get_channel(listener_data["discord_channel_id"])
+            if discord_channel is None:
+                db.tweet_listeners.delete_one(listener_data)
 
-        if g_guild.has_captcha_channel(message.author.id) is False:
-            return
+            twitter_username = listener_data["twitter_username"]
+            twitter_user = await self.bot.twtsc.get_user(username=twitter_username)
+            if twitter_user is None:
+                db.tweet_listeners.delete_one(listener_data)
 
-        captcha_channel: CaptchaChannel = g_guild.get_captcha_channel(message.author.id)
-        await captcha_channel.on_message(message)
-
-    async def check_left_members(self):
-        self.bot.logger.info(f"Checking Guilds for left members.")
-        left_member_count = 0
-        # check if any users have left while the bot was offline
-        for guild in self.bot.guilds:
-            initial_left_members = left_member_count
-            guild_members = [
-                m.id for m in await guild.fetch_members(limit=None).flatten()
-            ]
-            leveling_users = db.leveling_users.find({"guild_id": guild.id})
-
-            self.bot.logger.debug(
-                f"Checking {guild.name} [{guild.id}] for left members. Guild members: {len(guild_members)} Leveling Users: {leveling_users.count()}"
-            )
-
-            for user in leveling_users:
-                # if true, user has left the server while the bot was offline
-                if int(user["user_id"]) not in guild_members:
-                    left_member_count += 1
-                    self.transfer_leveling_data(user)
-
-            self.bot.logger.debug(
-                f"{left_member_count - initial_left_members} members left guild."
-            )
-
-        self.bot.left_check.set()
-        self.bot.logger.info(
-            f"Left members have been checked - Total {left_member_count} members left guilds."
-        )
+            partial_callback = partial(new_tweet, discord_channel=discord_channel)
+            self.bot.twtsc.create_tweet_listener(twitter_user, partial_callback)
 
     @Cog.listener()
     async def on_command_error(self, ctx: Context, exception: Exception):
@@ -376,7 +328,7 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_message_edit(self, before, after):
-        if not self.bot.first_ready:
+        if not self.bot._ready.is_set():
             return
 
         # re run command if command was edited
@@ -648,20 +600,6 @@ class Events(Cog):
                         for role in up_to_role:
                             await leveling_member.add_role(role)
 
-    def transfer_leveling_data(self, leveling_user):
-        db.leveling_users.delete_many(leveling_user)
-        db.left_leveling_users.delete_many(leveling_user)
-        db.left_leveling_users.insert_one(leveling_user)
-
-        data_expires = round(time.time()) + 30 * 24 * 60 * 60  # 30 days
-
-        self.bot.timers.create(
-            guild_id=leveling_user["guild_id"],
-            expires=data_expires,
-            event="leveling_data_expires",
-            extras={"user_id": leveling_user["user_id"]},
-        )
-
     @Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         if self.bot.captcha:
@@ -675,7 +613,7 @@ class Events(Cog):
         if not leveling_user:
             return
 
-        self.transfer_leveling_data(leveling_user)
+        self.bot.leveling_system.transfer_leveling_data(leveling_user)
 
     @Cog.listener()
     async def on_leveling_data_expires_timer_over(self, timer: dict):

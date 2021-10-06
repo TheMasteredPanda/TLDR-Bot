@@ -4,16 +4,18 @@ import os
 import traceback
 from datetime import datetime
 
+import config
 import discord
 from discord.ext.commands import Bot, when_mentioned_or
+from twtsc import Twtsc
 
-import config
 import modules.captcha_verification
 import modules.commands
 import modules.custom_commands
 import modules.database
 import modules.embed_maker
 import modules.google_drive
+import modules.instagram
 import modules.invite_logger
 import modules.leveling
 import modules.moderation
@@ -216,7 +218,7 @@ class TLDR(Bot):
     async def on_message(self, message: discord.Message):
         await self.wait_until_ready()
 
-        if not self.first_ready:
+        if not self._ready.is_set():
             return
 
         # no bots allowed

@@ -375,6 +375,13 @@ class UKParliamentModule:
         self._guild: Union[Guild, None] = None
         bot.logger.info("UK Parliament module has been initiated.")
 
+    async def on_ready(self):
+        self.set_guild(self._bot.get_guild(config.MAIN_SERVER))
+        await self.load()
+        self._bot.get_cog("UK").load()
+        self.load_trackers()
+        self.tracker_event_loop.start()
+
     async def load_settings(self):
         pass
 

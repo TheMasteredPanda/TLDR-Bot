@@ -19,6 +19,8 @@ class Clearance:
         self.roles = {}
         self.command_access = {}
 
+        self.bot.add_listener(self.on_ready, 'on_ready')
+
         self.bot.logger.debug(f"Downloading clearance spreadsheet")
 
         if self.bot.google_drive:
@@ -37,6 +39,9 @@ class Clearance:
         self.bot.logger.debug(f"Clearance spreadsheet has been downloaded")
         self.bot.logger.info(f"Sheets: {', '.join(self.clearance_spreadsheet.keys())}")
         self.bot.logger.info(f"Clearance module has been initiated")
+
+    async def on_ready(self):
+        await self.parse_clearance_spreadsheet()
 
     @staticmethod
     def split_comma(value: str, *, value_type: Callable = str):
