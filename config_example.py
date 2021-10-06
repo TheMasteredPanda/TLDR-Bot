@@ -29,28 +29,30 @@ GEONAMES_USERNAME = ""
 CLEARANCE_SPREADSHEET_ID = ""
 
 MODULES = {
-    'google_drive': True,
-    'webhooks': True,
-    'watchlist': True,
-    'timers': True,
-    'reaction_menus': True,
-    'custom_commands': True,
-    'leveling_system': True,
-    'invite_logger': True,
-    'moderation': True,
-    'ukparl_module': True,
-    'clearance': True
+    "google_drive": True,
+    "webhooks": True,
+    "watchlist": True,
+    "timers": True,
+    "reaction_menus": True,
+    "custom_commands": True,
+    "leveling_system": True,
+    "invite_logger": True,
+    "moderation": True,
+    "ukparl_module": True,
+    "clearance": True,
+    "captcha": True,
 }
 
 COGS = {
-    'admin': True,
-    'dev': True,
-    'events': True,
-    'fun': True,
-    'leveling': True,
-    'mod': True,
-    'privatemessages': True,
-    'settings': True,
-    'uk_parliament': True,
-    'utility': True
+    "admin": True,
+    "dev": True,
+    "events": True,
+    "fun": True,
+    "leveling": True,
+    "mod": True,
+    "privatemessages": True,
+    "settings": True,
+    "uk_parliament": True,
+    "utility": True,
+    "captcha": True,
 }

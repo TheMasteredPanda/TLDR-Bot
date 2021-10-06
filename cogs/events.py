@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import hashlib
 import time
@@ -8,8 +9,11 @@ import config
 import discord
 from bot import TLDR
 from bson import ObjectId
+from discord import Invite
 from discord.ext.commands import Cog, Context
 from modules import database, embed_maker, format_time
+from modules.captcha_verification import CaptchaChannel
+from modules.custom_commands import Guild, Message
 
 db = database.get_connection()
 
@@ -532,16 +536,34 @@ class Events(Cog):
                         )
 
     @Cog.listener()
+    async def on_guild_remove(self, guild: Guild):
+        if self.bot.captcha:
+            if self.bot.captcha.is_gateway_guild(guild):
+                if len(self.bot.captcha.get_gateway_guilds()) == 0:
+                    captcha_settings = self.bot.settings_handler.get_settings(
+                        config.MAIN_SERVER
+                    )["modules"]["captcha"]
+                    if captcha_settings["autospawn_guilds"] == True:
+                        self.bot.logger.info(
+                            "Last Gateway Guild manually removed. Creating new guild. To prevent this set the autospawn_guilds setting to False."
+                        )
+                        g_guild = await self.bot.captcha.create_guild()
+                        await g_guild.load()
+
+    @Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild_id = member.guild.id
         user_id = member.id
 
+        if self.bot.captcha:
+            await self.bot.captcha.on_member_join(member)
+
         # see if user is in left_leveling_users, if they are, move the data back to leveling_users
+
         left_user = db.left_leveling_users.find_one(
             {"guild_id": guild_id, "user_id": user_id}
         )
         if left_user:
-
             # transfer back data
             db.left_leveling_users.delete_many(
                 {"guild_id": guild_id, "user_id": user_id}
@@ -580,6 +602,10 @@ class Events(Cog):
 
     @Cog.listener()
     async def on_member_remove(self, member: discord.Member):
+        if self.bot.captcha:
+            print("Triggering on_member leave in Captcha module.")
+            await self.bot.captcha.on_member_leave(member)
+
         leveling_user = db.leveling_users.find_one(
             {"guild_id": member.guild.id, "user_id": member.id}
         )

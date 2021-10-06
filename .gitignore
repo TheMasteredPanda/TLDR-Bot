@@ -135,3 +135,4 @@ tmpimages
 tmpimages/*
 tldr.json
 tldr_rsa
+setup.cfg

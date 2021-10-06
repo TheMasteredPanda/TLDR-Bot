@@ -1,32 +1,32 @@
-import os
-import copy
-import config
 import asyncio
-import discord
+import copy
+import os
 import traceback
-import modules.utils
-import modules.timers
-import modules.database
-import modules.leveling
-import modules.embed_maker
-import modules.ukparliament
-import modules.webhooks
-import modules.watchlist
-import modules.google_drive
-import modules.reaction_menus
-import modules.custom_commands
-import modules.invite_logger
-import modules.moderation
-import modules.commands
-import modules.slack_bridge
-import modules.tasks
-import modules.instagram
+from datetime import datetime
 
+import config
+import discord
+from discord.ext.commands import Bot, when_mentioned_or
 from twtsc import Twtsc
 
-from datetime import datetime
-from discord.ext.commands import when_mentioned_or, Bot
-
+import modules.captcha_verification
+import modules.commands
+import modules.custom_commands
+import modules.database
+import modules.embed_maker
+import modules.google_drive
+import modules.instagram
+import modules.invite_logger
+import modules.leveling
+import modules.moderation
+import modules.reaction_menus
+import modules.slack_bridge
+import modules.tasks
+import modules.timers
+import modules.ukparliament
+import modules.utils
+import modules.watchlist
+import modules.webhooks
 
 intents = discord.Intents.all()
 db = modules.database.get_connection()
@@ -47,7 +47,7 @@ class TLDR(Bot):
         )
         self.enabled_modules = config.MODULES
         self.enabled_cogs = config.COGS
-
+        self.settings_handler = modules.utils.SettingsHandler()
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
         self.command_system = modules.commands.CommandSystem(self)
@@ -55,25 +55,81 @@ class TLDR(Bot):
         # Load Cogs
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py") and filename[:-3] != "template_cog":
-                if filename[:-3] in self.enabled_cogs and self.enabled_cogs[filename[:-3]]:
+                if (
+                    filename[:-3] in self.enabled_cogs
+                    and self.enabled_cogs[filename[:-3]]
+                ):
                     self.load_extension(f"cogs.{filename[:-3]}")
                     self.logger.info(f"Cog {filename[:-3]} is now loaded.")
 
-        self.google_drive = modules.google_drive.Drive() if self.enabled_modules['google_drive'] else None
-        self.webhooks = modules.webhooks.Webhooks(self) if self.enabled_modules['webhooks'] else None
-        self.watchlist = modules.watchlist.Watchlist(self) if self.enabled_modules['watchlist'] else None
-        self.timers = modules.timers.Timers(self) if self.enabled_modules['timers'] else None
-        self.reaction_menus = modules.reaction_menus.ReactionMenus(self) if self.enabled_modules['reaction_menus'] else None
-        self.custom_commands = modules.custom_commands.CustomCommands(self) if self.enabled_modules['custom_commands'] else None
-        self.leveling_system = modules.leveling.LevelingSystem(self) if self.enabled_modules['leveling_system'] else None
-        self.invite_logger = modules.invite_logger.InviteLogger(self) if self.enabled_modules['invite_logger'] else None
-        self.moderation = modules.moderation.ModerationSystem(self) if self.enabled_modules['moderation'] else None
-        self.ukparl_module = modules.ukparliament.UKParliamentModule(self) if self.enabled_modules['ukparl_module'] else None
-        self.clearance = modules.commands.Clearance(self) if self.enabled_modules['clearance'] else None
-        self.slack_bridge = modules.slack_bridge.Slack(self) if self.enabled_modules['slack_bridge'] else None
-        self.tasks = modules.tasks.Tasks(self) if self.enabled_modules['tasks'] else None
-        self.twtsc = Twtsc() if self.enabled_modules['twtsc'] else None
-        self.instagram = modules.instagram.Instagram(self) if self.enabled_modules['instagram'] else None
+        self.google_drive = (
+            modules.google_drive.Drive()
+            if self.enabled_modules["google_drive"]
+            else None
+        )
+        self.webhooks = (
+            modules.webhooks.Webhooks(self)
+            if self.enabled_modules["webhooks"]
+            else None
+        )
+        self.watchlist = (
+            modules.watchlist.Watchlist(self)
+            if self.enabled_modules["watchlist"]
+            else None
+        )
+        self.timers = (
+            modules.timers.Timers(self) if self.enabled_modules["timers"] else None
+        )
+        self.reaction_menus = (
+            modules.reaction_menus.ReactionMenus(self)
+            if self.enabled_modules["reaction_menus"]
+            else None
+        )
+        self.custom_commands = (
+            modules.custom_commands.CustomCommands(self)
+            if self.enabled_modules["custom_commands"]
+            else None
+        )
+        self.leveling_system = (
+            modules.leveling.LevelingSystem(self)
+            if self.enabled_modules["leveling_system"]
+            else None
+        )
+        self.invite_logger = (
+            modules.invite_logger.InviteLogger(self)
+            if self.enabled_modules["invite_logger"]
+            else None
+        )
+        self.moderation = (
+            modules.moderation.ModerationSystem(self)
+            if self.enabled_modules["moderation"]
+            else None
+        )
+        self.ukparl_module = (
+            modules.ukparliament.UKParliamentModule(self)
+            if self.enabled_modules["ukparl_module"]
+            else None
+        )
+        self.clearance = (
+            modules.commands.Clearance(self)
+            if self.enabled_modules["clearance"]
+            else None
+        )
+        self.slack_bridge = (
+            modules.slack_bridge.Slack(self)
+            if self.enabled_modules["slack_bridge"]
+            else None
+        )
+        self.tasks = (
+            modules.tasks.Tasks(self) if self.enabled_modules["tasks"] else None
+        )
+
+        self.captcha = (
+            modules.captcha_verification.CaptchaModule(self)
+            if self.enabled_modules["captcha"]
+            else None
+        )
+        self.first_ready = False
 
     def add_cog(self, cog):
         """Overwrites the orginal add_cog method to add a line for the commandSystem"""
@@ -108,9 +164,7 @@ class TLDR(Bot):
         embed.set_author(
             name=f"Critical Error - Shutting down", icon_url=guild.icon_url
         )
-        await channel.send(
-            embed=embed
-        )
+        await channel.send(embed=embed)
         await self.close()
 
     async def _run_event(self, coroutine, event_name, *args, **kwargs):
@@ -128,7 +182,7 @@ class TLDR(Bot):
 
     async def on_event_error(self, exception: Exception, event_method, *args, **kwarg):
         """Reports all event errors to server and channel given in config."""
-        loop = kwarg.get('loop', None)
+        loop = kwarg.get("loop", None)
         trace = exception.__traceback__
         verbosity = 10
         lines = traceback.format_exception(type(exception), exception, trace, verbosity)
@@ -151,7 +205,10 @@ class TLDR(Bot):
             timestamp=datetime.now(),
             description=f"```py\n{exception}\n{traceback_text}```",
         )
-        embed.set_author(name=f"{'Event' if not loop else 'Loop'} Error - {event_method}", icon_url=guild.icon_url)
+        embed.set_author(
+            name=f"{'Event' if not loop else 'Loop'} Error - {event_method}",
+            icon_url=guild.icon_url,
+        )
         if not loop:
             embed.add_field(name="args", value=str(args))
             embed.add_field(name="kwargs", value=str(kwarg))
@@ -181,7 +238,10 @@ class TLDR(Bot):
                 return
 
         # invoke command if message starts with prefix
-        if message.content.startswith(config.PREFIX) and message.content.replace(config.PREFIX, "").strip():
+        if (
+            message.content.startswith(config.PREFIX)
+            and message.content.replace(config.PREFIX, "").strip()
+        ):
             return await self.process_command(message)
 
     async def check_custom_command(self, message: discord.Message):
@@ -225,6 +285,11 @@ class TLDR(Bot):
             return
 
         command = None
+
+        if message.guild.id != config.MAIN_SERVER and config.MAIN_SERVER != 0:
+            # This is to prevent commands on Gateway Guilds from being processed.
+            return
+
         if self.clearance:
             # get the object of the command actually being run, so that can be checked instead of just the parent command
             # Discord.py invokes the parent command, then it looks for any sub commands and invokes those directly, instead of processing them like commands
@@ -235,7 +300,7 @@ class TLDR(Bot):
                 add = view.get_word()
                 if not add:
                     break
-                full_command_name += f' {add}'
+                full_command_name += f" {add}"
 
             command = self.get_command(full_command_name)
 
@@ -250,16 +315,22 @@ class TLDR(Bot):
                 )
 
             # return if user doesnt have clearance for command
-            if not ctx.command.can_use(ctx.author) or (command and not command.can_use(ctx.author)):
+            if not ctx.command.can_use(ctx.author) or (
+                command and not command.can_use(ctx.author)
+            ):
                 return
 
         # check if the command has a missing dependency
         ctx_dependency = ctx.command.module_dependency()
         command_dependency = command.module_dependency() if command else None
         if ctx_dependency:
-            return await modules.embed_maker.error(ctx, f'Command missing module dependency [{ctx_dependency}]')
+            return await modules.embed_maker.error(
+                ctx, f"Command missing module dependency [{ctx_dependency}]"
+            )
         if command_dependency:
-            return await modules.embed_maker.error(ctx, f'Command missing module dependency [{command_dependency}]')
+            return await modules.embed_maker.error(
+                ctx, f"Command missing module dependency [{command_dependency}]"
+            )
 
         await self.invoke(ctx)
 

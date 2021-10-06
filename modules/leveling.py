@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import math
-import discord
 import time
-import config
-
-from pymongo.collection import Collection
-from typing import Tuple, Union, Optional, List
 from datetime import datetime
+from typing import List, Optional, Tuple, Union
+
+import config
+import discord
+from pymongo.collection import Collection
+
 from modules import database
 from modules.utils import get_guild_role, get_member_by_id
 
@@ -766,7 +767,9 @@ class LevelingGuild(LevelingData):
 
         return member
 
-    async def add_member(self, member: discord.Member, *, leveling_user_data: dict = None) -> LevelingMember:
+    async def add_member(
+        self, member: discord.Member, *, leveling_user_data: dict = None
+    ) -> LevelingMember:
         """
         Converts :class:`discord.Member` to :class:`LevelingMember` and adds it to :attr:`members`.
 
@@ -780,7 +783,9 @@ class LevelingGuild(LevelingData):
         :class:`LevelingMember`
             The LevelingMember.
         """
-        leveling_member = LevelingMember(self.bot, self, member, leveling_user_data=leveling_user_data)
+        leveling_member = LevelingMember(
+            self.bot, self, member, leveling_user_data=leveling_user_data
+        )
         self.members.append(leveling_member)
         return leveling_member
 
@@ -1186,12 +1191,13 @@ class LevelingSystem:
     guilds: :class:`List[:class:`LevelingGuild`]`
         List of the LevelingGuilds attached to the bot.
     """
+
     def __init__(self, bot):
         self.bot = bot
         # list of leveling guilds
         self.guilds = []
-        self.bot.add_listener(self.on_message, 'on_message')
-        self.bot.add_listener(self.on_ready, 'on_ready')
+        self.bot.add_listener(self.on_message, "on_message")
+        self.bot.add_listener(self.on_ready, "on_ready")
         self.bot.logger.info("LevelingSystem module has been initiated")
 
     async def on_ready(self):
@@ -1247,7 +1253,14 @@ class LevelingSystem:
         if not self.bot._ready.is_set():
             return
 
-        if message.author.bot or not message.guild or message.content.startswith(config.PREFIX):
+        if message.guild.id != config.MAIN_SERVER and config.MAIN_SERVER != 0:
+            return
+
+        if (
+            message.author.bot
+            or not message.guild
+            or message.content.startswith(config.PREFIX)
+        ):
             return
 
         leveling_cog = self.bot.get_cog("Leveling")
