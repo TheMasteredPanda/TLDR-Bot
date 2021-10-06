@@ -1,24 +1,22 @@
-from datetime import datetime
 import functools
-from io import BytesIO
 import math
+from datetime import datetime
+from io import BytesIO
 from typing import Union
 
-from discord.ext.commands.converter import TextChannelConverter
-from discord.file import File
-from modules import database
-from modules.custom_commands import Guild
-from modules.reaction_menus import BookMenu
-from discord import embeds
-
-from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
-from bot import TLDR
-from modules import embed_maker
 import modules.commands as cls
-from modules.utils import ParseArgs
+from bot import TLDR
+from discord import embeds
 from discord.ext import commands
 from discord.ext.commands import Context
+from discord.ext.commands.converter import TextChannelConverter
+from discord.file import File
+from modules import database, embed_maker
+from modules.custom_commands import Guild
+from modules.reaction_menus import BookMenu
+from modules.utils import ParseArgs
 from ukparliament.bills import SearchBillsBuilder, SearchBillsSortOrder
+from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from ukparliament.utils import URL_BILLS
 
 
@@ -384,7 +382,6 @@ class UK(commands.Cog):
         name="dbstats",
         help="At the moment this only displays the amount of documents in both bills_tracker and divisions_tracker collections",
         usage="uk mod tracker dbstats",
-        clearence="dev",
         cls=cls.Command,
         module_dependency=["ukparl_module"],
     )
@@ -481,6 +478,7 @@ class UK(commands.Cog):
     async def mod_cmd_tracker_eventloop(self, ctx: commands.Context):
         if self.loaded is False:
             return
+        print(self.bot.ukparl_module.tracker_event_loop.is_running())
         return await embed_maker.message(
             ctx,
             description=(
@@ -573,7 +571,7 @@ class UK(commands.Cog):
             next_line = "\n"
             return await embed_maker.message(
                 ctx,
-                description=f"**Valid tracker ids:**{next_line} - {(next_line + ' - ').join(channels.keys)}",
+                description=f"**Valid tracker ids:**{next_line} - {(next_line + ' - ').join(channels.keys())}",
                 send=True,
             )
 

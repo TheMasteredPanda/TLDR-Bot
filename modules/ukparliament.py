@@ -13,10 +13,9 @@ import discord
 from cachetools.ttl import TTLCache
 from discord import File
 from discord.embeds import Embed
-from discord.ext import tasks
 from discord.guild import Guild
 
-from modules import database
+from modules import database, timers
 from modules.utils import SettingsHandler
 from ukparliament.bills_tracker import (BillsStorage, Conditions, Feed,
                                         FeedUpdate, PublicationUpdate)
@@ -424,12 +423,14 @@ class UKParliamentModule:
         if channels["lords_divisions"] != 0 or channels["commons_divisions"] != 0:
             self.parliament.start_divisions_tracker(self._divisions_storage)
             if channels["commons_divisions"] != 0:
+                print("Registered commons division listener.")
                 self.parliament.get_divisions_tracker().register(
                     self.on_commons_division
                 )
                 self.tracker_status["commonsdivisions"]["started"] = True
 
             if channels["lords_divisions"] != 0:
+                print("Registered lords division listener.")
                 self.parliament.get_divisions_tracker().register(
                     self.on_lords_division, False
                 )
@@ -451,8 +452,9 @@ class UKParliamentModule:
     def get_guild(self) -> Union[Guild, None]:
         return self._guild
 
-    @tasks.loop(seconds=60)
+    @timers.loop(seconds=60)
     async def tracker_event_loop(self):
+        print("UKParliament Loop Trigger.")
         division_listener = (
             self.tracker_status["lordsdivisions"]["started"]
             or self.tracker_status["commonsdivisions"]["started"]
@@ -517,6 +519,7 @@ class UKParliamentModule:
         await channel.send(embed=embed)
 
     async def on_commons_division(self, division: CommonsDivision, bill: Bill):
+        print("on_commons_division triggered.")
         channel = self._guild.get_channel(
             int(self.config.get_channel_id("commons_divisions"))
         )
@@ -552,12 +555,16 @@ class UKParliamentModule:
         )
 
     async def on_lords_division(self, division: LordsDivision, bill: Bill):
+        print("on_lords_division triggered.")
         channel = self._guild.get_channel(
             int(self.config.get_channel_id("lords_divisions"))
         )
+        print("Lords Channel: ")
+        print(channel)
         if channel is None:
             return
         division_file = await self.generate_division_image(self.parliament, division)
+        print("Got division file.")
         embed = Embed(
             color=discord.Colour.from_rgb(166, 42, 22), timestamp=datetime.now()
         )
@@ -583,6 +590,7 @@ class UKParliamentModule:
         embed.description = description
         self.tracker_status["lordsdivisions"]["confirmed"] = True
         embed.set_image(url="attachment://divisionimage.png")
+        print("Attempting to send embed in on_lords_division.")
         await channel.send(
             file=division_file,
             embed=embed,

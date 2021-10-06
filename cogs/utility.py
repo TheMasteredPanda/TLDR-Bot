@@ -1,23 +1,24 @@
 import datetime
-import json
-import discord
-import time
-import config
-import os
 import inspect
-import pytz
-import bs4
-
-from iso639 import languages
-from googletrans import Translator
-from emoji.unicode_codes.en import EMOJI_UNICODE_ENGLISH, EMOJI_ALIAS_UNICODE_ENGLISH
-from timezonefinder import TimezoneFinder
+import json
+import os
+import time
 from typing import Union
-from bson import ObjectId
-from modules import commands, database, embed_maker, format_time
-from modules.utils import get_member, ParseArgs, get_custom_emote
-from discord.ext.commands import Cog, command, Context
+
+import bs4
+import config
+import discord
+import pytz
 from bot import TLDR
+from bson import ObjectId
+from discord.ext.commands import Cog, Context, command
+from emoji.unicode_codes.en import (EMOJI_ALIAS_UNICODE_ENGLISH,
+                                    EMOJI_UNICODE_ENGLISH)
+from googletrans import Translator
+from iso639 import languages
+from modules import commands, database, embed_maker, format_time
+from modules.utils import ParseArgs, get_custom_emote, get_member
+from timezonefinder import TimezoneFinder
 
 db = database.get_connection()
 
@@ -25,6 +26,16 @@ db = database.get_connection()
 class Utility(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+
+    @command(
+        help="Shuts down the bot.",
+        usage="shutdown",
+        examples=["shutdown"],
+        cls=commands.Command,
+    )
+    async def shutdown(self, ctx: Context):
+        await self.bot.logout()
+        exit(0)
 
     @command(
         help="Translate text to english",
@@ -506,7 +517,8 @@ class Utility(Cog):
     async def reminders(self, ctx: Context, action: str = None, *, index: str = None):
         user_reminders = sorted(
             [
-                r for r in db.timers.find(
+                r
+                for r in db.timers.find(
                     {
                         "guild_id": ctx.guild.id,
                         "event": "reminder",

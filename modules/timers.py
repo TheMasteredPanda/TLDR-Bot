@@ -1,8 +1,9 @@
 import asyncio
 import time
 
-from discord.ext.commands import Bot
 from bson import ObjectId
+from discord.ext.commands import Bot
+
 from modules import database
 
 db = database.get_connection()
@@ -28,6 +29,9 @@ class Loop:
     def stop(self):
         self.started.clear()
 
+    def is_running(self):
+        return self.started.is_set()
+
     def __get__(self, obj, objtype):
         if obj is None:
             return self
@@ -48,21 +52,26 @@ class Loop:
             try:
                 await self.coro(self._injected)
             except Exception as e:
-                if hasattr(self._injected, 'bot'):
-                    await self._injected.bot.on_event_error(e, self.coro.__name__, loop=True)
+                if hasattr(self._injected, "bot"):
+                    await self._injected.bot.on_event_error(
+                        e, self.coro.__name__, loop=True
+                    )
                 if isinstance(self._injected, Bot):
                     # checking if isinstace bot, cause can't import TLDR due to circular import
-                    await self._injected.on_event_error(e, self.coro.__name__, loop=True)
+                    await self._injected.on_event_error(
+                        e, self.coro.__name__, loop=True
+                    )
 
 
 def loop(*, seconds=0, minutes=0, hours=0):
     def decorator(func):
         kwargs = {
-            'seconds': seconds,
-            'minutes': minutes,
-            'hours': hours,
+            "seconds": seconds,
+            "minutes": minutes,
+            "hours": hours,
         }
         return Loop(func, **kwargs)
+
     return decorator
 
 
@@ -79,7 +88,7 @@ class Timers:
 
     def __init__(self, bot):
         self.bot = bot
-        self.bot.logger.info('Timers module has been initiated')
+        self.bot.logger.info("Timers module has been initiated")
 
     async def run_loop(self, loop: Loop):
         await loop.started.wait()
@@ -96,7 +105,7 @@ class Timers:
         await self.bot.left_check.wait()
 
         timers = db.timers.find({})
-        self.bot.logger.info(f'Running {timers.count()} old timers.')
+        self.bot.logger.info(f"Running {timers.count()} old timers.")
 
         for timer in timers:
             asyncio.create_task(self.run(timer))
@@ -112,8 +121,8 @@ class Timers:
         """
         now = round(time.time())
 
-        if timer['expires'] > now:
-            await asyncio.sleep(timer['expires'] - now)
+        if timer["expires"] > now:
+            await asyncio.sleep(timer["expires"] - now)
 
         self.call_event(timer)
 
@@ -127,11 +136,11 @@ class Timers:
         timer: :class:`dict`
             Timer dictionary from :func:`create`
         """
-        timer = db.timers.find_one({'_id': ObjectId(timer['_id'])})
+        timer = db.timers.find_one({"_id": ObjectId(timer["_id"])})
         if not timer:
             return
 
-        db.timers.delete_one({'_id': ObjectId(timer['_id'])})
+        db.timers.delete_one({"_id": ObjectId(timer["_id"])})
         self.bot.dispatch(f'{timer["event"]}_timer_over', timer)
 
     def create(self, *, guild_id: int, expires: int, event: str, extras: dict):
@@ -150,12 +159,12 @@ class Timers:
             Extra data that can be passed to the timer.
         """
         timer_dict = {
-            'guild_id': guild_id,
-            'expires': expires,
-            'event': event,
-            'extras': extras
+            "guild_id": guild_id,
+            "expires": expires,
+            "event": event,
+            "extras": extras,
         }
 
         result = db.timers.insert_one(timer_dict)
-        timer_dict['_id'] = str(result.inserted_id)
+        timer_dict["_id"] = str(result.inserted_id)
         asyncio.create_task(self.run(timer_dict))

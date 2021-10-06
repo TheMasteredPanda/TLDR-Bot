@@ -1,19 +1,19 @@
+import asyncio
+import datetime
+import hashlib
+import re
+import time
+import traceback
+
+import config
+import discord
+from bot import TLDR
+from bson import ObjectId
+from discord import Invite
+from discord.ext.commands import Cog, Context
+from modules import database, embed_maker, format_time
 from modules.captcha_verification import CaptchaChannel
 from modules.custom_commands import Guild, Message
-import discord
-import time
-import hashlib
-import config
-import datetime
-import traceback
-import asyncio
-import re
-
-from bson import ObjectId
-from bot import TLDR
-from modules import database, format_time, embed_maker
-from discord.ext.commands import Cog, Context
-
 
 db = database.get_connection()
 
@@ -65,6 +65,16 @@ class Events(Cog):
             self.bot.watchlist.initialize()
 
         self.bot.first_ready = True
+
+    @Cog.listener()
+    async def on_invite_create(self, invite: Invite):
+        if self.bot.captcha:
+            await self.bot.captcha.on_invite_create(invite)
+
+    @Cog.listener()
+    async def on_invite_delete(self, invite: Invite):
+        if self.bot.captcha:
+            await self.bot.captcha.on_invite_delete(invite)
 
     @Cog.listener()  # TODO: Create Gateway Guild Message listener, to listen for the answers to captchas. Also have to create a listener for members joning and leaving, to handle the kicking off of members on the gateway guild when they join the main TLDR Gateway.
     async def on_message(self, message: discord.Message):
@@ -142,7 +152,9 @@ class Events(Cog):
 
         embed = await embed_maker.message(
             ctx,
-            author={"name": f"{ctx.command.name if ctx.command else 'Unknown'} - Command Error"},
+            author={
+                "name": f"{ctx.command.name if ctx.command else 'Unknown'} - Command Error"
+            },
             description=f"```{exception}\n{traceback_text}```",
         )
 

@@ -25,20 +25,22 @@ import modules.timers as timers
 from modules.utils import SettingsHandler
 
 """
-A Captcha Gateway System to prevent continuous bot attacks.
+Author: TheMasteredPanda (Duke J. Morgan)
+Description: A Captcha Gateway System to prevent continuous bot attacks.
+
 
 Requirements:
     - [DONE] Bot to have ownership over gateway server.
     - [ ] Bot to create more gateway servers if the need arises.
-    - [ ] Each new member to a captcha server will need a dedicated channel to prove they are not a bot.
+    - [DONE] Each new member to a captcha server will need a dedicated channel to prove they are not a bot.
         * [DONE] In this channel, only they will be able to see themselves and the bot.
         * [DONE] In this channel, the captcha will happen.
-        * [ ] This channel will be removed after a time-to-live if the captcha has not be completed, configuable ofc.
-        * [ ] This channel will be removed after the captcha is successfully on unsuccessfully completed.
-    - [ ] The Bot should allow for invitation links to be generated for each gateway server through a command, accessed on
+        * [DONE] This channel will be removed after a time-to-live if the captcha has not be completed, configuable ofc.
+        * [DONE] This channel will be removed after the captcha is successfully on unsuccessfully completed.
+    - [DONE] The Bot should allow for invitation links to be generated for each gateway server through a command, accessed on
     the main TLDR guild.
-    - [ ] The Bot should allow for warning announcements if any one gateway is becoming too full.
-    - [ ] After the captcha is complete, the user should be given a one-time invitation link. Once they have joined the
+    - [DONE] The Bot should allow for warning announcements if any one gateway is becoming too full.
+    - [DONE] After the captcha is complete, the user should be given a one-time invitation link. Once they have joined the
     main TLDR server,
     they should be kicked off of the gateway server.
     - The following data points need to be stored:
@@ -46,7 +48,7 @@ Requirements:
         * [ ] Amount of unsuccessful captchas.
         * [ ] Amount of joins per month.
     - The following commands need to be written:
-        * [ ] A command to get an invitiation link. This command will also need to accomodate for the different types of
+        * [DONE] A command to get an invitiation link. This command will also need to accomodate for the different types of
         invitiation link a guild can offer. Whether it be one of or non-expiring.
         * [ ] A command to see the status of each gateway server. How many people join each gateway server,
         it's current lifetime, it's id, &c.
@@ -610,6 +612,7 @@ class TrackerManager:
         within the timeout time to be bots and kick them. It will also send a direct message to those kicked asking
         for them to join through a Gateway Guild. The invite they used will also be removed too.
         """
+        self._logger.info(f"Member joined guild {member.guild.name}")
         guild_id = member.guild.id
 
         if guild_id != config.MAIN_SERVER:
@@ -631,6 +634,8 @@ class TrackerManager:
                 f"Couldn't determine which invite member {member.display_name} joined with."
             )
             return
+        else:
+            self._logger.info(f"Member joined from invite {invite_used.id}")
 
         if self.is_registered(invite_used.id):
             return
@@ -672,6 +677,19 @@ class TrackerManager:
                 f"Removing temporal entry associated with {invite_used.url} because a potential bot attack was not detected."
             )
             self.remove_temporal_entry(invite_used.id)
+
+    async def on_invite_create(self, invite: Invite):
+        self._invite_cache[invite.id] = invite.uses
+        self._logger.info(
+            f"Invite created. Added invitation link {invite.id} to the invite link cache."
+        )
+
+    async def on_invite_delete(self, invite: Invite):
+        del self._temporal_cache[invite.id]
+        del self._invite_cache[invite.id]
+        self._logger.info(
+            f"Invite link deleted. Removing invitation link {invite.id} from the invite link cache."
+        )
 
 
 class CaptchaChannel:
@@ -1865,16 +1883,18 @@ class CaptchaModule:
             if g_guild.get_guild().id == guild_id:
                 await g_guild.on_member_leave(member)
 
+    async def on_invite_create(self, invite: Invite):
+        await self._tracker_manager.on_invite_create(invite)
+
+    async def on_invite_delete(self, invite: Invite):
+        await self._tracker_manager.on_invite_delete(invite)
+
     async def on_member_join(self, member: discord.Member):
         """
         Handles the invocation of GatewayGuild on_member_join events.
         """
         user_id = member.id
         guild_id = member.guild.id
-
-        if guild_id == config.MAIN_SERVER:
-            await self._tracker_manager.on_member_join(member)
-            return
 
         if self.is_gateway_guild(guild_id):
             main_guild: Guild = self._bot.get_guild(config.MAIN_SERVER)
@@ -1888,11 +1908,13 @@ class CaptchaModule:
                     f"Member {main_guild_user.display_name} on Gateway Guild and Main Guild. Kicking member."
                 )
                 await member.guild.kick(member)
+                await member.kick()
                 return
 
             await self._bot.captcha.get_gateway_guild(guild_id).on_member_join(member)
 
         if guild_id == config.MAIN_SERVER:
+            await self._tracker_manager.on_member_join(member)
             for g_guild in self._bot.captcha.get_gateway_guilds():
                 if g_guild.has_captcha_channel(user_id):
                     channel: CaptchaChannel = g_guild.get_captcha_channel(user_id)
