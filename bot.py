@@ -4,11 +4,11 @@ import os
 import traceback
 from datetime import datetime
 
-import config
 import discord
 from discord.ext.commands import Bot, when_mentioned_or
 from twtsc import Twtsc
 
+import config
 import modules.captcha_verification
 import modules.commands
 import modules.custom_commands
@@ -123,13 +123,12 @@ class TLDR(Bot):
         self.tasks = (
             modules.tasks.Tasks(self) if self.enabled_modules["tasks"] else None
         )
-
-        self.captcha = (
-            modules.captcha_verification.CaptchaModule(self)
-            if self.enabled_modules["captcha"]
+        self.twtsc = Twtsc() if self.enabled_modules["twtsc"] else None
+        self.instagram = (
+            modules.instagram.Instagram(self)
+            if self.enabled_modules["instagram"]
             else None
         )
-        self.first_ready = False
 
     def add_cog(self, cog):
         """Overwrites the orginal add_cog method to add a line for the commandSystem"""

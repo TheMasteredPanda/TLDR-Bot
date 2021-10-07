@@ -41,6 +41,9 @@ MODULES = {
     "ukparl_module": True,
     "clearance": True,
     "captcha": True,
+    "instagram": True,
+    "twtsc": True,
+    "slack_bridge": True,
 }
 
 COGS = {
