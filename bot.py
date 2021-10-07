@@ -129,6 +129,7 @@ class TLDR(Bot):
             if self.enabled_modules["instagram"]
             else None
         )
+        self.captcha = None  # Temporary.
 
     def add_cog(self, cog):
         """Overwrites the orginal add_cog method to add a line for the commandSystem"""
