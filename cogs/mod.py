@@ -375,6 +375,37 @@ class Mod(Cog):
         self.bot.reaction_menus.add(menu)
 
     @command(
+        help='Purge messages that match a filter or just all messages up to n. when given multiple filters all of them will be checked separately',
+        usage='purge [number of messages] (args)',
+        examples=['purge 500 -f buy bitcoin'],
+        command_args=[
+            (('--filter', '-f', list),
+             'A regex filter that will be matched against the users message, if a match is found the message will be deleted'),
+        ],
+        cls=commands.Command,
+        module_dependency=['moderation']
+    )
+    async def purge(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
+        if not args:
+            return await embed_maker.command_error(ctx)
+
+        number = args['pre']
+        filters = args['filter']
+
+        t = 0
+        messages = await ctx.channel.history(limit=number).flatten()
+        for message in messages:
+            if not filters or any(x in message.content for x in filters):
+                try:
+                    await message.delete()
+                    t += 1
+                except:
+                    pass
+
+        return await embed_maker.message(ctx, description=f'Removed {t} messages.')
+
+
+    @command(
         help='See the cases (warn/mute/ban) issued to a user',
         usage='cases [member] [case type] (page)',
         examples=['cases hattyot warn', 'warns hattyot ban 2'],
