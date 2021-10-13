@@ -390,12 +390,15 @@ class Mod(Cog):
             return await embed_maker.command_error(ctx)
 
         number = args['pre']
+        if not number.isdigit():
+            return await embed_maker.command_error(ctx)
+
         filters = args['filter']
 
         t = 0
-        messages = await ctx.channel.history(limit=number).flatten()
+        messages = await ctx.channel.history(limit=int(number)).flatten()
         for message in messages:
-            if not filters or any(x in message.content for x in filters):
+            if not filters or any(x.strip() in message.content for x in filters):
                 try:
                     await message.delete()
                     t += 1
