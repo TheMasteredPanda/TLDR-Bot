@@ -405,7 +405,7 @@ class Mod(Cog):
                 except:
                     pass
 
-        return await embed_maker.message(ctx, description=f'Removed {t} messages.')
+        return await embed_maker.message(ctx, description=f'Removed {t} messages.', send=True)
 
 
     @command(
