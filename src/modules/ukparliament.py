@@ -1,63 +1,51 @@
-from io import BytesIO
-from cachetools.ttl import TTLCache
+import configparser
+import os
+import random
+import string
+import time
 from datetime import datetime
+from io import BytesIO
+from typing import Union
+
+import aiofiles
+import config
 import discord
+from cachetools.ttl import TTLCache
+from discord import File
 from discord.embeds import Embed
 from discord.guild import Guild
-import random
-from discord import File
-import string
-from typing import Union
+
+from modules import database, timers
+from modules.utils import SettingsHandler
+from ukparliament.bills_tracker import (BillsStorage, Conditions, Feed,
+                                        FeedUpdate, PublicationUpdate)
+from ukparliament.divisions_tracker import DivisionStorage
 from ukparliament.structures.bills import Bill, CommonsDivision, LordsDivision
 from ukparliament.structures.members import ElectionResult, PartyMember
-from ukparliament.bills_tracker import (
-    Conditions,
-    Feed,
-    FeedUpdate,
-    BillsStorage,
-    PublicationUpdate,
-)
-from ukparliament.divisions_tracker import DivisionStorage
-from ukparliament.utils import BetterEnum
-from discord.ext import tasks
 from ukparliament.ukparliament import UKParliament
-from modules import database
-import config
+from ukparliament.utils import BetterEnum
 
 
 class UKParliamentConfig:
-    def __init__(self, guild_id: int):
+    def __init__(self, settings_handler: SettingsHandler, guild_id: int):
         """
         Utility/handler class to interface with the collection containing the channel ids for each tracker.
         Used soley to store the ids of channel assigned to each tracker.
         """
+        self._settings_handler: SettingsHandler = settings_handler
         self.db = database.get_connection()
-        self.settings = self.db.get_guild_settings(guild_id)
+        settings = self._settings_handler.get_settings(guild_id)
         self.guild_id = guild_id
-        if "modules" not in self.settings.keys():
-            self.db.guild_settings.update_one(
-                {"guild_id": guild_id}, {"$set": {"modules": {}}}
-            )
-            self.settings = self.db.get_guild_settings(guild_id)
 
-        if "ukparliament" not in self.settings["modules"].keys():
-            self.db.guild_settings.update_one(
-                {"guild_id": guild_id},
-                {
-                    "$set": {
-                        "modules": {
-                            "ukparliament": {
-                                "royal_assent": 0,
-                                "lords_divisions": 0,
-                                "commons_divisions": 0,
-                                "publications": 0,
-                                "feed": 0,
-                            }
-                        }
-                    }
-                },
-            )
-            self.settings = self.db.get_guild_settings(guild_id)
+        if "ukparliament" not in settings["modules"].keys():
+            settings["modules"]["ukparliament"] = {
+                "royal_assent": 0,
+                "lords_divisions": 0,
+                "commons_divisions": 0,
+                "publications": 0,
+                "feed": 0,
+            }
+            self._settings_handler.save(settings)
 
     def set_channel(self, tracker_name: str, channel_id: int):
         """
@@ -70,13 +58,14 @@ class UKParliamentConfig:
         channel_id: :class:`int`
             The id of the text channel.
         """
-        if tracker_name not in self.settings["modules"]["ukparliament"].keys():
+        settings = self._settings_handler.get_settings(self.guild_id)
+        if tracker_name not in settings["modules"]["ukparliament"].keys():
             raise Exception(
                 f"Tracker name {tracker_name} is not a key for a channel id."
             )
 
-        self.settings["modules"]["ukparliament"][tracker_name] = channel_id
-        self.db.guild_settings.save(self.settings)
+        settings["modules"]["ukparliament"][tracker_name] = channel_id
+        self._settings_handler.save(settings)
 
     def get_channel_id(self, tracker_id):
         """
@@ -94,13 +83,16 @@ class UKParliamentConfig:
             The id of the text channel or 0
         """
 
-        if tracker_id not in self.settings["modules"]["ukparliament"].keys():
+        settings = self._settings_handler.get_settings(self.guild_id)
+        if tracker_id not in settings["modules"]["ukparliament"].keys():
             raise Exception(f"Tracker name {tracker_id} is not a key for a channel id.")
 
-        return self.settings["modules"]["ukparliament"][tracker_id]
+        return settings["modules"]["ukparliament"][tracker_id]
 
     def get_channel_ids(self):
-        return self.settings["modules"]["ukparliament"]
+        return self._settings_handler.get_settings(self.guild_id)["modules"][
+            "ukparliament"
+        ]
 
 
 class PartyColour(BetterEnum):
@@ -364,6 +356,7 @@ class UKParliamentModule:
         self._divisions_storage = DivisionMongoStorage()
         self._bills_storage = BillsMongoStorage()
         self.confirm_manager = ConfirmManager()
+        bot.add_listener(self.on_ready, "on_ready")
 
         """
         These are used to allow a check  of the trackers to be done in the guild.
@@ -381,6 +374,14 @@ class UKParliamentModule:
         }
 
         self._guild: Union[Guild, None] = None
+        bot.logger.info("UK Parliament module has been initiated.")
+
+    async def on_ready(self):
+        self.set_guild(self._bot.get_guild(config.MAIN_SERVER))
+        await self.load()
+        self._bot.get_cog("UK").load()
+        self.load_trackers()
+        self.tracker_event_loop.start()
 
     async def load_settings(self):
         pass
@@ -392,7 +393,7 @@ class UKParliamentModule:
         wasn't for this impediment.
 
         """
-        self.config = UKParliamentConfig(self._guild.id)
+        self.config = UKParliamentConfig(self._bot.settings_handler, self._guild.id)
         self.aiohttp_session = getattr(self._bot.http, "_HTTPClient__session")
         self.parliament = UKParliament(self.aiohttp_session)
         await self.parliament.load()
@@ -430,12 +431,14 @@ class UKParliamentModule:
         if channels["lords_divisions"] != 0 or channels["commons_divisions"] != 0:
             self.parliament.start_divisions_tracker(self._divisions_storage)
             if channels["commons_divisions"] != 0:
+                print("Registered commons division listener.")
                 self.parliament.get_divisions_tracker().register(
                     self.on_commons_division
                 )
                 self.tracker_status["commonsdivisions"]["started"] = True
 
             if channels["lords_divisions"] != 0:
+                print("Registered lords division listener.")
                 self.parliament.get_divisions_tracker().register(
                     self.on_lords_division, False
                 )
@@ -457,7 +460,7 @@ class UKParliamentModule:
     def get_guild(self) -> Union[Guild, None]:
         return self._guild
 
-    @tasks.loop(seconds=60)
+    @timers.loop(seconds=60)
     async def tracker_event_loop(self):
         division_listener = (
             self.tracker_status["lordsdivisions"]["started"]
@@ -561,6 +564,7 @@ class UKParliamentModule:
         channel = self._guild.get_channel(
             int(self.config.get_channel_id("lords_divisions"))
         )
+        print(channel)
         if channel is None:
             return
         division_file = await self.generate_division_image(self.parliament, division)
@@ -752,6 +756,9 @@ class UKParliamentModule:
                 "name": party_name,
                 "colour": PartyColour.from_id(party_id).value["colour"],
             }
+
+        if config.WEB_API_URL == "":
+            raise Exception("WEB_API_URL for image processor has not been set.")
 
         async with self.aiohttp_session.post(
             f"{config.WEB_API_URL}/divisionimage",

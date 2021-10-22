@@ -12,6 +12,10 @@ class Webhooks:
     def __init__(self, bot):
         self.bot = bot
         self.webhooks = {}
+        self.bot.add_listener(self.on_ready, 'on_ready')
+
+    async def on_ready(self):
+        await self.initialize()
 
     async def initialize(self):
         """Cache all the existing webhooks."""

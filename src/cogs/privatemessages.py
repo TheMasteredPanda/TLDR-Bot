@@ -2,7 +2,7 @@ import config
 import discord
 
 from modules.utils import get_member
-from modules import embed_maker, commands, database
+from modules import commands, embed_maker, database
 from datetime import datetime, date
 from discord.ext.commands import Cog, command, Context
 
@@ -45,6 +45,9 @@ class PrivateMessages(Cog):
         cls=commands.Command
     )
     async def pm_help(self, ctx: Context, help_cmd: str = None):
+        main_guild: discord.Guild = self.bot.get_guild(config.MAIN_SERVER)
+        member = main_guild.get_member(ctx.author.id)
+
         embed_colour = config.EMBED_COLOUR
         all_commands = self.commands
 
@@ -63,7 +66,7 @@ class PrivateMessages(Cog):
         else:
             if help_cmd in all_commands:
                 cmd = getattr(self, help_cmd)
-                cmd_help = cmd.get_help(ctx.author)
+                cmd_help = cmd.get_help(member)
                 examples = f' | '.join(cmd_help.examples)
                 cmd_help = f"""
                         **Description:** {cmd_help.help}

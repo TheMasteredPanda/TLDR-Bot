@@ -1,76 +1,48 @@
-import os
-from urllib.parse import quote_plus
-from dotenv import load_dotenv
-
-if os.path.isfile('.env'):
-    load_dotenv('.env')
-elif os.path.isfile('../.env'):
-    load_dotenv('../.env')
-
-
-BOT_TOKEN = os.getenv('BOT_TOKEN', '')
-PREFIX = os.getenv('PREFIX', '>')
-EMBED_COLOUR = int(os.getenv('EMBED_COLOUR', '0x00a6ad'), 16)  # TLDR blue
-
-MONGODB_HOST = os.getenv('MONGODB_HOST', 'localhost')
-MONGODB_PORT = os.getenv('MONGODB_PORT', '27017')
-DATABASE_USERNAME = os.getenv('DATABASE_USERNAME', 'tldradmin')
-DATABASE_PASSWORD = os.getenv('DATABASE_PASSWORD', 'rP8P5nw3nOjq7T7LBthBNlB8yKEnmT')
-MONGODB_URL = f'mongodb://{quote_plus(DATABASE_USERNAME)}:{quote_plus(DATABASE_PASSWORD)}@{MONGODB_HOST}:{MONGODB_PORT}/'
-
-MAIN_SERVER = int(os.getenv('MAIN_SERVER', 0))
-
-# Error server and channel where to send error messages
-ERROR_SERVER = int(os.getenv('ERROR_SERVER', 0))
-ERROR_CHANNEL = int(os.getenv('ERROR_CHANNEL', 0))
-WEB_API_URL = os.getenv('WEB_API_URL', '')
-
-# for google drive integration
-# path to given credentials for drive_service account
-SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE', '')
-DRIVE_PARENT_FOLDER_ID = os.getenv('DRIVE_PARENT_FOLDER_ID', '')
-
-# for when the bot cant dm the user
-BOT_CHANNEL_ID = int(os.getenv('BOT_CHANNEL_ID', 0))
-
-# For the time command https://www.geonames.org/
-GEONAMES_USERNAME = os.getenv('GEONAMES_USERNAME', '')
-
-CLEARANCE_SPREADSHEET_ID = os.getenv('CLEARANCE_SPREADSHEET_ID', '')
-
-SLACK_APP_TOKEN = os.getenv('SLACK_APP_TOKEN', '')
-SLACK_CLIENT_ID = os.getenv('SLACK_CLIENT_ID', '')
-SLACK_CLIENT_SECRET = os.getenv('SLACK_CLIENT_SECRET', '')
-SLACK_REDIRECT_DOMAIN = os.getenv('SLACK_REDIRECT_DOMAIN', '')
+BOT_TOKEN = "NjcyMDUyNzQ4MzU4Nzc4ODkw.XjF35Q.g_lCmWIaMSH1Sy4ovBwOlmApgqk"
+MONGODB_URL = "mongodb://tldradmin:W08L2wk0dldnw2L@tldrcommunity.duckdns.org:27017/TLDR?authSource=admin&w=1"
+PREFIX = ">>"
+MAIN_SERVER = 524213542635700224
+ERROR_SERVER = 524213542635700224
+ERROR_CHANNEL = 748622037383381036
+WEB_API_URL = "https://tldr-process-images.herokuapp.com/"
+SERVICE_ACCOUNT_FILE = "tldr-bot-71b67ba59890.json"
+DRIVE_PARENT_FOLDER_ID = "1GGFtzEuSH3hX9aHT5rn-FzOV0rZnpPXP"
+BOT_CHANNEL_ID = 697181595890614323
+GEONAMES_USERNAME = "tldrbot"
+CLEARANCE_SPREADSHEET_ID = "1RBc8wZS_mRKxP5jr8ZgOLadGCUuqKRUikkeLaN4zXyo"
+SLACK_APP_TOKEN = "xapp-1-A028L5UBNP4-2289182305941-500e75f8ad7d6e0f2014a87f3a00e097c9d8a7fc5138b8bd327226cf5eb66112"
+SLACK_CLIENT_ID = "2242616258578.2292198396786"
+SLACK_CLIENT_SECRET = "9f51feb94914b141bfcc81102ab382d4"
+SLACK_REDIRECT_DOMAIN = 'tldrcommunity.duckdns.org'
+EMBED_COLOUR = 0x00a6ad
 
 MODULES = {
-    'google_drive': True,
+    'google_drive': False,
     'webhooks': True,
-    'watchlist': True,
-    'timers': True,
-    'reaction_menus': True,
-    'custom_commands': True,
-    'leveling_system': True,
-    'invite_logger': True,
-    'moderation': True,
-    'ukparl_module': True,
+    'watchlist': False,
+    'timers': False,
+    'reaction_menus': False,
+    'custom_commands': False,
+    'leveling_system': False,
+    'invite_logger': False,
+    'moderation': False,
+    'ukparl_module': False,
     'clearance': False,
-    'channels': True,
     'slack_bridge': False,
-    'tasks': True,
-    "captcha": True,
+    'tasks': False,
+    'captcha': False
 }
 
 COGS = {
-    'admin': True,
-    'dev': True,
+    'admin': False,
+    'dev': False,
     'events': True,
-    'fun': True,
-    'leveling': True,
+    'fun': False,
+    'leveling': False,
     'mod': True,
-    'privatemessages': True,
-    'settings': True,
-    'uk_parliament': True,
+    'privatemessages': False,
+    'settings': False,
+    'uk_parliament': False,
     'utility': True,
-    'captcha': True,
+    'captcha': False
 }

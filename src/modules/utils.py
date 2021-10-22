@@ -9,16 +9,71 @@ import requests
 from io import BytesIO
 from logging import handlers
 from typing import Tuple, Union, Optional
-from modules import embed_maker, commands, database
+from modules import embed_maker, database, commands
 from discord.ext.commands import Context, Converter
 
 db = database.get_connection()
 log_session = None
 
 
+class SettingsHandler:
+    """
+    A settings handler. Used to store centrally settings from the guild_settings collection.
+    This was written primarily to prevent multiple modules from saving to the collection old
+    versions of a settings document.
+    """
+
+    def __init__(self):
+        self._db = database.get_connection()
+        self._settings = {}
+
+    def get_settings(self, guild_id: int):
+        if guild_id not in self._settings.keys():
+            self._settings[guild_id] = self._db.get_guild_settings(guild_id)
+        return self._settings[guild_id]
+
+    def save(self, new_settings):
+        if "_id" not in new_settings:
+            raise Exception(
+                "Can't save new settings as no '_id' exists on the document."
+            )
+
+        self._db.guild_settings.replace_one({"_id": new_settings["_id"]}, new_settings)
+
+    def get_key_map(self, settings, flat: bool = False) -> list[str]:
+        def walk(key_list: list, branch: dict, full_branch_key: str):
+            walk_list = {} if flat is False else []
+            for key, value in branch:
+                if type(branch[key]) is dict:
+                    walk(key_list, branch[key], f"{full_branch_key}.{key}")
+                else:
+                    walk_list[f"{full_branch_key}.{key}".lower()] = (
+                        value
+                        if flat is False
+                        else walk_list.append(f"{full_branch_key}.{key}")
+                    )
+
+            key_list.extend(walk_list)
+            return key_list
+
+        key_list = []
+
+        for key, value in settings:
+            if type(settings[key]) is dict:
+                key_list = walk(key_list, settings[key], key)
+            else:
+                key_list[key.lower()] = (
+                    value if flat is False else key_list.append(key.lower())
+                )
+        return key_list
+
+
 class Command(Converter):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
-    async def convert(self, ctx: Context, argument: str = '') -> Optional[Union[commands.Command, commands.Group]]:
+
+    async def convert(
+        self, ctx: Context, argument: str = ""
+    ) -> Optional[Union[commands.Command, commands.Group]]:
         """
         Converts provided argument to command
 
@@ -39,7 +94,8 @@ class Command(Converter):
 
 class ParseArgs(Converter, dict):
     """Special class for when used as a type on a command arg, :func:`convert` will be called on the argument."""
-    async def convert(self, ctx: Context, argument: str = '') -> dict:
+
+    async def convert(self, ctx: Context, argument: str = "") -> dict:
         """
         Converts provided argument to dictionary of command args and their values.
         Command args are gotten from ctx.command.docs.command_args.
@@ -71,9 +127,11 @@ class ParseArgs(Converter, dict):
                 args[long[2:]] = data_type
 
                 if type(short) == str:
-                    matches = re.findall(rf'(\s|^)({short})(\s|$)', argument)
+                    matches = re.findall(rf"(\s|^)({short})(\s|$)", argument)
                     for match in matches:
-                        argument = re.sub(''.join(match), match[0] + long + match[2], argument)
+                        argument = re.sub(
+                            "".join(match), match[0] + long + match[2], argument
+                        )
 
                 result[long[2:]] = None
 
@@ -82,7 +140,7 @@ class ParseArgs(Converter, dict):
             # split argument with regex
             split_argument = re.split(regex, argument)
             # anything before the first arg is put into result['pre']
-            result['pre'] = split_argument.pop(0)
+            result["pre"] = split_argument.pop(0)
 
             for arg, data in zip(split_argument[::2], split_argument[1::2]):
                 data_type = args[arg]
@@ -164,7 +222,7 @@ def get_custom_emote(ctx: Context, emote: str) -> Optional[discord.Emoji]:
     Optional[:class:`discord.Emoji`]
         Emoji if one is found, otherwise `None`.
     """
-    match = id_match(emote, r'<a?:[a-zA-Z0-9\_]+:([0-9]+)>$')
+    match = id_match(emote, r"<a?:[a-zA-Z0-9\_]+:([0-9]+)>$")
     result = None
 
     if match is None:
@@ -187,7 +245,9 @@ def get_custom_emote(ctx: Context, emote: str) -> Optional[discord.Emoji]:
     return result
 
 
-async def get_guild_role(guild: discord.Guild, role_identifier: str) -> Optional[discord.Role]:
+async def get_guild_role(
+    guild: discord.Guild, role_identifier: str
+) -> Optional[discord.Role]:
     """
     Get guild's role by its name or id.
 
@@ -495,13 +555,13 @@ async def get_member(ctx: Context, source, *, multi: bool = True, return_message
         if index.isdigit() and len(members) >= int(index) - 1 >= 0:
             return members[int(index) - 1]
         elif not index.isdigit():
-            return await embed_maker.error(ctx, 'Input is not a number') if return_message else None
+            return await embed_maker.error(ctx, 'Input is not a number')
         elif int(index) - 1 > len(members) or int(index) - 1 < 0:
-            return await embed_maker.error(ctx, 'Input number out of range') if return_message else None
+            return await embed_maker.error(ctx, 'Input number out of range')
 
     except asyncio.TimeoutError:
         await users_embed_message.delete()
-        return await embed_maker.error(ctx, 'Timeout') if return_message else None
+        return await embed_maker.error(ctx, 'Timeout')
 
 
 def get_logger(name: str = 'TLDR-Bot-log'):

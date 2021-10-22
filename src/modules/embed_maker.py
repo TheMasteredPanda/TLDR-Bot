@@ -1,6 +1,7 @@
 import discord
 import config
 
+from modules import commands
 from typing import Union
 from datetime import datetime
 from discord.ext.commands import Context
@@ -125,7 +126,7 @@ async def command_error(ctx, bad_arg: str = None):
         embed_colour = get_colour("red")
         description = f"**Invalid Argument:** {bad_arg}\n\n**Usage:** {ctx.command.docs.usage}\n**Examples:** {examples_str}"
 
-    if ctx.command.all_commands:
+    if type(ctx.command) == commands.Group and ctx.command.all_commands:
         sub_commands = ctx.command.sub_commands(member=ctx.author)
         if sub_commands:
             sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc.name for sc in sub_commands)

@@ -1,22 +1,24 @@
 import datetime
-import discord
-import time
-import config
-import os
 import inspect
-import pytz
-import bs4
-
-from iso639 import languages
-from googletrans import Translator
-from emoji.unicode_codes.en import EMOJI_UNICODE_ENGLISH, EMOJI_ALIAS_UNICODE_ENGLISH
-from timezonefinder import TimezoneFinder
+import json
+import os
+import time
 from typing import Union
-from bson import ObjectId
-from modules import embed_maker, format_time, commands, database
-from modules.utils import get_member, ParseArgs, get_custom_emote
-from discord.ext.commands import Cog, command, Context
+
+import bs4
+import config
+import discord
+import pytz
 from bot import TLDR
+from bson import ObjectId
+from discord.ext.commands import Cog, Context, command
+from emoji.unicode_codes.en import (EMOJI_ALIAS_UNICODE_ENGLISH,
+                                    EMOJI_UNICODE_ENGLISH)
+from googletrans import Translator
+from iso639 import languages
+from modules import commands, database, embed_maker, format_time
+from modules.utils import ParseArgs, get_custom_emote, get_member
+from timezonefinder import TimezoneFinder
 
 db = database.get_connection()
 
@@ -24,6 +26,16 @@ db = database.get_connection()
 class Utility(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+
+    @command(
+        help="Shuts down the bot.",
+        usage="shutdown",
+        examples=["shutdown"],
+        cls=commands.Command,
+    )
+    async def shutdown(self, ctx: Context):
+        await self.bot.logout()
+        exit(0)
 
     @command(
         help="Translate text to english",
@@ -188,7 +200,7 @@ class Utility(Cog):
             ),
         ],
         cls=commands.Command,
-        module_dependency=['timers']
+        module_dependency=["timers"],
     )
     async def anon_poll(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
         if not args:
@@ -505,7 +517,8 @@ class Utility(Cog):
     async def reminders(self, ctx: Context, action: str = None, *, index: str = None):
         user_reminders = sorted(
             [
-                r for r in db.timers.find(
+                r
+                for r in db.timers.find(
                     {
                         "guild_id": ctx.guild.id,
                         "event": "reminder",
@@ -549,7 +562,7 @@ class Utility(Cog):
             "remindme 10h 30m 10s stay alive",
         ],
         cls=commands.Command,
-        module_dependency=['timers']
+        module_dependency=["timers"],
     )
     async def remindme(self, ctx: Context, *, reminder: str = None):
         if reminder is None:
@@ -568,9 +581,12 @@ class Utility(Cog):
             extras={"reminder": reminder, "member_id": ctx.author.id},
         )
 
+        timestamp = datetime.datetime.utcfromtimestamp(expires)
+        strftimestamp = timestamp.strftime('%H:%M:%S %Y-%m-%d (GMT)')
+
         return await embed_maker.message(
             ctx,
-            description=f"Alright, in {format_time.seconds(remind_time, accuracy=10)} I will remind you: `{reminder}`",
+            description=f"Alright, in {format_time.seconds(remind_time, accuracy=10)} [{strftimestamp}] I will remind you: `{reminder}`",
             send=True,
         )
 
@@ -707,12 +723,21 @@ class Utility(Cog):
             else:
                 help_object[cog_name].append(command)
 
-        member_clearance = self.bot.clearance.member_clearance(ctx.author)
+        member_clearance = (
+            self.bot.clearance.member_clearance(ctx.author)
+            if self.bot.clearance
+            else None
+        )
+
         # if user didnt ask for a specific command, display all the available categories and commands to the user
         if command_name is None:
-            highest_member_clearance = self.bot.clearance.highest_member_clearance(
-                member_clearance
+            highest_member_clearance = (
+                self.bot.clearance.highest_member_clearance(member_clearance)
+                if self.bot.clearance
+                else None
             )
+            if highest_member_clearance is None:
+                highest_member_clearance = "*"
 
             embed = await embed_maker.message(
                 ctx,
@@ -730,6 +755,8 @@ class Utility(Cog):
                 "Admin",
                 "Dev",
                 "Special Access",
+                "UK",
+                "Catchpa",
             ]
             for cog_name in sorted_cog_names:
                 if cog_name not in help_object:
@@ -775,8 +802,10 @@ class Utility(Cog):
             if type(command) == commands.Group and command.all_commands:
                 sub_commands = command.sub_commands(member=ctx.author)
                 if sub_commands:
-                    sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc.name for sc in sub_commands)
-                    sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`'
+                    sub_commands_str = "**\nSub Commands:** " + " | ".join(
+                        sc.name for sc in sub_commands
+                    )
+                    sub_commands_str += f"\nTo view more info about sub commands, type `{ctx.prefix}help {command.name} [sub command]`"
                     cmd_help += sub_commands_str
 
             if command_help.command_args:
@@ -826,7 +855,7 @@ class Utility(Cog):
 
         # pull back indentation
         new_src = ""
-        for line in splitlines():
+        for line in src.splitlines():
             new_src += f"{line.replace('    ', '', 1)}\n"
 
         src = new_src

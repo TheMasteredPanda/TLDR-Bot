@@ -3,17 +3,17 @@ services:
   db:
     image: mongo:latest
     container_name: mongodb
-      volumes:
-        - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
-      restart: unless-stopped
-      env_file:
-        - ./.env
-      environment:
-        MONGO_INITDB_ROOT_USERNAME: ${DATABASE_USERNAME:-tldradmin}
-        MONGO_INITDB_ROOT_PASSWORD: ${DATABASE_PASSWORD:-rP8P5nw3nOjq7T7LBthBNlB8yKEnmT}
-        MONGO_INITDB_DATABASE: admin
-      ports:
-        - "27017:27017"
+    volumes:
+      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DATABASE_USERNAME:-tldradmin}
+      MONGO_INITDB_ROOT_PASSWORD: ${DATABASE_PASSWORD:-rP8P5nw3nOjq7T7LBthBNlB8yKEnmT}
+      MONGO_INITDB_DATABASE: admin
+    ports:
+      - "27017:27017"
 
   bot:
     image: hattyot/tldr-bot:latest
@@ -31,7 +31,7 @@ services:
 
   api:
     image: hattyot/tldr-api:latest
-    container_name: tldr-bot
+    container_name: tldr-api
     restart: unless-stopped
     env_file:
       - ./.env

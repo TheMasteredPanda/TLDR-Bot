@@ -1,10 +1,11 @@
-import pymongo
+from typing import Union
+
 import config
+import pymongo
+from bson import ObjectId
 
 from ukparliament.bills_tracker import FeedUpdate
-from ukparliament.divisions_tracker import LordsDivision, CommonsDivision
-from typing import Union
-from bson import ObjectId
+from ukparliament.divisions_tracker import CommonsDivision, LordsDivision
 
 active_connection = None
 
@@ -163,9 +164,6 @@ class Connection:
             {
                 'guild_id': :class:`int`,
                 'mute_role_id': :class:`int`,
-                'slack_bridges': {
-                   'slack_channel_id': 'discord_channel_id'
-                }
             }
     bills_tracker: :class:`pymongo.collection.Collection`
         The bills tracker collection:
@@ -180,6 +178,37 @@ class Connection:
                 'bill_id': :class:`int`
                 'division_id': :class:`int`
             }
+    captcha_guilds: :class:`pymongo.ccollection.Collection`
+        The captcha guilds collection:
+            {
+                'guild_id': :class:`int`
+    captcha_channels: :class:`pymongo.collection.Collection`
+        The captcha channels collection:
+            {
+                'guild_id': :class:`int`,
+                'channel_id': :class:`int`,
+                'tries': :class:`int`,
+                'ttl': :class:`int`,
+                'member_id': :class:`int`
+            }
+    captcha_blacklist: :class:`pymongo.collection.Collection`
+        The captcha blacklist collection:
+            {
+                'member': {
+                    'id': :class:`int`,
+                    'name': :class:`str`
+                },
+                'started': :class:`int`
+                'ends': :class:`int`
+            }
+    captcha_counter: :class:`pymongo.collection.Collection`
+        The captcha counter collection:
+            {
+                'member_id': :class:`int`,
+                'counter': :class:`int`,
+                'updated_at': :class:`int`
+            }
+
     webhooks: :class:`pymongo.collection.Collection`
         The webhooks collection
             {
@@ -221,7 +250,30 @@ class Connection:
                 'function': :class:`str`  # name of the function in tasks that will be called
                 'kwargs': :class:`dict`
             }
+    captcha_member_cache: :class:`pymongo.collection.Collection`
+        The collection for storing the last known username of a blacklisted member.
+            {
+                'member_id': :class:`int`
+                'member_name': :class:`str`
+            }
+    captcha_registered_invitations: :class:`pymongo.collection.Collection`
+        The collection for storing invitations registered as acceptable to use.
+            {
+                'code': :class:`str`
+    tweet_listeners :class:`pymongo.collection.Collection`
+        The collection that holds the data for tweet listeners.
+            {
+                'twitter_username': :class:`str`
+                'discord_channel_id': :class:`int`
+            }
+    insta_listeners :class:`pymongo.collection.Collection`
+        The collection that holds the data for insta listeners.
+            {
+                'insta_user_id': :class:`str`
+                'discord_channel_id': :class:`int`
+            }
     """
+
     def __init__(self):
         self.mongo_client = pymongo.MongoClient(config.MONGODB_URL)
         self.db = self.mongo_client["TLDR"]
@@ -238,10 +290,21 @@ class Connection:
         self.bills_tracker = self.db["bills_tracker"]
         self.divisions_tracker = self.db["divisions_tracker"]
         self.guild_settings = self.db["guild_settings"]
-        self.webhooks = self.db['webhooks']
-        self.slack_bridge = self.db['slack_bridge']
-        self.slack_messages = self.db['slack_messages']
-        self.tasks = self.db['tasks']
+        self.captcha_guilds = self.db["captcha_guilds"]
+        self.captcha_channels = self.db["captcha_channels"]
+        self.captcha_blacklist = self.db["captcha_blacklist"]
+        self.captcha_counter = self.db["captcha_counter"]
+        self.captcha_member_cache = self.db["captcha_member_cache"]
+        self.captcha_registered_invitations = self.db["catpcha_registered_invitations"]
+        self.webhooks = self.db["webhooks"]
+        self.slack_bridge = self.db["slack_bridge"]
+        self.slack_messages = self.db["slack_messages"]
+        self.tasks = self.db["tasks"]
+        self.slack_bridge = self.db["slack_bridge"]
+        self.slack_messages = self.db["slack_messages"]
+        self.tasks = self.db["tasks"]
+        self.tweet_listeners = self.db["tweet_listeners"]
+        self.insta_listeners = self.db["insta_listeners"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
@@ -358,7 +421,7 @@ class Connection:
         """
         guild_settings = self.guild_settings.find_one({"guild_id": guild_id})
         if guild_settings is None:
-            guild_settings = {"guild_id": guild_id, "mute_role_id": None}
+            guild_settings = {"guild_id": guild_id, "mute_role_id": None, "modules": {}}
             self.guild_settings.insert_one(guild_settings)
 
         return guild_settings
