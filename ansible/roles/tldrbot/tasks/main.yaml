@@ -11,6 +11,11 @@
     src: env_file_encrypted
     dest: /home/tldrbot/TLDR-Bot/.env
 
+- name: copy service account
+  copy:
+    src: service_account.json
+    dest: tldr-bot-71b67ba59890.json
+
 - name: deploy tldrbot container
   docker_compose:
     project_src: /home/tldrbot/TLDR-Bot
