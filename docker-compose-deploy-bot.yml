@@ -17,3 +17,5 @@ services:
       - ./.env
     ports:
       - "443:443"
+    volumes:
+      - "/etc/letsencrypt/live/${SLACK_REDIRECT_DOMAIN}/:/etc/letsencrypt/live/${SLACK_REDIRECT_DOMAIN}/"
