@@ -1,0 +1,32 @@
+- name: install letsencrypt
+  apt:
+    name: letsencrypt
+
+- name: Check that the cert doesnt exist
+  stat:
+    path: "/etc/letsencrypt/live/{{ duckdns_domain }}.duckdns.org/privkey.pem"
+  register: stat_result
+
+- name: enusre scripts dir
+  file:
+    path: /home/tldrbot/scripts
+    state: directory
+
+- name: copy over scripts
+  template:
+    src: certbot.sh
+    dest: /home/tldrbot/scripts/certbot.sh
+    mode: "+x"
+
+- name: certbot plugins
+  pip:
+    name:
+      - certbot-dns-duckdns
+      - certbot-nginx
+      - cffi
+
+- name: letsencrypt cert
+  become: yes
+  shell:
+    cmd: "sh -c \"/home/tldrbot/scripts/certbot.sh\""
+  when: "not stat_result.stat.exists"

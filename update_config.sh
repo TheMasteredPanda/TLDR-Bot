@@ -1,0 +1,1 @@
+ansible-vault encrypt .env --vault-password-file ansible/vault_password --output ansible/env_file_encrypted

@@ -18,3 +18,4 @@ git+https://github.com/TheMasteredPanda/UK-Parliament-Library.git@master#egg=ukp
 igramscraper
 captcha
 python-dotenv
+emoji

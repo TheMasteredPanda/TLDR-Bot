@@ -1,0 +1,15 @@
+- name: create tldrbot user
+  user:
+    name: tldrbot
+    create_home: yes
+    state: present
+
+- name: ensure tldrbot/.ssh directory
+  file:
+    path: /home/tldrbot/.ssh/
+    state: directory
+
+- name: add tldrbot authorized keys
+  copy:
+    src: ssh/tldrbot_authorized_keys
+    dest: /home/tldrbot/.ssh/authorized_keys

@@ -1,0 +1,24 @@
+---
+  - name: init
+    hosts: all
+    become: yes
+    roles:
+      - init
+      - docker
+      - tldrbot_user
+
+  - name: tldrbot
+    hosts: tldrbot
+    become: yes
+    roles:
+      - python
+      - duckdns
+      - lets_encrypt
+      - image_processor
+      - tldrbot
+
+  - name: database
+    hosts: database
+    become: yes
+    roles:
+      - mongodb
