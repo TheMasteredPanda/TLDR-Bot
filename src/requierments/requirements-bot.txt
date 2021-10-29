@@ -17,4 +17,4 @@ sanic
 git+https://github.com/TheMasteredPanda/UK-Parliament-Library.git@master#egg=ukparliament
 captcha
 python-dotenv
-emoji
+emoji==1.2.0
