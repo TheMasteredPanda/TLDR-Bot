@@ -19,5 +19,5 @@ services:
     ports:
       - "443:443"
     volumes:
-      - "./.env:/TLDR-Bot/.env"
+      - "./.env:/TLDR-Api/.env"
       - "/etc/letsencrypt/live/tldrcommunity.duckdns.org/:/TLDR-Api/tldrcommunity.duckdns.org/"

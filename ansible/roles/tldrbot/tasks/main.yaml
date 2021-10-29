@@ -4,6 +4,7 @@
     dest: /home/tldrbot/TLDR-Bot
     version: master
     update: yes
+    force: yes
 
 - name: copy bot config
   copy:

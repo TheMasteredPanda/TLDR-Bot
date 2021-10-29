@@ -2,6 +2,8 @@
   git:
     repo: "{{ image_processor_repo }}"
     dest: /home/tldrbot/image_processor
+    update: yes
+    force: yes
 
 - name: deploy image processor docker container
   docker_compose:

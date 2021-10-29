@@ -3,6 +3,7 @@
     repo: "{{ tldrbot_repo }}"
     dest: /home/tldrbot/TLDR-Bot
     version: master
+    force: yes
 
 - name: copy db config
   copy:
