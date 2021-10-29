@@ -16,5 +16,10 @@ services:
     ports:
       - "27017:27017"
 
+networks:
+  default:
+    external:
+      name: tldr-net
+
 volumes:
   mongodb_data_container:

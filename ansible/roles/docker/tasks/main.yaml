@@ -3,3 +3,8 @@
     name:
       - docker
       - docker-compose
+
+- name: create tldr-net network
+  docker_network:
+    name: "tldr-net"
+    state: present

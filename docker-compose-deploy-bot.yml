@@ -21,3 +21,8 @@ services:
     volumes:
       - "./.env:/TLDR-Api/.env"
       - "/etc/letsencrypt/:/etc/letsencrypt/"
+
+networks:
+  default:
+    external:
+      name: tldr-net
