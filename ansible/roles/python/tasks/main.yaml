@@ -1,0 +1,29 @@
+- name: install requirements
+  apt:
+    name: software-properties-common
+
+- name: add deadsnakes ppa
+  apt_repository:
+    repo: ppa:deadsnakes/ppa
+
+- name: install python3.9 and distutils
+  apt:
+    name:
+      - python3.9
+      - python3.9-distutils
+    update_cache: yes
+
+- name: download pip
+  get_url:
+    url: "https://bootstrap.pypa.io/get-pip.py"
+    dest: /home/tldrbot/get-pip.py
+
+- name: Check that the pip3.9 doesnt exist
+  stat:
+    path: /usr/local/bin/pip3.9
+  register: stat_result
+
+- name: install pip
+  shell: "python3.9 /home/tldrbot/get-pip.py"
+  when: "not stat_result.stat.exists"
+

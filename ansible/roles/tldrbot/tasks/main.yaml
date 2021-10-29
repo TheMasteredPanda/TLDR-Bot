@@ -1,0 +1,18 @@
+- name: clone or update tldrbot repo
+  git:
+    repo: "{{ tldrbot_repo }}"
+    dest: /home/tldrbot/TLDR-Bot
+    version: dockerization
+  register: result
+  changed_when: "result.before != result.after"
+
+- name: copy bot config
+  copy:
+    src: env_file_encrypted
+    dest: /home/tldrbot/TLDR-Bot/.env
+
+- name: deploy tldrbot container
+  docker_compose:
+    project_src: /home/tldrbot/TLDR-Bot
+    files: docker-compose-deploy-bot.yml
+    pull: yes

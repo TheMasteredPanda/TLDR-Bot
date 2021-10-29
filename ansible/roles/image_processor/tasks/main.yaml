@@ -1,0 +1,12 @@
+- name: clone or update image processing repo
+  git:
+    repo: "{{ image_processor_repo }}"
+    dest: /home/tldrbot/image_processor
+  register: result
+  changed_when: "result.before != result.after"
+
+- name: deploy image processor docker container
+  docker_compose:
+    project_src: /home/tldrbot/image_processor
+    files: docker-compose-deploy.yml
+    pull: yes

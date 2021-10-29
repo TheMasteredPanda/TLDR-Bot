@@ -1,0 +1,19 @@
+version: '3.4'
+services:
+  bot:
+    image: hattyot/tldr-bot:latest
+    container_name: tldr-bot
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - "./.env:/TLDR-Bot/.env"
+
+  api:
+    image: hattyot/tldr-api:latest
+    container_name: tldr-api
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    ports:
+      - "443:443"
