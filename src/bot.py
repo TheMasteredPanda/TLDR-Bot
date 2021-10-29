@@ -14,7 +14,6 @@ import modules.custom_commands
 import modules.database
 import modules.embed_maker
 import modules.google_drive
-import modules.instagram
 import modules.invite_logger
 import modules.leveling
 import modules.moderation
@@ -120,11 +119,6 @@ class TLDR(Bot):
         )
         self.tasks = (
             modules.tasks.Tasks(self) if self.enabled_modules.get("tasks", True) else None
-        )
-        self.instagram = (
-            modules.instagram.Instagram(self)
-            if self.enabled_modules.get("instagram", True)
-            else None
         )
         self.captcha = None  # Temporary.
 
