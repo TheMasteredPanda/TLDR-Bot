@@ -132,3 +132,6 @@ dmypy.json
 .idea
 tmpimages
 tmpimages/*
+tldr.json
+tldr_rsa
+setup.cfg

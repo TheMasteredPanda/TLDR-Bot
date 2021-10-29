@@ -15,7 +15,6 @@ emoji
 timezonefinder
 sanic
 git+https://github.com/TheMasteredPanda/UK-Parliament-Library.git@master#egg=ukparliament
-igramscraper
 captcha
 python-dotenv
 emoji

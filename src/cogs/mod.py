@@ -5,10 +5,9 @@ import dateparser
 import discord
 import functools
 
-from igramscraper.instagram import Media
 from bson import ObjectId
 from modules.reaction_menus import BookMenu
-from discord.ext.commands import Cog, command, Context, group, TextChannelConverter
+from discord.ext.commands import Cog, command, Context, group
 from typing import Union
 from bot import TLDR
 from modules import commands, database, embed_maker, format_time, reaction_menus
@@ -26,124 +25,6 @@ db = database.get_connection()
 class Mod(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
-
-    @command(
-        invoke_without_command=True,
-        help='Manage the server\'s insta feeds.',
-        usage='instafeed (sub command) (args)',
-        examples=['instafeed add #tldr-tweets TLDRNewsUS', 'tweetfeed remove TLDRNewsUS'],
-        aliases=['if'],
-        cls=commands.Group,
-    )
-    async def instafeed(self, ctx: Context):
-        embed = await embed_maker.message(ctx, author={'name': "Instafeed"})
-
-        description = ''
-        listeners = db.insta_listeners.find({})
-        for listener_data in listeners:
-            insta_user = self.bot.instagram.get_user(user_id=listener_data['insta_user_id'])
-            if insta_user is None:
-                return db.insta_listeners.delete_one(listener_data)
-
-            description += f'[{insta_user.username}](https://www.instagram.com/{insta_user.username}) - <#{listener_data["discord_channel_id"]}>\n'
-
-        if not description:
-            description = 'No Instafeed :('
-
-        embed.description = description
-
-        return await ctx.send(embed=embed)
-
-    @instafeed.command(
-        name='add',
-        help='Add to the instafeed',
-        usage='instafeed add [#discord-channel] [instagram username]',
-        examples=['instafeed add #tldr-insta TldrNewsUK'],
-        cls=commands.Command,
-    )
-    async def instafeed_add(self, ctx: Context, discord_channel: str = None, insta_username: str = None):
-        if discord_channel is None:
-            return await embed_maker.command_error(ctx)
-
-        try:
-            discord_channel = await TextChannelConverter().convert(ctx, discord_channel)
-        except:
-            return await embed_maker.error(ctx, "Invalid discord channel.")
-
-        if insta_username is None:
-            return await embed_maker.error(ctx, "Missing instagram username arg.")
-
-        insta_user = self.bot.instagram.get_user(username=insta_username)
-        if insta_user is None:
-            return await embed_maker.error(ctx, 'Invalid instagram username')
-
-        if insta_user.identifier in self.bot.instagram.listeners:
-            return await embed_maker.error(ctx, "Currently instagram users can only be associated with one channel")
-
-        def new_insta_posts(posts: list[Media]):
-            self.bot.dispatch('new_insta_posts', posts, discord_channel)
-
-        self.bot.instagram.create_listener(insta_user.identifier, new_insta_posts)
-        db.insta_listeners.insert_one({
-            'insta_user_id': insta_user.identifier,
-            'discord_channel_id': discord_channel.id
-        })
-
-        return await embed_maker.message(
-            ctx,
-            description=f'Instagram user [{insta_user.username}] has been added to the instafeed with channel [<#{discord_channel.id}>]',
-            colour='green',
-            send=True
-        )
-
-    @instafeed.command(
-        name='remove',
-        help='Remove from the instafeed',
-        usage='instafeed remove [instagram username]',
-        examples=['instafeed remove TLDRNewsUK'],
-        cls=commands.Command,
-    )
-    async def instafeed_remove(self, ctx: Context, insta_username: str = None):
-        if insta_username is None:
-            return await embed_maker.command_error(ctx)
-
-        insta_user = self.bot.instagram.get_user(username=insta_username)
-        if insta_user is None:
-            return await embed_maker.error(ctx, 'Invalid instagram username')
-
-        if insta_user.identifier not in self.bot.instagram.listeners:
-            return await embed_maker.error(ctx, f"Instagram user [{insta_user}] is not associated with any channels.")
-
-        listener = self.bot.instagram.listeners[insta_user.identifier]
-        listener.stop()
-        db.insta_listeners.delete_one({
-            'insta_user_id': insta_user.identifier
-        })
-
-        return await embed_maker.message(
-            ctx,
-            description=f'Instagram user [{insta_user.username}] has been removed from the instafeed.',
-            colour='green',
-            send=True
-        )
-
-    @Cog.listener('on_new_insta_posts')
-    async def on_new_insta_posts(self, posts: list[Media], discord_channel: discord.TextChannel):
-        for post in posts:
-            user = self.bot.instagram.get_user(user_id=post.owner.identifier)
-            embed = discord.Embed(colour=0x8a3ab9, timestamp=datetime.datetime.fromtimestamp(post.created_time))
-            embed.set_image(url=post.image_high_resolution_url)
-            embed.set_author(name=f'{user.username} ({user.full_name})', icon_url=user.profile_pic_url)
-            embed.description = post.caption
-            embed.set_footer(text='Instagram', icon_url="https://www.designpieces.com/wp-content/uploads/2016/05/Instagram-v051916-150x150.png")
-
-            await self.bot.webhooks.send(
-                channel=discord_channel,
-                content=post.link,
-                username=user.username,
-                avatar_url=user.profile_pic_url,
-                embeds=[embed]
-            )
 
     @staticmethod
     async def construct_cases_embed(ctx: Context, member: discord.Member, cases: dict, case_type: str,
