@@ -295,7 +295,7 @@ class Command(discord.ext.commands.Command):
 
     def access_given(self, member: discord.Member):
         """Return True if member has been given access to command, otherwise return False."""
-        if config.MODULES["clearance"] is False:
+        if config.MODULES.get("clearance", True) is False:
             return False
         command_clearance = self.bot.clearance.command_clearance(self)
         return member.id in command_clearance["users"]
@@ -309,7 +309,7 @@ class Command(discord.ext.commands.Command):
 
     def can_use(self, member: discord.Member):
         """Returns True if member can use command, otherwise return False."""
-        if config.MODULES["clearance"] is False:
+        if config.MODULES.get("clearance", True) is False:
             return True
         command_clearance = self.bot.clearance.command_clearance(self)
         member_clearance = self.bot.clearance.member_clearance(member)
