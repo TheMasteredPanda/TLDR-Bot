@@ -19,18 +19,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push bot
-        id: docker_build_bot
+        id: docker_build
         uses: docker/build-push-action@v2
         with:
           push: true
           tags: hattyot/tldr-bot:latest
           context: .
-          file: TLDR-Bot/Dockerfile-bot
+          file: ./Dockerfile-bot
       - name: Build and push api
-        id: docker_build_api
+        id: docker_build
         uses: docker/build-push-action@v2
         with:
           push: true
           tags: hattyot/tldr-api:latest
           context: .
-          file: TLDR-Bot/Dockerfile-api
+          file: ./Dockerfile-api
