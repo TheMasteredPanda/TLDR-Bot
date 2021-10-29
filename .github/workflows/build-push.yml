@@ -41,14 +41,16 @@ jobs:
           file: ./Dockerfile-api
 
   run-playbook:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latestd
     needs: docker-build-push
     steps:
-      - uses: actions/checkout@v1
+      - name: Checkout
+        uses: actions/checkout@v2
+
       - name: Run playbook
         uses: dawidd6/action-ansible-playbook@v2
         with:
-          playbook: ansible/infra.yml
+          playbook: infra.yml
           directory: ./ansible
           key: ${{secrets.SSH_PRIVATE_KEY}}
           known_hosts: ./ansible/.known_hosts
