@@ -7,7 +7,7 @@ services:
     env_file:
       - ./.env
   volumes:
-    - ./.env:/TLDR-Bot/.env
+    - ./.env:/TLDR\-Bot/.env
 
   api:
     image: hattyot/tldr-api:latest
