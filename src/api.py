@@ -62,8 +62,8 @@ app.run(
   host='0.0.0.0',
   port=443,
   ssl=dict(
-    cert=f"/etc/letsencrypt/live/{config.SLACK_REDIRECT_DOMAIN}/fullchain.pem",
-    key=f"/etc/letsencrypt/live/{config.SLACK_REDIRECT_DOMAIN}/privkey.pem",
+    cert=f"./{config.SLACK_REDIRECT_DOMAIN}/fullchain.pem",
+    key=f"./{config.SLACK_REDIRECT_DOMAIN}/privkey.pem",
   )
 )
 
