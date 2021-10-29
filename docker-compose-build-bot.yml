@@ -8,13 +8,6 @@ services:
       dockerfile: Dockerfile-bot
     env_file:
       - ./.env
-    environment:
-      PREFIX: ${PREFIX:->}
-      EMBED_COLOUR: ${EMBED_COLOUR:-0x00a6ad}
-      DATABASE_USERNAME: ${DATABASE_USERNAME:-tldradmin}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-rP8P5nw3nOjq7T7LBthBNlB8yKEnmT}
-      MONGODB_HOST: ${MONGODB_HOST:-db}
-      MONGODB_PORT: ${MONGODB_PORT:-27017}
 
   api:
     image: hattyot/tldr-api:latest
@@ -24,13 +17,5 @@ services:
       dockerfile: Dockerfile-api
     env_file:
       - ./.env
-    environment:
-      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-""}
-      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-""}
-      SLACK_REDIRECT_DOMAIN: ${SLACK_REDIRECT_DOMAIN:-""}
-      DATABASE_USERNAME: ${DATABASE_USERNAME:-tldradmin}
-      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-rP8P5nw3nOjq7T7LBthBNlB8yKEnmT}
-      MONGODB_HOST: ${MONGODB_HOST:-db}
-      MONGODB_PORT: ${MONGODB_PORT:-27017}
     ports:
       - "443:443"

@@ -18,3 +18,4 @@ git+https://github.com/Hattyot/twtsc.git@main#egg=twtsc
 git+https://github.com/TheMasteredPanda/UK-Parliament-Library.git@master#egg=ukparliament
 igramscraper
 captcha
+dotenv
