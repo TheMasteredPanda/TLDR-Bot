@@ -39,3 +39,16 @@ jobs:
           tags: hattyot/tldr-api:latest
           context: .
           file: ./Dockerfile-api
+
+  run-playbook:
+    needs: docker-build-push
+    steps:
+      - uses: actions/checkout@v1
+      - name: Run playbook
+        uses: dawidd6/action-ansible-playbook@v2
+        with:
+          playbook: ansible/infra.yml
+          directory: ./ansible
+          key: ${{secrets.SSH_PRIVATE_KEY}}
+          known_hosts: ./ansible/.known_hosts
+          vault_password: ${{secrets.VAULT_PASSWORD}}
