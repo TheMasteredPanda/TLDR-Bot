@@ -129,7 +129,6 @@ dmypy.json
 .pyre/
 
 #Special
-config.py
 .idea
 tmpimages
 tmpimages/*

@@ -1,0 +1,1 @@
+echo url="https://www.duckdns.org/update?domains={{ duckdns_domain }}&token={{ duckdns_token }}&ip=" | curl -k -o ~/duckdns/duck.log -K - | sudo update-ca-certificates --fresh | export SSL_CERT_DIR=/etc/ssl/certs

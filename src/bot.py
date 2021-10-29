@@ -6,7 +6,6 @@ from datetime import datetime
 
 import discord
 from discord.ext.commands import Bot, when_mentioned_or
-from twtsc import Twtsc
 
 import config
 import modules.captcha_verification
@@ -15,7 +14,6 @@ import modules.custom_commands
 import modules.database
 import modules.embed_maker
 import modules.google_drive
-import modules.instagram
 import modules.invite_logger
 import modules.leveling
 import modules.moderation
@@ -45,8 +43,8 @@ class TLDR(Bot):
             intents=intents,
             chunk_guilds_at_startup=True,
         )
-        self.enabled_modules = config.MODULES
-        self.enabled_cogs = config.COGS
+        self.enabled_modules = getattr(config, 'MODULES', {})
+        self.enabled_cogs = getattr(config, 'COGS', {})
         self.settings_handler = modules.utils.SettingsHandler()
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
@@ -55,79 +53,72 @@ class TLDR(Bot):
         # Load Cogs
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py") and filename[:-3] != "template_cog":
-                if (
-                    filename[:-3] in self.enabled_cogs
-                    and self.enabled_cogs[filename[:-3]]
-                ):
-                    self.load_extension(f"cogs.{filename[:-3]}")
-                    self.logger.info(f"Cog {filename[:-3]} is now loaded.")
+                if filename[:-3] in self.enabled_cogs and not self.enabled_cogs[filename[:-3]]:
+                    continue
+
+                self.load_extension(f"cogs.{filename[:-3]}")
+                self.logger.info(f"Cog {filename[:-3]} is now loaded.")
 
         self.google_drive = (
             modules.google_drive.Drive()
-            if self.enabled_modules["google_drive"]
+            if self.enabled_modules.get("google_drive", True)
             else None
         )
         self.webhooks = (
             modules.webhooks.Webhooks(self)
-            if self.enabled_modules["webhooks"]
+            if self.enabled_modules.get("webhooks", True)
             else None
         )
         self.watchlist = (
             modules.watchlist.Watchlist(self)
-            if self.enabled_modules["watchlist"]
+            if self.enabled_modules.get("watchlist", True)
             else None
         )
         self.timers = (
-            modules.timers.Timers(self) if self.enabled_modules["timers"] else None
+            modules.timers.Timers(self) if self.enabled_modules.get("timers", True) else None
         )
         self.reaction_menus = (
             modules.reaction_menus.ReactionMenus(self)
-            if self.enabled_modules["reaction_menus"]
+            if self.enabled_modules.get("reaction_menus", True)
             else None
         )
         self.custom_commands = (
             modules.custom_commands.CustomCommands(self)
-            if self.enabled_modules["custom_commands"]
+            if self.enabled_modules.get("custom_commands", True)
             else None
         )
         self.leveling_system = (
             modules.leveling.LevelingSystem(self)
-            if self.enabled_modules["leveling_system"]
+            if self.enabled_modules.get("leveling_system", True)
             else None
         )
         self.invite_logger = (
             modules.invite_logger.InviteLogger(self)
-            if self.enabled_modules["invite_logger"]
+            if self.enabled_modules.get("invite_logger", True)
             else None
         )
         self.moderation = (
             modules.moderation.ModerationSystem(self)
-            if self.enabled_modules["moderation"]
+            if self.enabled_modules.get("moderation", True)
             else None
         )
         self.ukparl_module = (
             modules.ukparliament.UKParliamentModule(self)
-            if self.enabled_modules["ukparl_module"]
+            if self.enabled_modules.get("ukparl_module", True)
             else None
         )
         self.clearance = (
             modules.commands.Clearance(self)
-            if self.enabled_modules["clearance"]
+            if self.enabled_modules.get("clearance", True)
             else None
         )
         self.slack_bridge = (
             modules.slack_bridge.Slack(self)
-            if self.enabled_modules["slack_bridge"]
+            if self.enabled_modules.get("slack_bridge", True)
             else None
         )
         self.tasks = (
-            modules.tasks.Tasks(self) if self.enabled_modules["tasks"] else None
-        )
-        self.twtsc = Twtsc() if self.enabled_modules["twtsc"] else None
-        self.instagram = (
-            modules.instagram.Instagram(self)
-            if self.enabled_modules["instagram"]
-            else None
+            modules.tasks.Tasks(self) if self.enabled_modules.get("tasks", True) else None
         )
         self.captcha = None  # Temporary.
 

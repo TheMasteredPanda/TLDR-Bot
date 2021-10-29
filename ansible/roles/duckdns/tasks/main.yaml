@@ -1,0 +1,16 @@
+- name: ensure duckdns folder
+  file:
+    path: /home/tldrbot/duckdns
+    state: directory
+
+- name: copy over duck.sh script
+  template:
+    src: duckdns.sh
+    dest: /home/tldrbot/duckdns/duck.sh
+    mode: 700
+
+- name: set up cron task for duckdns script
+  cron:
+    name: "duckdns"
+    minute: "*/5"
+    job: "~/duckdns/duck.sh >/dev/null 2>&1"
