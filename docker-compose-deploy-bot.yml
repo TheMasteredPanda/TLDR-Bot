@@ -19,4 +19,4 @@ services:
     ports:
       - "443:443"
     volumes:
-      - "/etc/letsencrypt/live/${SLACK_REDIRECT_DOMAIN}/:/TLDR-Api/${SLACK_REDIRECT_DOMAIN}/"
+      - "/etc/letsencrypt/live/tldrcommunity.duckdns.org/:/TLDR-Api/tldrcommunity.duckdns.org/"
