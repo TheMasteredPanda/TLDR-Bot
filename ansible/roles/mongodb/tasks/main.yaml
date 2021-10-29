@@ -2,9 +2,7 @@
   git:
     repo: "{{ tldrbot_repo }}"
     dest: /home/tldrbot/TLDR-Bot
-    version: dockerization
-  register: result
-  changed_when: "result.before != result.after"
+    version: master
 
 - name: copy db config
   copy:
