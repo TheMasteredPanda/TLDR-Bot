@@ -15,3 +15,18 @@
     project_src: /home/tldrbot/TLDR-Bot
     files: docker-compose-deploy-database.yml
     pull: yes
+
+- name: copy over backup and restore scripts
+  template:
+    src: "{{ item }}"
+    dest: "/home/tldrbot/mongodb/{{ item }}"
+  with_items:
+    - backup.sh
+    - restore.sh
+
+- name: set up cron task for database backup
+  cron:
+    name: "mongodb"
+    minute: "0"
+    hour: "2"
+    job: "/home/tldrbot/mongodb/backup.sh >/dev/null 2>&1"
