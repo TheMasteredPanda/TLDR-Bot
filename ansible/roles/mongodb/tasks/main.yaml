@@ -1,3 +1,29 @@
+- name: install gnupg
+  apt:
+    name: gnupg
+
+- name: add mongodb key
+  apt_key:
+    url: https://www.mongodb.org/static/pgp/server-5.0.asc
+    state: present
+
+- name: add mongodb source
+  apt_repository:
+    repo: "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse"
+    filename: "mongodb-org-5.0"
+
+- name: install mongodb packages
+  apt:
+    name: mongodb-org
+    state: present
+  register: mongodb_installed
+
+- name: wait after mongo install
+  pause:
+    seconds: 15
+  when: mongodb_installed.changed
+
+
 - name: clone or update tldrbot repo
   git:
     repo: "{{ tldrbot_repo }}"
