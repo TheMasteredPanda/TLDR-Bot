@@ -1,4 +1,4 @@
-name: ci
+name: auto-build-push
 
 on:
   push:
@@ -6,8 +6,8 @@ on:
       - 'dockerization'
 
 jobs:
-  docker:
-    runs-on: ubuntu:18.04
+  docker-build-push:
+    runs-on: ubuntu-latest
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
