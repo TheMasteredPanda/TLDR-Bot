@@ -20,6 +20,7 @@
   template:
     src: "{{ item }}"
     dest: "/home/tldrbot/mongodb/{{ item }}"
+    mode: "+x"
   with_items:
     - backup.sh
     - restore.sh
