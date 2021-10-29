@@ -52,5 +52,4 @@ jobs:
           playbook: infra.yaml
           directory: ./ansible
           key: ${{secrets.SSH_PRIVATE_KEY}}
-          known_hosts: ./ansible/.known_hosts
           vault_password: ${{secrets.VAULT_PASSWORD}}
