@@ -6,7 +6,6 @@ from datetime import datetime
 
 import discord
 from discord.ext.commands import Bot, when_mentioned_or
-from twtsc import Twtsc
 
 import config
 import modules.captcha_verification
@@ -45,8 +44,8 @@ class TLDR(Bot):
             intents=intents,
             chunk_guilds_at_startup=True,
         )
-        self.enabled_modules = config.MODULES
-        self.enabled_cogs = config.COGS
+        self.enabled_modules = getattr(config, 'MODULES', {})
+        self.enabled_cogs = getattr(config, 'COGS', {})
         self.settings_handler = modules.utils.SettingsHandler()
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
@@ -122,7 +121,6 @@ class TLDR(Bot):
         self.tasks = (
             modules.tasks.Tasks(self) if self.enabled_modules.get("tasks", True) else None
         )
-        self.twtsc = Twtsc() if self.enabled_modules.get("twtsc", True) else None
         self.instagram = (
             modules.instagram.Instagram(self)
             if self.enabled_modules.get("instagram", True)

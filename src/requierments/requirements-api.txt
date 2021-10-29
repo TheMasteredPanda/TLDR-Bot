@@ -4,3 +4,4 @@ sanic
 cachetools
 aiohttp
 python-dotenv
+bs4
