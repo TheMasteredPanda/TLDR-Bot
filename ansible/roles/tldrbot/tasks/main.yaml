@@ -14,7 +14,7 @@
 - name: copy service account
   copy:
     src: service_account.json
-    dest: tldr-bot-71b67ba59890.json
+    dest: /home/tldrbot/TLDR-Bot/service_account.json
 
 - name: deploy tldrbot container
   docker_compose:

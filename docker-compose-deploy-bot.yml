@@ -8,6 +8,7 @@ services:
       - ./.env
     volumes:
       - "./.env:/TLDR-Bot/.env"
+      - "./service_account.json:/TLDR-Bot/service_account.json"
 
   api:
     image: hattyot/tldr-api:latest
