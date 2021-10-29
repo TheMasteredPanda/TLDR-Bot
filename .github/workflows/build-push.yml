@@ -3,7 +3,7 @@ name: auto-build-push
 on:
   push:
     branches:
-      - 'dockerization'
+      - 'master'
 
 jobs:
   docker-build-push:
