@@ -1,13 +1,9 @@
-import configparser
-import os
 import random
 import string
-import time
 from datetime import datetime
 from io import BytesIO
 from typing import Union
 
-import aiofiles
 import config
 import discord
 from cachetools.ttl import TTLCache

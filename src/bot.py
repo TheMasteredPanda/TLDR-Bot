@@ -43,8 +43,8 @@ class TLDR(Bot):
             intents=intents,
             chunk_guilds_at_startup=True,
         )
-        self.enabled_modules = getattr(config, 'MODULES', {})
-        self.enabled_cogs = getattr(config, 'COGS', {})
+        self.enabled_modules = getattr(config, "MODULES", {})
+        self.enabled_cogs = getattr(config, "COGS", {})
         self.settings_handler = modules.utils.SettingsHandler()
         self.left_check = asyncio.Event()
         self.logger = modules.utils.get_logger()
@@ -53,7 +53,10 @@ class TLDR(Bot):
         # Load Cogs
         for filename in os.listdir("./cogs"):
             if filename.endswith(".py") and filename[:-3] != "template_cog":
-                if filename[:-3] in self.enabled_cogs and not self.enabled_cogs[filename[:-3]]:
+                if (
+                    filename[:-3] in self.enabled_cogs
+                    and not self.enabled_cogs[filename[:-3]]
+                ):
                     continue
 
                 self.load_extension(f"cogs.{filename[:-3]}")
@@ -75,7 +78,9 @@ class TLDR(Bot):
             else None
         )
         self.timers = (
-            modules.timers.Timers(self) if self.enabled_modules.get("timers", True) else None
+            modules.timers.Timers(self)
+            if self.enabled_modules.get("timers", True)
+            else None
         )
         self.reaction_menus = (
             modules.reaction_menus.ReactionMenus(self)
@@ -118,9 +123,17 @@ class TLDR(Bot):
             else None
         )
         self.tasks = (
-            modules.tasks.Tasks(self) if self.enabled_modules.get("tasks", True) else None
+            modules.tasks.Tasks(self)
+            if self.enabled_modules.get("tasks", True)
+            else None
         )
-        self.captcha = None  # Temporary.
+        self.captcha = (
+            modules.captcha_verification.CaptchaModule(self)
+            if self.enabled_modules.get("captcha", True)
+            else None
+        )
+        self.twtsc = None
+        self.first_ready = False
 
     def add_cog(self, cog):
         """Overwrites the orginal add_cog method to add a line for the commandSystem"""
