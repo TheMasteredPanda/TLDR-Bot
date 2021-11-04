@@ -136,4 +136,3 @@ tldr.json
 tldr_rsa
 setup.cfg
 src/.env
-src/config.py
