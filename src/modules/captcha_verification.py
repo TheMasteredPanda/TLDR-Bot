@@ -1660,9 +1660,27 @@ class CaptchaModule:
             "captcha"
         ]["operators"]
 
-    def set_operator(self, member_id: int):
+    def add_operator(self, member_id: int):
         """
-        Adds or removes an operator. Depends what they were previously.
+        Add a member to the operator list.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of the member to add.
+        """
+        operators: list[int] = self._settings_handler.get_settings(config.MAIN_SERVER)[
+            "modules"
+        ]["captcha"]["operators"]
+
+        operators.append(member_id)
+        self._settings_handler.save(
+            self._settings_handler.get_settings(config.MAIN_SERVER)
+        )
+
+    def remove_operator(self, member_id: int):
+        """
+        Removes an operator. Depends what they were previously.
 
         Parameters
         ----------
@@ -1673,28 +1691,29 @@ class CaptchaModule:
             "modules"
         ]["captcha"]["operators"]
 
-        if member_id in operators:
-            operators.remove(member_id)
-        else:
-            operators.append(member_id)
+        operators.remove(member_id)
         self._settings_handler.save(
             self._settings_handler.get_settings(config.MAIN_SERVER)
         )
 
-    def is_operator(self, member_id: int) -> bool:
+    def is_operator(self, member_id: int):
         """
-        Check if a member is already an Operator.
+        Checks if a member is an operator or not.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The id of a member.
 
         Returns
+        -------
         :class:`bool`
-            True if they were already an operator. Else False.
+            Returns True if member is an operator, else False.
         """
-        return (
-            member_id
-            in self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
-                "captcha"
-            ]["operators"]
-        )
+        operators: list[int] = self._settings_handler.get_settings(config.MAIN_SERVER)[
+            "modules"
+        ]["captcha"]["operators"]
+        return member_id in operators
 
     def rm_gateway_guild_from_cache(self, guild_id: int):
         """
