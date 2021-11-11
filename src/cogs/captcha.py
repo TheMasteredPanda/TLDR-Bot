@@ -1,9 +1,11 @@
+import copy
 import functools
 import math
 import re
 from datetime import datetime, timedelta
 from typing import Union
 
+import config
 import modules.commands as commands
 from bot import TLDR
 from bson import json_util
@@ -263,8 +265,9 @@ class Captcha(Cog):
         invoke_without_command=True,
     )
     async def config_mod_cmd(self, ctx: Context):
-        config_copy = self.bot.captcha.get_settings().copy()
-        # config_copy["modules"]["captcha"].pop("operators")
+        config_copy = copy.deepcopy(self.bot.captcha.get_settings())
+        config_copy["modules"]["captcha"].pop("operators")
+
         return await embed_maker.message(
             ctx,
             description=f"```{json_util.dumps(config_copy['modules']['captcha'], indent=4)}```",
@@ -968,14 +971,25 @@ class Captcha(Cog):
             file=File(fp=captcha_image, filename="captcha.png"), embed=embed
         )
 
-    @captcha_cmd.command(
+    @captcha_cmd.group(
         help="Add or remove an operator to an operator list. This will allow member on the op list to become operators when they join Gateway Guilds. Affording them admin access on the guild.",
         name="op",
-        usage="captcha op TheMasteredPanda",
-        examples=["captcha op TheMasteredPanda"],
+        usage="captcha op [sub-command]",
+        examples=["captcha op add TheMasteredPanda"],
+        cls=Group,
+        invoke_without_command=True,
+    )
+    async def mod_operator(self, ctx: Context):
+        return await embed_maker.command_error(ctx)
+
+    @mod_operator.command(
+        help="Add member to operator list.",
+        name="add",
+        usage="captcha op add [username]",
+        examples=["captcha op add TheMasteredPanda"],
         cls=Command,
     )
-    async def mod_operator(self, ctx: Context, member_string: str = None):
+    async def mod_operator_add(self, ctx: Context, member_string: str = None):
         if member_string is None:
             return await embed_maker.command_error(ctx)
 
@@ -989,7 +1003,7 @@ class Captcha(Cog):
             )
 
         was_op = member.id in self.bot.captcha.get_operators()
-        self.bot.captcha.set_operator(member.id)
+        self.bot.captcha.add_operator(member.id)
 
         if was_op is False:
             await embed_maker.message(
@@ -1001,10 +1015,107 @@ class Captcha(Cog):
         else:
             await embed_maker.message(
                 ctx,
-                description=f"Removed {member.name} from the Operators list",
-                title="Removed Operator.",
+                description=f"Member {member.name} already an Operator.",
+                title="Member already Operator.",
                 send=True,
             )
+
+    @mod_operator.command(
+        help="Remove a member from the operator list",
+        name="remove",
+        usage="captcha op remove [username/id]",
+        examples=["captcha op remove TheMasteredPanda"],
+        cls=Command,
+    )
+    async def mod_operator_remove(self, ctx: Context, member_string: str = None):
+        if member_string is None:
+            return await embed_maker.command_error(ctx)
+
+        member, ignore = await get_member_from_string(ctx, member_string)
+        if member is None:
+            return await embed_maker.message(
+                ctx,
+                description=f"Couldn't find member {member_string}",
+                title="Couldn't find Member",
+                send=True,
+            )
+
+        was_op = member.id in self.bot.captcha.get_operators()
+        self.bot.captcha.remove_operator(member.id)
+
+        if was_op is True:
+            await embed_maker.message(
+                ctx,
+                description=f"Removed {member.name} from the Operators list.",
+                title="Added Operator.",
+                send=True,
+            )
+        else:
+            await embed_maker.message(
+                ctx,
+                description=f"Member {member.name} already an Operator.",
+                title="Member already Operator.",
+                send=True,
+            )
+
+    async def construct_operator_embed(
+        self,
+        ctx: Context,
+        operators: list,
+        max_page_num: int,
+        page_limit: int,
+        *,
+        page: int,
+    ):
+        if len(operators) == 0:
+            return await embed_maker.message(ctx, description="No operators found.")
+        bits = []
+
+        for i, entry in enumerate(
+            operators[page_limit * (page - 1) : page_limit * page]
+        ):
+            member = self.bot.get_guild(config.MAIN_SERVER).get_member(entry)
+            if member is None:
+                bits.append(f"{i + 1}. {entry} (No username found)")
+            else:
+                bits.append(f"{i + 1}. {member.name} ")
+
+        return await embed_maker.message(
+            ctx,
+            description="\n".join(bits),
+            author={"name": "Captcha Gateway"},
+            footer={"text": f"Page {page}/{max_page_num}"},
+        )
+
+    @mod_operator.command(
+        help="Lists all operators.",
+        name="list",
+        usage="captcha op list",
+        examples=["captcha op list"],
+        cls=Command,
+    )
+    async def mod_operator_list(self, ctx: Context):
+        operators: list[int] = self.bot.captcha.get_operators()
+        max_page_size = 10
+        max_page_num = math.ceil(len(operators) / max_page_size)
+        page_constructor = functools.partial(
+            self.construct_operator_embed,
+            ctx=ctx,
+            operators=operators,
+            max_page_num=max_page_num,
+            page_limit=max_page_size,
+        )
+
+        embed = await page_constructor(page=1)
+        message = await ctx.send(embed=embed)
+        menu = BookMenu(
+            message,
+            page=1,
+            max_page_num=max_page_num,
+            page_constructor=page_constructor,
+            author=ctx.author,
+        )
+        self.bot.reaction_menus.add(menu)
 
     @dev_cmds.group(
         help="A set of commands used to interface directly with the ban lists of active Gateway Guilds.",
