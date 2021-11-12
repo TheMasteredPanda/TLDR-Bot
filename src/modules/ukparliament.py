@@ -526,7 +526,12 @@ class UKParliamentModule:
         )
         if channel is None:
             return
+        print(f"Commons Event: {division.get_division_title()}")
+        print(f"Commons Event Date: {division.get_division_date()}")
+
+        print("Getting commons division image.")
         division_file = await self.generate_division_image(self.parliament, division)
+        print("Got commons division image.")
         embed = Embed(
             color=discord.Colour.from_rgb(84, 174, 51), timestamp=datetime.now()
         )
@@ -550,6 +555,7 @@ class UKParliamentModule:
         embed.description = description
         embed.set_image(url="attachment://divisionimage.png")
         self.tracker_status["commonsdivisions"]["confirmed"] = True
+        print("Sending commons division embed.")
         await channel.send(
             file=division_file,
             embed=embed,
@@ -561,7 +567,11 @@ class UKParliamentModule:
         )
         if channel is None:
             return
+        print(f"Lords Event: {division.get_division_title()}")
+        print(f"Lords Event Date: {division.get_division_date()}")
+        print("Getting lords division image.")
         division_file = await self.generate_division_image(self.parliament, division)
+        print("Got lords division image.")
         embed = Embed(
             color=discord.Colour.from_rgb(166, 42, 22), timestamp=datetime.now()
         )
@@ -587,6 +597,7 @@ class UKParliamentModule:
         embed.description = description
         self.tracker_status["lordsdivisions"]["confirmed"] = True
         embed.set_image(url="attachment://divisionimage.png")
+        print("Sending lords division embed.")
         await channel.send(
             file=division_file,
             embed=embed,
