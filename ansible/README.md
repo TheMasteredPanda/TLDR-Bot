@@ -63,3 +63,18 @@ ___
 The main ansible directory contains an encrypted env file that contains the configuration for the bot. \
 All the needed env variables can be seen in the main README.md
 ___
+### Encrypt and Decrypt
+Encrypt strings
+```bash
+ansible-vault encrypt_string important_string 123 --vault-password-file vault_password_file
+```
+Encrypt files
+```bash
+ansible-vault encrypt .env --vault-password-file vault_password_file
+```
+
+Decrypt
+```bash
+ansible-vault decrypt .env --vault-password-file vault_password_file
+```
+___
