@@ -9,6 +9,11 @@ RUN apt-get update \
 
 RUN python3.9 -m pip install --upgrade setuptools pip distlib
 
+RUN apt-get install git -y \
+    && git clone https://github.com/TheMasteredPanda/UK-Parliament-Library.git \
+    && python3.9 -m pip install -e UK-Parliament-Library
+
+
 WORKDIR /TLDR-Bot
 
 COPY src/requierments/requirements-bot.txt .
