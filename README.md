@@ -15,8 +15,6 @@ pip3 install -r src/requirements/requirements-bot.txt
 MONGODB_URL =  # url to the database, if run with docker defaults to the database container url
 DATABASE_USERNAME =  # username of the mongodb database
 DATABASE_PASSWORD =  # password of the mongodb database
-MONGODB_HOST = # host of the mongodb database
-MONGODB_PORT = # port the database runs on
 
 BOT_TOKEN =  # discord bot token
 PREFIX =   # prefix used for commands
@@ -27,6 +25,7 @@ ERROR_CHANNEL =  # discord channel id in the error server where errors should be
 WEB_API_URL =  # url to the image api - https://github.com/Hattyot/image_processor 
 BOT_CHANNEL_ID =  # id of the main servers bot channel, where some messages will be posted
 GEONAMES_USERNAME =  # username of the geonames account https://www.geonames.org/
+MOD_ROLE_ID = # Id of the mod role on the main server
 
 SERVICE_ACCOUNT_FILE =  # path to the google service account file
 DRIVE_PARENT_FOLDER_ID =  # google drive folder id where other folders will be created
@@ -38,7 +37,6 @@ SLACK_CLIENT_ID =  # slack app client id
 SLACK_CLIENT_SECRET =  # slack app client secret
 SLACK_REDIRECT_DOMAIN =  # slack redirect domain, eg. discordserver.duckdns.org
 ```
-PREFIX, EMBED_COLOUR and MONGODB_URL can be left to default values
 4. Install community edition mongodb server. Installation guides: https://docs.mongodb.com/manual/administration/install-community/
 5. Run the bot
 ```
@@ -76,6 +74,9 @@ python3 api.py
 ```
 
 ## Running with docker
+There are 2 docker images to consider, the api one and the bot one. A docker-compose file has also been created for the database.
+docker-compose-deploy-bot.yml starts both the api and the bot.
+because the docker images are kept updated on docker-hub, you can simply run this command:
 ```
-docker-compose -f docker-compose-deploy up -d
+docker-compose -f docker-compose-deploy-bot.yml up -d
 ```
