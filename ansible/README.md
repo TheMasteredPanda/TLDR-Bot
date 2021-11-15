@@ -44,6 +44,7 @@ ___
     * Files:
         * service_account.json -> encrypted google drive api service account json authentication file
 * tldrbot_user -> creates the tldrbot user and its home directory
+* cleanup -> Does a bit of cleanup after running all the other roles
 ___
 ### Group vars
 * tldrbot_repo -> Link to the tldrbot repository, in case a fork needs to be used
