@@ -155,12 +155,9 @@ class Watchlist:
         if generic_filters:
             channel_id = generic_watchlist_data["channel_id"]
             channel = self.bot.get_channel(int(channel_id))
-            matched_filter = None
             for filter in generic_filters:
                 if re.findall(filter['regex'], message.content):
-                    matched_filter = filter
-                    break
-            return await self.send_message(channel, message, matched_filter, True)
+                    return await self.send_message(channel, message, filter, True)
 
         channel_id = user_watchlist_data.get("channel_id", '0')
         channel = self.bot.get_channel(int(channel_id))
