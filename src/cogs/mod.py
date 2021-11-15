@@ -18,7 +18,6 @@ from modules.utils import (
     get_member_from_string,
     get_member_by_id
 )
-
 db = database.get_connection()
 
 
@@ -452,15 +451,29 @@ class Mod(Cog):
     @group(
         invoke_without_command=True,
         name='watchlist',
-        help='Manage the watchlist, which logs all the users message to a channel',
-        usage='watchlist (sub command) (args)',
-        examples=['watchlist'],
+        help='Manage the watchlist, which logs all the users message to a channel.\nView all the details of a user with `watchlist [index number]`.',
+        usage='watchlist [index number]',
+        examples=['watchlist', 'watchlist 1'],
         cls=commands.Group,
         module_dependency=['watchlist']
     )
-    async def watchlist(self, ctx: Context):
+    async def watchlist(self, ctx: Context, index_number: int = None):
         if ctx.subcommand_passed is None:
             users_on_list = [d for d in db.watchlist.distinct('user_id', {'guild_id': ctx.guild.id})]
+
+            if index_number is not None:
+                user_id = 0 if index_number == 0 else users_on_list[index_number - 1]
+                user_filters = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': user_id})
+                total = sum(filter.get('matches', 0) for filter in user_filters['filters'])
+                filters_string = "\n".join(f"`{filter['regex']}`: {filter.get('matches', 0)}" for filter in user_filters['filters'])
+                user = self.bot.get_user(user_id)
+                return await embed_maker.message(
+                    ctx,
+                    description=f'Filters and amount of matches total:\n{filters_string}\n\n'
+                                f'Total filter message matches: {total}',
+                    author={'name': str(user) if user else 'All Users'},
+                    send=True
+                )
 
             list_embed = await embed_maker.message(
                 ctx,
@@ -468,7 +481,14 @@ class Mod(Cog):
             )
 
             on_list_str = ''
-            for i, user_id in enumerate(users_on_list):
+            if 0 in users_on_list:
+                on_list_str += '`#0` - All Users\n'
+
+            index = 1
+            for user_id in users_on_list:
+                if user_id == 0:
+                    continue
+
                 user = ctx.guild.get_member(int(user_id))
                 if user is None:
                     try:
@@ -477,12 +497,8 @@ class Mod(Cog):
                         # remove user from the watchlist if user isnt on the server anymore
                         db.watchlist.delete_one({'guild_id': ctx.guild.id, 'user_id': user_id})
                         continue
-
-                on_list_str += f'`#{i + 1}` - {str(user)}\n'
-                watchlist_user = db.watchlist.find_one({'guild_id': ctx.guild.id, 'user_id': user_id}, {'filters': 1})
-                if watchlist_user['filters']:
-                    on_list_str += 'Filters: ' + " | ".join(f"`{f}`" for f in watchlist_user['filters'])
-                on_list_str += '\n\n'
+                on_list_str += f'`#{index}` - {str(user)}\n'
+                index += 1
 
             list_embed.description = 'Currently no users are on the watchlist' if not on_list_str else on_list_str
 
@@ -495,6 +511,7 @@ class Mod(Cog):
         examples=[r'watchlist add hattyot -f hattyot -f \sot\s -f \ssus\s'],
         command_args=[
             (('--filter', '-f', list), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
+            (('--mention-role', '-mr', list), 'Role that should me mentioned when filter is matched.')
         ],
         cls=commands.Command,
         module_dependency=['watchlist']
@@ -505,19 +522,29 @@ class Mod(Cog):
 
         user_identifier = args['pre']
         filters = args['filter']
+        mention_roles = args['mention-role'] if args['mention-role'] else []
 
         if not user_identifier:
             return await embed_maker.error(ctx, 'Missing user')
+
+        for role_id in mention_roles:
+            guild: discord.Guild = ctx.guild
+            try:
+                role = await guild.get_role(int(role_id))
+                if not role:
+                    return await embed_maker.error(ctx, f"Invalid role id: `{role_id}`")
+            except:
+                return await embed_maker.error(ctx, f"Invalid role id: `{role_id}`")
 
         member = await get_member(ctx, user_identifier)
         if type(member) == discord.Message:
             return
 
-        watchlist_user = self.bot.watchlist.get_member(member)
+        watchlist_user = await self.bot.watchlist.get_member(member, ctx.guild)
         if watchlist_user:
             return await embed_maker.error(ctx, 'User is already on the watchlist')
 
-        await self.bot.watchlist.add_member(member, filters)
+        await self.bot.watchlist.add_member(member, ctx.guild, filters)
 
         msg = f'<@{member.id}> has been added to the watchlist'
         if filters:
@@ -541,11 +568,11 @@ class Mod(Cog):
         if type(member) == discord.Message:
             return
 
-        watchlist_user = self.bot.watchlist.get_member(member)
+        watchlist_user = await self.bot.watchlist.get_member(member, ctx.guild)
         if not watchlist_user:
             return await embed_maker.error(ctx, 'User is not on the watchlist')
 
-        await self.bot.watchlist.remove_member(member)
+        await self.bot.watchlist.remove_member(member, ctx.guild)
 
         return await embed_maker.message(
             ctx,
@@ -558,9 +585,11 @@ class Mod(Cog):
         name='add_filters',
         help='Add filters to a user on the watchlist, when a user message matches the filter, mods are pinged.',
         usage='watchlist add_filters [user] (args)',
-        examples=[r'watchlist add_filters hattyot -f filter 1 -f \sfilter 2\s'],
+        examples=[r'watchlist add_filters hattyot -f filter 1 -f \sfilter 2\s -m 658274389971697675 -m 810787506022121533'],
         command_args=[
-            (('--filter', '-f', list), 'A regex filter that will be matched against the users message, if a match is found, mods will be @\'d'),
+            (('--filter', '-f', list), 'A regex filter that will be matched against the users message.'),
+            (('--mention-role', '-mr', list), 'Role that should me mentioned when filter is matched.'),
+            (('--set', '-s', bool), 'Set the filters to given list instead of adding new ones.')
         ],
         cls=commands.Command,
         module_dependency=['watchlist'],
@@ -570,27 +599,96 @@ class Mod(Cog):
             return await embed_maker.command_error(ctx)
 
         user_identifier = args['pre']
-        filters = args['f']
+        filters = args['filter']
+        mention_roles = args['mention-role'] if args['mention-role'] else []
+        set = args['set']
 
         if not filters:
             return await embed_maker.error(ctx, 'Missing filters')
 
+        for role_id in mention_roles:
+            try:
+                role = ctx.guild.get_role(int(role_id))
+                if not role:
+                    return await embed_maker.error(ctx, f"Invalid role id: `{role_id}`")
+            except:
+                return await embed_maker.error(ctx, f"Invalid role id: `{role_id}`")
+
         if not user_identifier:
-            return await embed_maker.error(ctx, 'Missing user')
+            # if no user specified set up generic filter matching for all users. Matching messages will be sent to central watchlist channel
+            await self.bot.watchlist.add_filters(None, ctx.guild, filters, mention_roles, set)
+            member = None
+        else:
+            member = await get_member(ctx, user_identifier)
+            if type(member) == discord.Message:
+                return
 
-        member = await get_member(ctx, user_identifier)
-        if type(member) == discord.Message:
-            return
+            watchlist_user = await self.bot.watchlist.get_member(member)
+            if not watchlist_user:
+                return await embed_maker.error(ctx, 'User is not on the watchlist')
 
-        watchlist_user = self.bot.watchlist.get_member(member)
-        if not watchlist_user:
-            return await embed_maker.error(ctx, 'User is not on the watchlist')
-
-        self.bot.watchlist.add_filters(member, filters)
+            await self.bot.watchlist.add_filters(member, ctx.guild, filters, mention_roles, set)
 
         return await embed_maker.message(
             ctx,
-            description=f'if {member} mentions {" or ".join(f"`{f}`" for f in filters)} mods will be @\'d',
+            description=f'If {member if member else "anybodys"} message matches {" or ".join(f"`{f}`" for f in filters)} '
+                        f'these roles will be @\'d: {", ".join(f"<@&{r}>" for r in mention_roles)}',
+            colour='green',
+            send=True
+        )
+
+    @watchlist.command(
+        name='remove_filters',
+        help='Remove filters from a user on the watchlist.',
+        usage='watchlist remove_filters [user] (args)',
+        examples=[
+            r'watchlist remove_filters hattyot -f filter 1 -f \sfilter 2\s'],
+        command_args=[
+            (('--filter', '-f', list), 'The regex of the filter to be removed.'),
+        ],
+        cls=commands.Command,
+        module_dependency=['watchlist'],
+    )
+    async def watchlist_remove_filters(self, ctx: Context, *, args: Union[ParseArgs, dict] = None):
+        if not args:
+            return await embed_maker.command_error(ctx)
+
+        user_identifier = args['pre']
+        filters = args['filter']
+        print(args)
+
+        if not filters:
+            return await embed_maker.error(ctx, 'Missing filters')
+
+        member = await get_member(ctx, user_identifier) if user_identifier else None
+        user_filters = await self.bot.watchlist.get_member(member, ctx.guild)
+        valid_filters_to_remove = []
+        if user_filters:
+            user_filters = user_filters['filters']
+            for filter in user_filters:
+                if filter.get('regex') in filters:
+                    valid_filters_to_remove.append(filter['regex'])
+
+        if not valid_filters_to_remove:
+            return await embed_maker.error(ctx, 'No valid filters given.')
+
+        if not user_identifier:
+            # if no user specified set up generic filter matching for all users. Matching messages will be sent to central watchlist channel
+            await self.bot.watchlist.remove_filters(None, ctx.guild, valid_filters_to_remove)
+        else:
+            if type(member) == discord.Message:
+                return
+
+            watchlist_user = await self.bot.watchlist.get_member(member)
+            if not watchlist_user:
+                return await embed_maker.error(ctx, 'User is not on the watchlist')
+
+            await self.bot.watchlist.remove_filters(member, ctx.guild, valid_filters_to_remove)
+
+        filters_str = ", ".join([f'`{filter}`' for filter in valid_filters_to_remove])
+        return await embed_maker.message(
+            ctx,
+            description=f'Filters: {filters_str} have been removed for {member if member else "everybody"}.',
             colour='green',
             send=True
         )
@@ -803,7 +901,6 @@ class Mod(Cog):
             'topic_options': topic_options
         }
         db.daily_debates.update_one({'guild_id': ctx.guild.id}, {'$push': {'topics': topic_obj}})
-
         daily_debate_data = db.daily_debates.find_one({'guild_id': ctx.guild.id})
         await embed_maker.message(
             ctx,

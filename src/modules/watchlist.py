@@ -1,4 +1,6 @@
 import datetime
+import re
+
 import discord
 
 from typing import Optional
@@ -48,55 +50,83 @@ class Watchlist:
 
         return category
 
-    def get_member(self, member: discord.Member) -> Optional[dict]:
+    async def get_member(self, member: Optional[discord.Member], guild: discord.Guild) -> Optional[dict]:
         """Get a watchlist member."""
-        if not member.guild:
-            return None
+        guild_watchlist_data = self.watchlist_data[guild.id]
+        if not member and guild_watchlist_data.get(0, None) is None:
+            return await self.add_member(member, guild, [])
+        return guild_watchlist_data.get(0, None) if not member else guild_watchlist_data.get(member.id, None)
 
-        guild_watchlist_data = self.watchlist_data[member.guild.id]
-        return guild_watchlist_data[member.id] if member.id in guild_watchlist_data else None
-
-    async def add_member(self, member: discord.Member, filters: list) -> dict:
+    async def add_member(self, member: Optional[discord.Member], guild: discord.Guild, filters: list) -> dict:
         """Add a watchlist member, creating a channel for them."""
-        category = await self.get_watchlist_category(member.guild)
-        watchlist_channel = await member.guild.create_text_channel(f'{member.name}', category=category)
+        category = await self.get_watchlist_category(guild)
+        watchlist_channel = await guild.create_text_channel(f'{member.name if member else "Generic"}', category=category, position=int(bool(member)))
         watchlist_doc = {
-            'guild_id': member.guild.id,
-            'user_id': member.id,
-            'filters': filters,
+            'guild_id': guild.id,
+            'user_id': member.id if member else 0,
+            'filters': [{'regex': f} for f in filters],
             'channel_id': watchlist_channel.id
         }
         db.watchlist.insert_one(watchlist_doc)
-        self.watchlist_data[member.guild.id][member.id] = watchlist_doc
+        self.watchlist_data[guild.id][member.id if member else 0] = watchlist_doc
         return watchlist_doc
 
-    async def remove_member(self, member: discord.Member):
+    async def remove_member(self, member: Optional[discord.Member], guild: discord.Guild):
         """Remove watchlist member and delete their channel."""
-        watchlist_member = self.get_member(member)
+        watchlist_member = await self.get_member(member, guild)
         channel = self.bot.get_channel(int(watchlist_member['channel_id']))
         if channel:
             await channel.delete()
 
-        db.watchlist.delete_one({'guild_id': member.guild.id, 'user_id': member.id})
+        db.watchlist.delete_one({'guild_id': guild.id, 'user_id': member.id if member else 0})
 
-    def add_filters(self, member: discord.Member, filters: list):
+    async def add_filters(self, member: Optional[discord.Member], guild: discord.Guild, filters: list, mention_roles: list = [], set: bool = False):
         """Add filters to a watchlist member."""
-        watchlist_member = self.get_member(member)
+        watchlist_member = await self.get_member(member, guild)
         all_filters = watchlist_member['filters']
-        if all_filters:
+        if all_filters and set:
             filters += all_filters
 
-        db.watchlist.update_one({'guild_id': member.guild.id, 'user_id': member.id}, {'$set': {f'filters': filters}})
+        filters_dict = [{'regex': f, 'mention_roles': mention_roles} for f in filters]
+        db.watchlist.update_one({'guild_id': guild.id, 'user_id': member.id if member else 0}, {'$set': {f'filters': filters_dict}})
+        self.watchlist_data[guild.id][member.id if member else 0]['filters'] = filters_dict
 
-    async def send_message(self, channel: discord.TextChannel, message: discord.Message):
+    async def remove_filters(self, member: Optional[discord.Member], guild: discord.Guild, filters_to_remove: list):
+        watchlist_member = await self.get_member(member, guild)
+        all_filters = watchlist_member['filters']
+        new_filters = []
+        for filter in all_filters:
+            if filter['regex'] in filters_to_remove:
+                continue
+            new_filters.append(filter)
+        db.watchlist.update_one({'guild_id': guild.id, 'user_id': member.id if member else 0}, {'$set': {f'filters': new_filters}})
+        self.watchlist_data[guild.id][member.id if member else 0]['filters'] = new_filters
+
+    async def send_message(self, channel: discord.TextChannel, message: discord.Message, matched_filter: Optional[dict], generic: bool = False):
         """Send watchlist message with a webhook."""
-        embeds = [discord.Embed(description=f'{message.content}\n{message.channel.mention} [link]({message.jump_url})', timestamp=datetime.datetime.now())]
+        # update stats first
+        if matched_filter:
+            db.watchlist.update_one(
+                {'guild_id': message.guild.id, 'filters': {'$elemMatch': {'regex': matched_filter['regex']}}},
+                {'$inc': {'filters.$.matches': 1}}
+            )
+
+        embeds = [
+            discord.Embed(
+                description=f'{message.content}\n{message.channel.mention} [link]({message.jump_url})',
+                timestamp=datetime.datetime.now(),
+            )
+        ]
+        if generic:
+            embeds[0].set_author(name=str(message.author), icon_url=message.author.avatar_url)
+
         files = [await attachment.to_file() for attachment in message.attachments]
+        content = f', '.join(f'<@&{int(role_id)}>' for role_id in matched_filter['mention_roles']) if matched_filter else ''
         await self.bot.webhooks.send(
             channel=channel,
-            content='',
-            username=message.author.name,
-            avatar_url=message.author.avatar_url,
+            content=content,
+            username=message.author.name if not generic else self.bot.user.name,
+            avatar_url=message.author.avatar_url if not generic else self.bot.user.avatar_url,
             files=files,
             embeds=embeds
         )
@@ -106,19 +136,41 @@ class Watchlist:
         if not self.bot._ready.is_set():
             return
 
+        if message.author.bot:
+            return
+
         if not message.guild:
             return
 
         guild_watchlist_data = self.watchlist_data[message.guild.id]
-        user_watchlist_data = guild_watchlist_data[message.author.id] if message.author.id in guild_watchlist_data else None
+        user_watchlist_data = guild_watchlist_data.get(message.author.id, {})
+        generic_watchlist_data = guild_watchlist_data.get(0, {})
         watchlist_category = await self.get_watchlist_category(message.guild)
-        if not user_watchlist_data or not watchlist_category:
+        if not watchlist_category:
             return
 
-        channel_id = user_watchlist_data["channel_id"]
+        user_filters = user_watchlist_data.get('filters', [])
+        generic_filters = generic_watchlist_data.get('filters', [])
+
+        if generic_filters:
+            channel_id = generic_watchlist_data["channel_id"]
+            channel = self.bot.get_channel(int(channel_id))
+            matched_filter = None
+            for filter in generic_filters:
+                if re.findall(filter['regex'], message.content):
+                    matched_filter = filter
+                    break
+            return await self.send_message(channel, message, matched_filter, True)
+
+        channel_id = user_watchlist_data.get("channel_id", '0')
         channel = self.bot.get_channel(int(channel_id))
         if channel:
-            await self.send_message(channel, message)
+            matched_filter = None
+            for filter in user_filters:
+                if re.findall(filter['regex'], message.content):
+                    matched_filter = filter
+                    break
+            await self.send_message(channel, message, matched_filter)
         else:
             # remove from watchlist, since watchlist channel doesnt exist
             db.watchlist.delete_one({"guild_id": message.guild.id, "user_id": message.author.id})
