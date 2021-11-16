@@ -529,7 +529,16 @@ class TrackerManager:
             return False
         return invite_entry["type"] == 1
 
-    def create_temporal_entry(self, invite_code: str):
+    async def is_vanity_link(self, invite_code: str):
+        main_guild: Union[None, Guild] = self._bot.get_guild(config.MAIN_SERVER)
+        if main_guild is None:
+            raise Exception("Main guild not set.")
+        v_invite = await main_guild.vanity_invite()
+        if v_invite is None:
+            return False
+        return v_invite.id is invite_code
+
+    async def create_temporal_entry(self, invite_code: str):
         """
         Creates a temporal entry.
 
@@ -549,9 +558,12 @@ class TrackerManager:
             What is stored is their member id, so that it can be references when the member limit has been met or
             exceeded on this invitation url.
         """
+        is_vanity = await self.is_vanity_link(invite_code)
         self._temporal_cache[invite_code] = {
             "started": time.time(),
-            "finished": (time.time() + self._member_join_timeout),
+            "finished": (time.time() + self._member_join_timeout)
+            if is_vanity is False
+            else (time.time() + self._member_vanity_join_timeout),
             "uses": [],
         }
 
@@ -633,10 +645,18 @@ class TrackerManager:
         ][
             "join_timeout"
         ]  # This is the number of seconds, the 'timeout' that is used to determine whether a bot attack is happening on a unprotected invitiation.
+        self._member_vanity_join_timeout = self._module.get_module_settings()[
+            "vanity_link"
+        ]["unregistered_invitations"]["join_timeout"]
+        self._minimum_vanity_member_count = self._module.get_module_settings()[
+            "vanity_link"
+        ]["unregistered_invitations"]["minimum_member_count"]
         invites: list[Invite] = await self._main_guild.invites()
         for invite in invites:
             self._invite_cache[invite.id] = invite.uses
-        self._logger.info(f"Loaded {len(invites)} invites into memory.")
+        self._logger.info(
+            f"TrackerManager loaded; Loaded {len(invites)} invites into memory."
+        )
 
     async def on_member_join(self, member: Member):
         """
@@ -683,13 +703,18 @@ class TrackerManager:
             return
 
         if self.has_temporal_entry(invite_used.id) is False:
-            self.create_temporal_entry(invite_used.id)
+            await self.create_temporal_entry(invite_used.id)
 
         self.add_member_to_temporal_entry(invite_used.id, member.id)
         entry = self.get_temporal_entry(invite_used.id)
+        is_vanity = await self.is_vanity_link(invite_used.id)
 
         if entry["finished"] >= time.time():
-            if len(entry["uses"]) >= self._minimum_member_count:
+            if len(entry["uses"]) >= (
+                self._minimum_member_count
+                if is_vanity is False
+                else self._minimum_vanity_member_count
+            ):
                 self._logger.info(f"Potential bot attack detected on {invite_used.id}.")
                 used_unregistered_message = self._module.get_module_settings()[
                     "messages"
@@ -709,10 +734,11 @@ class TrackerManager:
                         reason=f"Considered a bot by Captcha Gateway, using invite {invite.url}."
                     )
 
-                self._logger.info(
-                    f"Deleting invitation link {invite_used.url} as it was determined by Tracker Manager in Captcha Gateway to be used for a potential bot attack."
-                )
-                await invite_used.delete(reason="Used in a potential bot attack.")
+                if is_vanity is False:
+                    self._logger.info(
+                        f"Deleting invitation link {invite_used.url} as it was determined by Tracker Manager in Captcha Gateway to be used for a potential bot attack."
+                    )
+                    await invite_used.delete(reason="Used in a potential bot attack.")
                 self.remove_temporal_entry(invite_used.id)
         else:
             self._logger.info(
@@ -1483,8 +1509,14 @@ class CaptchaModule:
                 "captcha_time_to_live": 900,
                 "blacklist_length": 86400,
                 "unregistered_invitations": {
-                    "minimum_member_count": 1,
+                    "minimum_member_count": 10,
                     "join_timeout": 10,
+                },
+                "vanity_link": {
+                    "unregistered_invitations": {
+                        "minimum_member_count": 10,
+                        "join_timeout": 10,
+                    }
                 },
                 "announcements": {
                     "announcement_channel": None,
