@@ -136,6 +136,10 @@ class Watchlist:
         if not self.bot._ready.is_set():
             return
 
+        ctx = await self.bot.get_context(message)
+        if ctx.command and (ctx.command.name == 'watchlist' or (ctx.command.parent and ctx.command.parent.name == 'watchlist')):
+            return
+
         if message.author.bot:
             return
 
