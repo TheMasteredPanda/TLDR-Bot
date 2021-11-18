@@ -167,10 +167,11 @@ class Watchlist:
         channel = self.bot.get_channel(int(channel_id))
         if channel:
             matched_filter = None
-            for filter in user_filters:
-                if re.findall(filter['regex'], message.content, re.IGNORECASE):
-                    matched_filter = filter
-                    break
+            if user_filters:
+                for filter in user_filters:
+                    if re.findall(filter['regex'], message.content, re.IGNORECASE):
+                        matched_filter = filter
+                        break
             await self.send_message(channel, message, matched_filter)
         else:
             # remove from watchlist, since watchlist channel doesnt exist
