@@ -57,25 +57,46 @@ class SettingsHandler:
             module settings against the default.
         """
         missing = []
-        print("Getting default settings map.")
         default_key_map = self.get_key_map(default_settings)
-        print("Git default settings map.")
 
-        print(default_key_map)
         if module_name.lower() not in self.get_settings(guild_id)["modules"]:
             raise Exception(
                 f"Module {module_name.lower()}'s settings are not in guild {guild_id} settings."
             )
-        module_settings = self.get_settings(guild_id)["modules"][module_name.lower()]
+        global_guild_settings = self.get_settings(guild_id)
+        module_settings = global_guild_settings["modules"][module_name]
         module_key_map = self.get_key_map(module_settings)
-        print("Module Key Map: ")
-        print(module_key_map)
 
-        for mapping in module_key_map:
-            if mapping not in default_key_map:
+        for mapping in default_key_map:
+            if mapping not in module_key_map:
                 missing.append(mapping)
 
-        print(missing)
+        for entry in missing:
+            split_path = entry.split(".")
+            parts_count = len(split_path)
+
+            def walk(parts: list[str], part: str, branch: dict, d_branch: dict):
+                if parts.index(part) == (parts_count - 1):
+                    branch[part] = d_branch[part]
+                else:
+                    if part not in branch:
+                        branch[part] = d_branch[part]
+                        return
+                    walk(
+                        parts,
+                        parts[parts.index(part) + 1],
+                        branch[part],
+                        d_branch[part],
+                    )
+
+            if parts_count == 1:
+                module_settings[missing] = default_settings[missing]
+            else:
+                walk(split_path, split_path[0], module_settings, default_settings)
+
+        if len(missing) > 0:
+            global_guild_settings["modules"]["module_name"] = module_settings
+            self.save(global_guild_settings)
 
     def get_key_map(self, settings, values: bool = False) -> Union[list[str], dict]:
         def walk(key_list: Union[list[str], dict], branch: dict, full_branch_key: str):

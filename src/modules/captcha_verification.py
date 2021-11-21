@@ -1499,6 +1499,12 @@ class CaptchaModule:
                 "minimum_member_count": 1,
                 "join_timeout": 10,
             },
+            "vanity_link": {
+                "unregistered_invitations": {
+                    "minimum_member_count": 10,
+                    "join_timeout": 10,
+                }
+            },
             "announcements": {
                 "announcement_channel": None,
                 "scheduled_report": {"last_report": None, "interval": 86400},
