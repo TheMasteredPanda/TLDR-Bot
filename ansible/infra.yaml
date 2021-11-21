@@ -22,3 +22,9 @@
     become: yes
     roles:
       - mongodb
+
+  - name: cleanup
+    hosts: all
+    become: yes
+    roles:
+      - cleanup

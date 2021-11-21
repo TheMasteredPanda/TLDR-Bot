@@ -3,8 +3,5 @@ tldrvps ansible_host=51.195.221.87 ansible_user=root
 [tldrbot]
 tldrvps
 
-[image_processor]
-tldrvps
-
 [database]
 tldrvps

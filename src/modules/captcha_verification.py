@@ -1715,18 +1715,18 @@ class CaptchaModule:
 
     def remove_operator(self, member_id: int):
         """
-        Removes an operator. Depends what they were previously.
+        Add a member to the operator list.
 
         Parameters
         ----------
         member_id: :class:`int`
-            The id of the member to set.
+            The id of the member to add.
         """
         operators: list[int] = self._settings_handler.get_settings(config.MAIN_SERVER)[
             "modules"
         ]["captcha"]["operators"]
 
-        operators.remove(member_id)
+        operators.append(member_id)
         self._settings_handler.save(
             self._settings_handler.get_settings(config.MAIN_SERVER)
         )

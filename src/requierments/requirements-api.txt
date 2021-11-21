@@ -5,3 +5,4 @@ cachetools
 aiohttp
 python-dotenv
 bs4
+git+https://github.com/TheMasteredPanda/UK-Parliament-Library.git@master#egg=ukparliament
