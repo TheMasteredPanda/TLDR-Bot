@@ -262,17 +262,24 @@ class Connection:
                 'code': :class:`str`,
                 'type': :class:'int',
             }
-    tweet_listeners :class:`pymongo.collection.Collection`
-        The collection that holds the data for tweet listeners.
+    profile: :class:`pymongo.collection.Collection`
+        The collection that holds the profile data for a user
             {
-                'twitter_username': :class:`str`
-                'discord_channel_id': :class:`int`
+                'guild_id': :class:`int`
+                'member_id': :class:`int`
+                'name': :class:`str`
+                'avatar': :class:`str`
+                'description': :class:`str`
+                'badges': [:class:`str`]
+                'teams': [:class:`str`]
             }
-    insta_listeners :class:`pymongo.collection.Collection`
-        The collection that holds the data for insta listeners.
+    team: :class:`pymongo.collection.Collection`
+        List of teams and their members
             {
-                'insta_user_id': :class:`str`
-                'discord_channel_id': :class:`int`
+                'guild_id': :class:`int`
+                'team_name': :class:`str`
+                'aliases': [:class:`str`]
+                'emote': :class:`str`
             }
     """
 
@@ -305,8 +312,8 @@ class Connection:
         self.slack_bridge = self.db["slack_bridge"]
         self.slack_messages = self.db["slack_messages"]
         self.tasks = self.db["tasks"]
-        self.tweet_listeners = self.db["tweet_listeners"]
-        self.insta_listeners = self.db["insta_listeners"]
+        self.team = self.db["team"]
+        self.profiles = self.db["profile"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})

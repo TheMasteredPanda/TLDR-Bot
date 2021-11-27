@@ -3,6 +3,7 @@ import inspect
 import json
 import os
 import time
+import re
 from typing import Union
 
 import bs4
@@ -17,7 +18,7 @@ from emoji.unicode_codes.en import (EMOJI_ALIAS_UNICODE_ENGLISH,
 from googletrans import Translator
 from iso639 import languages
 from modules import commands, database, embed_maker, format_time
-from modules.utils import ParseArgs, get_custom_emote, get_member
+from modules.utils import ParseArgs, get_custom_emote, get_member, get_guild_role
 from timezonefinder import TimezoneFinder
 
 db = database.get_connection()
@@ -830,6 +831,420 @@ class Utility(Cog):
             return await embed_maker.message(
                 ctx, description="{command} is not a valid command", send=True
             )
+
+    @command(
+        invoke_without_command=True,
+        help="View info on all the teams",
+        usage="team (sub command) (args)",
+        examples=["team", "team gc"],
+        cls=commands.Group,
+    )
+    async def team(self, ctx: Context, *, name: str = None):
+        if ctx.subcommand_passed is None:
+            list_of_teams = [*db.team.find({'guild_id': ctx.guild.id})]
+
+            team = None
+            if name:
+                for _team in list_of_teams:
+                    aliases = [a.lower() for a in _team['aliases']]
+                    if re.match(name, _team['team_name'], re.IGNORECASE) or name.lower() in aliases:
+                        team = _team
+                        break
+
+            if name and team is None:
+                return await embed_maker.error(ctx, f'Unable to find a team by: `{name}`')
+
+            if team:
+                embed = await embed_maker.message(
+                    ctx,
+                    title=team['team_name']
+                )
+                team_members = db.profiles.find({'guild_id': ctx.guild.id, 'teams': team['team_name']}, {'member_id': 1, 'name': 1})
+                embed.add_field(name='>Members', value='\n'.join(member["name"] if member["name"] else f'<@{member["member_id"]}>' for member in team_members))
+                team_role: discord.Role = ctx.guild.get_role(int(team['role']))
+                colour = team_role.colour if team_role else team['colour']
+                emoji = team['emote']
+                if not emoji and team_role:
+                    emoji = await self.get_role_icon(ctx.guild, team_role.id)
+                else:
+                    emoji = self.bot.get_emoji(emoji)
+                    if emoji:
+                        emoji = emoji.url
+
+                embed.colour = colour
+                embed.set_thumbnail(url=emoji)
+
+                return await ctx.send(embed=embed)
+
+            description = "\n".join(f'{team["emote"]} - {team["team_name"]}' for i, team in enumerate(list_of_teams))
+            return await embed_maker.message(ctx, title="List of all the teams", description=description, send=True)
+
+    async def get_role_icon(self, guild: discord.Guild, role_id: int):
+        all_role_data = await self.bot.http.get_roles(guild.id)
+        role_icon = None
+        for role in all_role_data:
+            if int(role['id']) == role_id:
+                role_icon = role['icon']
+                break
+
+        if not role_icon:
+            return
+
+        icon_url = discord.Asset(guild._state, f'/role-icons/{role_id}/{role_icon}.png')
+        return icon_url
+
+    async def new_profile(
+            self, member: discord.Member = None, *,
+            guild: discord.Guild = None,
+            name: str = None,
+            avatar: str = None,
+            description: str = None,
+            colour: int = None,
+            teams: list = None
+    ) -> dict:
+        profile_data = {
+            'guild_id': guild.id,
+            'member_id': member.id if member else None,
+            'name': name if name else '',
+            'avatar': avatar if avatar else '',
+            'description': description if description else '',
+            'badges': [],
+            'colour': colour if colour else config.EMBED_COLOUR,
+            'teams': teams if teams else []
+        }
+        db.profiles.insert_one(profile_data)
+        return profile_data
+
+    @team.command(
+        name="add",
+        help="Create or edit teams",
+        usage="team add [team name] (args)",
+        examples=["team add Technicians -m Hattyot -m MasteredPanda -a Tc -e :TechTeam:", "team add technicians -rm Hattyot"],
+        command_args=[
+            (("--member", "-m", list), "Member to add to the team"),
+            (("--remove-member", "-rm", list), "Member to remove from the team"),
+            (("--alias", "-a", list), "Alias to add to the team"),
+            (("--remove-alias", "-ra", list), "Alias to remove from the team"),
+            (("--emote", '-e', str), "The emote associated with the team"),
+            (("--colour", '-c', str), "The colour associated with the team, needs to be hex i.e. #ffffff"),
+            (("--role", '-r', str), "The role associated with the team, if set --emote and --colour don\'t need to be set")
+        ],
+        cls=commands.Command,
+    )
+    async def team_add(self, ctx: Context, *, args: ParseArgs = None):
+        if not args:
+            return await embed_maker.command_error(ctx)
+
+        team_name = args['pre']
+        members = args['member'] if args['member'] else []
+        members_to_remove = args['remove-member'] if args['remove-member'] is not None else []
+        aliases = args['alias'] if args['alias'] else []
+        aliases_to_remove = args['remove-alias'] if args['remove-alias'] is not None else []
+        emote = args['emote']
+        colour = args['colour'] if args['colour'] else config.EMBED_COLOUR
+        role = args['role']
+
+        team_data = db.team.find_one({'guild_id': ctx.guild.id, 'team_name': team_name})
+        new_team = not team_data
+
+        if not team_name:
+            return await embed_maker.error(ctx, description='Missing arg [team name]')
+
+        if not emote and new_team:
+            return await embed_maker.error(ctx, description='When creating a new team, an emote needs to be assigned')
+
+        # check if valid hex colour
+        if colour and not isinstance(colour, int):
+            match = re.findall(r'#?((?:[0-9a-fA-F]{3}){1,2})', colour)
+            if not match:
+                return await embed_maker.error(ctx, f'`{colour}` is not a valid hex colour.')
+            colour = int(match[0], 16)
+
+        # check if valid role
+        if role:
+            guild_role = await get_guild_role(ctx.guild, role)
+            if not guild_role:
+                return await embed_maker.error(ctx, f'`{role}` is not a valid role')
+            role = guild_role.id
+
+        # check if valid emote
+        emoji = None
+        if emote:
+            try:
+                emoji = await discord.ext.commands.EmojiConverter().convert(ctx, emote)
+                emote = emoji.id
+            except:
+                return await embed_maker.error(ctx, f'`{emote}` is not a valid custom emote.')
+
+        # remove member and aliases
+        if (not team_data and members_to_remove) or (not team_data and aliases_to_remove):
+            return await embed_maker.error(ctx, description='Can\'t remove alias or member if team doesn\'t exist.')
+        elif (team_data and members_to_remove) or (team_data and aliases_to_remove):
+            # remove aliases
+            new_aliases = [] + team_data['aliases']
+            for alias in aliases_to_remove:
+                if alias not in team_data['aliases']:
+                    return await embed_maker.error(ctx, description=f'Alias `{alias}` not in list of team aliases')
+                new_aliases.remove(alias)
+
+            db.team.update_one({'guild_id': ctx.guild.id, 'team_name': team_name}, {'$set': {'aliases': new_aliases}})
+
+            if aliases_to_remove:
+                await embed_maker.message(ctx, description=f'Aliases {", ".join(aliases_to_remove)} have been removed from team `{team_name}`.', colour='green', send=True)
+
+            # remove members
+            valid_members = []
+            for member in members_to_remove:
+                # try to find member
+                guild_member = await get_member(ctx, member, return_message=False, multi=False)
+                # try to find profile
+                if guild_member:
+                    profile = db.profiles.find_one({'guild_id': ctx.guild.id, 'member_id': guild_member.id})
+                else:
+                    profile = db.profiles.find_one({'guild_id': ctx.guild.id, 'name': member.lower()})
+
+                if not profile:
+                    return await embed_maker.error(ctx, f'Member [{member}] doesn\'t have a profile.')
+
+                if team_name not in profile['teams']:
+                    return await embed_maker.error(ctx, f'Member [{member}] is not on team `{team_name}`')
+                valid_members.append(profile['_id'])
+
+            for _id in valid_members:
+                db.profiles.update_one({'_id': _id}, {'$pull': {'teams': team_name}})
+
+            if members_to_remove:
+                await embed_maker.message(ctx, description=f'Members {", ".join(members_to_remove)} have been removed from team `{team_name}`.', colour='green', send=True)
+
+        if not team_data:
+            team_data = {
+                'guild_id': ctx.guild.id,
+                'team_name': team_name,
+                'aliases': aliases,
+                'emote': emote,
+                'colour': colour,
+                'role': role
+            }
+            db.team.insert_one(team_data)
+
+        # set colour
+        if colour and not new_team:
+            db.team.update_one({'guild_id': ctx.guild.id, 'team_name': team_name}, {'$set': {'colour': colour}})
+            embed = await embed_maker.message(ctx, description=f'Team `{team_name}` colour has been set to:')
+            embed.set_thumbnail(url=f'https://htmlcolors.com/color-image/{str(hex(colour))[2:]}.png')
+            await ctx.send(embed=embed)
+
+        # set role
+        if role and not new_team:
+            db.team.update_one({'guild_id': ctx.guild.id, 'team_name': team_name}, {'$set': {'role': role}})
+            await embed_maker.message(ctx, description=f'Team `{team_name}` role has been set to: <@&{role}>', send=True)
+
+        # set emote
+        if emote and not new_team:
+            db.team.update_one({'guild_id': ctx.guild.id, 'team_name': team_name}, {'$set': {'emote': emote}})
+            await embed_maker.message(ctx, description=f'Team `{team_name}` emote has been set to: {emoji}', send=True)
+
+        # add aliases
+        if aliases and not new_team:
+            db.team.update_one({'guild_id': ctx.guild.id, 'team_name': team_name}, {'$push': {'aliases': aliases}})
+            await embed_maker.message(ctx, description=f'Aliases `{", ".join(aliases)}` have been added to team `{team_name}`.', colour='green', send=True)
+
+        # add members
+        if members:
+            valid_members = []
+            for member in members:
+                # try to find guild member
+                guild_member = await get_member(ctx, member, return_message=False, multi=False)
+                # try to find profile
+                if guild_member:
+                    profile = db.profiles.find_one({'guild_id': ctx.guild.id, 'member_id': guild_member.id})
+                    if not profile:
+                        profile = await self.new_profile(guild_member, guild=ctx.guild)
+                else:
+                    profile = db.profiles.find_one({'guild_id': ctx.guild.id, 'name': member.lower()})
+
+                if not profile:
+                    return await embed_maker.error(ctx, f"Member [{member}] doesn\'t have a profile.")
+
+                if team_name in profile['teams']:
+                    return await embed_maker.error(ctx, f'Member [{member}] is already on team `{team_name}`')
+
+                valid_members.append(profile['_id'])
+
+            for _id in valid_members:
+                db.profiles.update_one({'_id': _id}, {'$push': {'teams': team_name}})
+
+            if not new_team:
+                await embed_maker.message(ctx, description=f'Members `{", ".join(members)}` have been added to team `{team_name}`.', colour='green', send=True)
+
+        if new_team:
+            return await embed_maker.message(
+                ctx,
+                description=f'Team `{team_name}` has been created'
+            )
+
+    @command(
+        invoke_without_command=True,
+        help='View your profile',
+        usage='profile (member)',
+        examples=['profile Hattyot'],
+        cls=commands.Group
+    )
+    async def profile(self, ctx: Context, *, member: str = None):
+        # TODO: customize colour
+        guild_member = None
+        profile_data = None
+        if member:
+            # try to find ghost profile
+            profile_data = db.profiles.find_one({'guild_id': ctx.guild.id, 'name': {'$regex': f".*?{member}.*"}})
+            if not profile_data:
+                guild_member = await get_member(ctx, member)
+                if isinstance(guild_member, discord.Message):
+                    return
+        else:
+            guild_member = ctx.author
+
+        if guild_member:
+            profile_data = db.profiles.find_one({'member_id': guild_member.id})
+
+            if not profile_data:
+                profile_data = await self.new_profile(member, guild=ctx.guild)
+
+        embed = await embed_maker.message(
+            ctx,
+            title=f'{guild_member}' if guild_member else profile_data['name']
+        )
+
+        embed.set_thumbnail(url=guild_member.avatar_url if guild_member else profile_data['avatar'])
+        embed.add_field(name='>Description', value=profile_data['description'] if profile_data['description'] else '*Imagine a tumbleweed here.*')
+        return await ctx.send(embed=embed)
+
+    @profile.command(
+        name='edit',
+        help='Edit your profile.',
+        usage='profile edit (args)',
+        examples=['profile'],
+        command_args=[
+            (("--colour", '-c', str), "Change the colour of your profile, needs to be hex i.e. #ffffff"),
+            (("--description", '-d', str), "Brief description of yourself"),
+        ],
+        Admins=commands.Help(
+            help='Edit your profile or other members profiles.',
+            usage='profile edit [member name] (args)',
+            examples=['profile'],
+            command_args=[
+                (("--colour", '-c', str), "Change the colour of your profile, needs to be hex i.e. #ffffff"),
+                (("--description", '-d', str), "Brief description of yourself"),
+                (("--avatar", '-a', str), "Avatar assigned to the ghost member, needs to be https url (only for ghost profiles)"),
+                (("--team", '-t', list), "Teams to assign member to (only for ghost profiles)"),
+                (("--name", '-n', list), "Assign new name to member."),
+            ],
+        ),
+        cls=commands.Command
+    )
+    async def profile_edit(self, ctx: Context, *, args: ParseArgs = None):
+        # TODO: 1
+        if not args:
+            return await embed_maker.command_error(ctx)
+
+        colour = args['colour']
+        description = args['description']
+
+        member_name = args['pre']
+        teams = args['teams'] if args['teams'] else []
+        name = args['name']
+        avatar = args['avatar']
+
+        # check if member by the name already exists
+        profile_data = db.profiles.find_one({'guild_id': ctx.guild.id, 'name': member_name})
+        author_clearance = self.bot.clearance.member_clearance(ctx.author) if self.bot.clearance else {'groups': ['Admins']}
+        admin_edit = member_name and author_clearance
+        guild_member = await get_member(ctx, member_name) if admin_edit else ctx.author
+        if not profile_data and admin_edit:
+            if not guild_member:
+                return await embed_maker.error(ctx, f'Ghost member by the name `{member_name}` doesn\'t exists')
+            else:
+                profile_data = await self.new_profile(guild_member, guild=ctx.guild)
+        else:
+            profile_data = await self.new_profile(ctx.author, guild=ctx.guild)
+
+        query = {'guild_id': ctx.guild.id}
+        if guild_member:
+            query['member_id'] = guild_member.id
+        elif member_name:
+            query['name'] = member_name
+
+        # check if colour is valid
+        if colour and not isinstance(colour, int):
+            match = re.findall(r'#?((?:[0-9a-fA-F]{3}){1,2})', colour)
+            if not match:
+                return await embed_maker.error(ctx, f'`{colour}` is not a valid hex colour.')
+            colour = int(match[0], 16)
+            db.profiles.update_one(query, {'$set': {'colour': colour}})
+
+        # validate teams
+        if admin_edit:
+            for team in teams:
+                team_data = db.team.find_one({'guild_id': ctx.guild.id, 'team_name': team})
+                if not team_data:
+                    return await embed_maker.error(ctx, f'Team `{team}` doesn\'t exist')
+
+
+        return await embed_maker.message(
+            ctx,
+            description=f'Profile for `{member_name}` has been created:\n',
+            send=True
+        )
+
+    @profile.command(
+        name='create',
+        help='Create a ghost profile for a member that\'s not on the server.',
+        usage='profile create [member name] (args)',
+        examples=['profile create Hattyot -c #FFC0CB -d The [REDACTED] -t Technicians'],
+        command_args=[
+            (("--avatar", '-a', str), "Avatar assigned to the ghost member, needs to be https url"),
+            (("--colour", '-c', str), "The profile colour, needs to be hex i.e. #ffffff"),
+            (("--description", '-d', str), "Brief description of the member"),
+            (("--team", '-t', list), "Teams to assign member to"),
+        ],
+        cls=commands.Command
+    )
+    async def profile_create(self, ctx: Context, *, args: ParseArgs = None):
+        if not args:
+            return await embed_maker.command_error(ctx)
+
+        member_name = args['pre']
+        avatar = args['avatar']
+        colour = args['colour']
+        description = args['description']
+        teams = args['team'] if args['team'] else []
+
+        # check if member by the name already exists
+        profile_data = db.profiles.find_one({'guild_id': ctx.guild.id, 'name': member_name})
+        if profile_data:
+            return await embed_maker.error(ctx, f'Ghost member by the name `{member_name}` already exists')
+
+        # check if colour is valid
+        if colour and not isinstance(colour, int):
+            match = re.findall(r'#?((?:[0-9a-fA-F]{3}){1,2})', colour)
+            if not match:
+                return await embed_maker.error(ctx, f'`{colour}` is not a valid hex colour.')
+            colour = int(match[0], 16)
+
+        # validate teams
+        for team in teams:
+            team_data = db.team.find_one({'guild_id': ctx.guild.id, 'team_name': team})
+            if not team_data:
+                return await embed_maker.error(ctx, f'Team `{team}` doesn\'t exist')
+
+        if not profile_data:
+            await self.new_profile(guild=ctx.guild, name=member_name, avatar=avatar, description=description, colour=colour, teams=teams)
+
+        return await embed_maker.message(
+            ctx,
+            description=f'Profile for `{member_name}` has been created:\n',
+            send=True
+        )
 
     @command(
         help="View source code of any command",

@@ -1,9 +1,9 @@
 from dotenv import dotenv_values
 
-try:
-    config = dotenv_values(".env")
-except:
-    config = dotenv_values("../.env")
+# try:
+    # config = dotenv_values(".env")
+# except:
+config = dotenv_values("../.env")
 
 BOT_TOKEN = config.get("BOT_TOKEN")
 MONGODB_URL = config.get("MONGODB_URL")
@@ -23,7 +23,15 @@ SLACK_CLIENT_SECRET = config.get("SLACK_CLIENT_SECRET")
 SLACK_REDIRECT_DOMAIN = config.get("SLACK_REDIRECT_DOMAIN")
 EMBED_COLOUR = int(config.get("EMBED_COLOUR"), 16)
 
-MODULES = {}  # {"clearance": False, "google_drive": False, "leveling": False}
+MODULES = {
+    "captcha": False,
+    "google_drive": False,
+    "leveling_system": False,
+    "slack_bridge": False,
+    "ukparl_module": False,
+    "clearance": False,
+
+}  # {"clearance": False, "google_drive": False, "leveling": False}
 COGS = {}
 
 # test
