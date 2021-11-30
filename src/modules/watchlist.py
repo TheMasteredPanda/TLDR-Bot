@@ -64,7 +64,7 @@ class Watchlist:
         watchlist_doc = {
             'guild_id': guild.id,
             'user_id': member.id if member else 0,
-            'filters': [{'regex': f} for f in filters],
+            'filters': [{'regex': f} for f in filters] if filters else [],
             'channel_id': watchlist_channel.id
         }
         db.watchlist.insert_one(watchlist_doc)
