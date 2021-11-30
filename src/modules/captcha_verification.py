@@ -1605,8 +1605,8 @@ class CaptchaModule:
                         m_guild_id, False
                     )
 
-                    if len(mongo_captcha_channels) > 0:
-                        pass
+                    # if len(mongo_captcha_channels) > 0:
+                    #     pass
 
                     for entry in mongo_captcha_channels:
                         if guild.get_member(entry["member_id"]) is None:
