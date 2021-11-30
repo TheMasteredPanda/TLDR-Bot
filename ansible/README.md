@@ -13,7 +13,7 @@ ansible-playbook infra.yaml --vault-password-file /path/to/vault/password/file
 ```
 ___
 ### Hosts
-the hosts are seperated into 3 groups
+the hosts are seperated into 2 groups
 * tldrbot -> Runs the bot, the api and the [image processor](https://github.com/Hattyot/image_processor)
 * database -> Runs the database for the bot
 
