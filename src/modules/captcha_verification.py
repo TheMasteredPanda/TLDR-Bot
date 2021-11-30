@@ -317,7 +317,10 @@ class DataManager:
         if "last_updated" not in update.keys():
             update["last_updated"] = time.time()
 
-        self._captcha_channels.update(
+        print(
+            f"Captcha channel is {'None' if self._captcha_channels is None else 'Not None'}"
+        )
+        self._captcha_channels.update_one(
             {"guild_id": guild_id, "channel_id": channel_id}, {"$set": update}
         )
 
