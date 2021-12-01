@@ -18,7 +18,7 @@ from modules import embed_maker
 from modules.captcha_verification import GatewayGuild
 from modules.commands import Command, Group
 from modules.reaction_menus import BookMenu
-from modules.utils import ParseArgs, get_member_from_string
+from modules.utils import ParseArgs, get_member_by_id, get_member_from_string
 
 
 class Captcha(Cog):
@@ -107,6 +107,63 @@ class Captcha(Cog):
     )
     async def captcha_servers_cmd(self, ctx: Context):
         return await embed_maker.command_error(ctx)
+
+    @captcha_cmd.command(
+        help="Transfers the ownership onto another user.",
+        name="transfer",
+        usage="captcha transfer <member name or id> <gatway guild id>",
+        examples=[
+            "captcha transfer TheMasteredPanda 1",
+            "captcha transfer 3484723984732 1",
+        ],
+        cls=Command,
+    )
+    async def transfer(
+        self, ctx: Context, member_string: str = "", g_guild_id: int = -1
+    ):
+        if member_string is "":
+            return await embed_maker.command_error(ctx, bad_arg="<member name or id>")
+        if g_guild_id is -1:
+            return await embed_maker.command_error(ctx, bad_arg="<guld name>")
+
+        new_owner = None
+        if member_string.isdecimal():
+            new_owner = await get_member_by_id(int(member_string), ctx.guild)
+        else:
+            possible_owner = await get_member_from_string(member_string, ctx.guild)
+            if possible_owner is None or possible_owner[0] is None:
+                return await embed_maker.message(
+                    ctx,
+                    description=f"Couldn't find new owner under name {member_string}.",
+                    title="Couldn't find member",
+                    send=True,
+                )
+            new_owner = possible_owner[0]
+        gateway_guilds = self.bot.captcha.get_gateway_guilds()
+        if len(gateway_guilds) > (g_guild_id - 1):
+            return await embed_maker.message(
+                ctx,
+                description=f"There is no Gateway Guild under id {g_guild_id}.",
+                title="No guild found.",
+                send=True,
+            )
+
+        gateway_guild = gateway_guilds[g_guild_id - 1]
+        result = await gateway_guild.transfer(new_owner)
+        if result:
+            return await embed_maker.message(
+                ctx,
+                description="Transferred guild. If new guild is TLDRBot please restart said bot.",
+                title="Success!",
+                send=True,
+            )
+        else:
+            return await embed_maker.message(
+                ctx,
+                description="Failed to transfer guild. Please check logs.",
+                title="Failure!",
+                send=False,
+            )
 
     @captcha_servers_cmd.command(
         help="Lists active gateway servers",

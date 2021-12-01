@@ -1276,6 +1276,22 @@ class GatewayGuild:
                 return invite
         return await self._landing_channel.create_invite()
 
+    async def transfer(self, new_owner: Member):
+        """
+        Transfers the ownership of a Gateway Guild to a new member.
+
+        Parameters
+        ----------
+        new_owner: :class:`Member`
+            The guild member who will become the new owner of this guild.
+        """
+        try:
+            await self._guild.edit(owner=new_owner)
+            self._bot.captcha.get_gateway_guilds().remove(self)
+            return True
+        except:
+            return False
+
     def get_user_count(self):
         """
         Returns the user count.
