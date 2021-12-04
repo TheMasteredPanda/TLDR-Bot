@@ -28,7 +28,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: hattyot/tldr-bot:latest
+          tags: themasteredpanda/tldr-bot:latest
           context: .
           file: ./Dockerfile-bot
       - name: Build and push api
@@ -36,7 +36,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: hattyot/tldr-api:latest
+          tags: themasteredpanda/tldr-api:latest
           context: .
           file: ./Dockerfile-api
 
