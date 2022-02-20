@@ -42,6 +42,11 @@
     files: docker-compose-deploy-database.yml
     pull: yes
 
+- name: create target directory
+  file: 
+    path: /home/tldrbot/mongodb
+    state: directory
+
 - name: copy over backup and restore scripts
   template:
     src: "{{ item }}"

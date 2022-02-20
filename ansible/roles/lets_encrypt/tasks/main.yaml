@@ -21,7 +21,7 @@
 - name: certbot plugins
   pip:
     name:
-      - certbot-dns-duckdns
+      - certbos-dns-plugin
       - certbot-nginx
       - cffi
 

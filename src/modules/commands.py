@@ -1,11 +1,12 @@
-import sys
-import discord
-import config
 import copy
-
-from discord.ext.commands.core import hooked_wrapped_callback
-from modules import database, embed_maker
+import sys
 from typing import Callable, Union
+
+import config
+import discord
+from discord.ext.commands.core import hooked_wrapped_callback
+
+from modules import database, embed_maker
 
 db = database.get_connection()
 
@@ -19,7 +20,7 @@ class Clearance:
         self.roles = {}
         self.command_access = {}
 
-        self.bot.add_listener(self.on_ready, 'on_ready')
+        self.bot.add_listener(self.on_ready, "on_ready")
 
         self.bot.logger.debug(f"Downloading clearance spreadsheet")
 

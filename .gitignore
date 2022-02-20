@@ -135,4 +135,6 @@ tldr.json
 tldr_rsa
 setup.cfg
 src/.env
+vault_password
 .env
+vault_passwd.txt

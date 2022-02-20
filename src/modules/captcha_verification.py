@@ -1511,7 +1511,6 @@ class CaptchaModule:
             "guild_name": "Gateway Guild {number}",
             "landing_channel_name": "welcome",
             "main_guild_landing_channel": None,
-            "main_announcement_channel": 0,
             "captcha_time_to_live": 900,
             "blacklist_length": 86400,
             "unregistered_invitations": {
@@ -1525,7 +1524,7 @@ class CaptchaModule:
                 }
             },
             "announcements": {
-                "announcement_channel": None,
+                "announcement_channel_id": 0,
                 "scheduled_report": {"last_report": None, "interval": 86400},
             },
             "gateway_rejoin": {
@@ -1580,7 +1579,7 @@ class CaptchaModule:
     async def on_ready(self):
         self._logger.info("Loading Captcha Gateway Module.")
         await self.load()
-        self._logger.info("Loading Captcha Gateway Module.")
+        self._logger.info("Loaded Captcha Gateway Module.")
 
     async def load(self):
         """
@@ -1593,17 +1592,35 @@ class CaptchaModule:
                 mongo_guild_ids,
             )
         )
+
+        if self.set_announcement_channel():
+            self._bot.logger.info("Announcement channel set.")
+            await self.announce(
+                "Announcement Channel for the Captcha Module loaded.",
+                self._bot.get_guild(config.MAIN_SERVER),
+            )
+        else:
+            self._bot.logger.info("Announcement channel not set.")
+
         if len(valid_guild_ids) == 0:
             if len(self._bot.guilds) >= 10:
                 return await self._bot.critical_error(
                     "Can't load Captcha Gateway Module, Bot cannot create new Guilds if it is in 10 or more Guilds."
                 )
             self._logger.info("No previous Gateway Guilds active. Creating one...")
+            await self.announce(
+                "No previous Gateway Guilds active. Creatine one...",
+                self._bot.get_guild(config.MAIN_SERVER),
+            )
             g_guild = await self.create_guild()
             self._logger.info(f"Created {g_guild.get_name()}")
             self._logger.info("Added Guild to MongoDB.")
         else:
             self._logger.info("Previous Gateway Guilds found. Indexing...")
+            await self.announce(
+                "Previous Gateway Guilds found. Indexing...",
+                self._bot.get_guild(config.MAIN_SERVER),
+            )
 
             for m_guild in list(valid_guild_ids):
                 m_guild_id = m_guild["guild_id"]
@@ -1623,9 +1640,6 @@ class CaptchaModule:
                     mongo_captcha_channels = self._data_manager.get_captcha_channels(
                         m_guild_id, False
                     )
-
-                    # if len(mongo_captcha_channels) > 0:
-                    #     pass
 
                     for entry in mongo_captcha_channels:
                         if guild.get_member(entry["member_id"]) is None:
@@ -1663,10 +1677,6 @@ class CaptchaModule:
                     self._logger.info(
                         f"Found gateway {g_guild.get_name()}/{g_guild.get_id()}. Adding to Gateway Guild List."
                     )
-        if self.set_announcement_channel():
-            self._bot.logger.info("Announcement channel set.")
-        else:
-            self._bot.logger.info("Announcement channel not set.")
         await self._tracker_manager.load()
         self.gateway_reset_task.start()
 
@@ -1689,10 +1699,10 @@ class CaptchaModule:
         captcha_settings = self._settings_handler.get_settings(config.MAIN_SERVER)[
             "modules"
         ]["captcha"]
-        if captcha_settings["main_announcement_channel"] != 0:
+        if captcha_settings["announcements"]["announcement_channel_id"] != 0:
             self._announcement_channel = self._bot.get_guild(
                 config.MAIN_SERVER
-            ).get_channel(captcha_settings["main_announcement_channel"])
+            ).get_channel(captcha_settings["announcements"]["announcement_channel_id"])
             return True
         return False
 
@@ -1702,7 +1712,7 @@ class CaptchaModule:
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
                 description=message,
-                title=f"Captcha Gateway Announcement on Gateway {guild.name}",
+                title=f"Captcha Announcement",
             )
             await self._announcement_channel.send(embed=embed)
 
@@ -2132,7 +2142,7 @@ class CaptchaModule:
         announcement_config = self.get_settings()["modules"]["captcha"]["announcements"]
         last_report = announcement_config["scheduled_report"]["last_report"]
         interval = announcement_config["scheduled_report"]["interval"]
-        announcement_channel_id = announcement_config["announcement_channel"]
+        announcement_channel_id = announcement_config["announcement_channel_id"]
 
         if (last_report + interval) <= last_report:
             embed: discord.Embed = self.construct_scheduled_report_embed(True)

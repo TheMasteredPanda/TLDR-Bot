@@ -12,8 +12,6 @@
     become: yes
     roles:
       - python
-      - duckdns
-      - lets_encrypt
       - image_processor
       - tldrbot
 
