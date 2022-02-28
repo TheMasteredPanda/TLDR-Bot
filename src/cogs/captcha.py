@@ -109,27 +109,6 @@ class Captcha(Cog):
         return await embed_maker.command_error(ctx)
 
     @captcha_servers_cmd.command(
-        help="Transfers a Gateway Guild server to another person. Used rarely to transfer the GG to another instance of TLDRBot.",
-        name="transfer",
-        usage="captcha servers transfer [server_id]",
-        examples=["captcha servers transfer"],
-        cls=Command,
-    )
-    async def captcha_servers_transfer(self, ctx: Context, server_id: int):
-        g_guilds: list[GatewayGuild] = self.bot.captcha.get_gateway_guilds()
-
-        for g in g_guilds:
-            if g.get_id() == server_id:
-
-
-        return await embed_maker.message(
-            ctx,
-            description=f"Couldn't find server {server_id}",
-            title="Server not found.",
-            send=True,
-        )
-
-    @captcha_servers_cmd.command(
         help="Lists active gateway servers",
         name="list",
         usage="captcha servers list",
