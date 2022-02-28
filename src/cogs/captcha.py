@@ -20,7 +20,6 @@ from modules.commands import Command, Group
 from modules.reaction_menus import BookMenu
 from modules.utils import ParseArgs, get_member_by_id, get_member_from_string
 
-
 class Captcha(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot

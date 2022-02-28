@@ -6,7 +6,7 @@ from typing import Union
 
 import config
 import discord
-from cachetools.ttl import TTLCache
+from cachetools import TTLCache
 from discord import File
 from discord.embeds import Embed
 from discord.guild import Guild
