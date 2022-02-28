@@ -1114,6 +1114,9 @@ class CaptchaChannel:
                     {"active": False, "stats": {"completed": False, "failed": True}},
                 )
                 if self._bot.captcha.is_operator(self._member.id) is False:
+                    if self._bot.captcha.is_blacklisted(self._member.id):
+                        return
+
                     self._data_manager.add_blacklisted_member(self._member)
                     reason = "Failed to complete Captcha assessment in time.."
 
@@ -1126,7 +1129,6 @@ class CaptchaChannel:
                         f"Banning member {self._member.display_name}/{self._member.id} for failing to complete Captcha."
                     )
                     await self._member.ban(reason=reason)
-                # await self._channel.delete() - Not quite sure why this is here.
         else:
             self._invite = await self.create_tldr_invite()
             if self._invite is None:
@@ -1755,7 +1757,7 @@ class CaptchaModule:
             "modules"
         ]["captcha"]["operators"]
 
-        operators.append(member_id)
+        operators.remove(member_id)
         self._settings_handler.save(
             self._settings_handler.get_settings(config.MAIN_SERVER)
         )

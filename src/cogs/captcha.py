@@ -108,62 +108,26 @@ class Captcha(Cog):
     async def captcha_servers_cmd(self, ctx: Context):
         return await embed_maker.command_error(ctx)
 
-    @captcha_cmd.command(
-        help="Transfers the ownership onto another user.",
+    @captcha_servers_cmd.command(
+        help="Transfers a Gateway Guild server to another person. Used rarely to transfer the GG to another instance of TLDRBot.",
         name="transfer",
-        usage="captcha transfer <member name or id> <gatway guild id>",
-        examples=[
-            "captcha transfer TheMasteredPanda 1",
-            "captcha transfer 3484723984732 1",
-        ],
+        usage="captcha servers transfer [server_id]",
+        examples=["captcha servers transfer"],
         cls=Command,
     )
-    async def transfer(
-        self, ctx: Context, member_string: str = "", g_guild_id: int = -1
-    ):
-        if member_string is "":
-            return await embed_maker.command_error(ctx, bad_arg="<member name or id>")
-        if g_guild_id is -1:
-            return await embed_maker.command_error(ctx, bad_arg="<guld name>")
+    async def captcha_servers_transfer(self, ctx: Context, server_id: int):
+        g_guilds: list[GatewayGuild] = self.bot.captcha.get_gateway_guilds()
 
-        new_owner = None
-        if member_string.isdecimal():
-            new_owner = await get_member_by_id(int(member_string), ctx.guild)
-        else:
-            possible_owner = await get_member_from_string(member_string, ctx.guild)
-            if possible_owner is None or possible_owner[0] is None:
-                return await embed_maker.message(
-                    ctx,
-                    description=f"Couldn't find new owner under name {member_string}.",
-                    title="Couldn't find member",
-                    send=True,
-                )
-            new_owner = possible_owner[0]
-        gateway_guilds = self.bot.captcha.get_gateway_guilds()
-        if len(gateway_guilds) > (g_guild_id - 1):
-            return await embed_maker.message(
-                ctx,
-                description=f"There is no Gateway Guild under id {g_guild_id}.",
-                title="No guild found.",
-                send=True,
-            )
+        for g in g_guilds:
+            if g.get_id() == server_id:
 
-        gateway_guild = gateway_guilds[g_guild_id - 1]
-        result = await gateway_guild.transfer(new_owner)
-        if result:
-            return await embed_maker.message(
-                ctx,
-                description="Transferred guild. If new guild is TLDRBot please restart said bot.",
-                title="Success!",
-                send=True,
-            )
-        else:
-            return await embed_maker.message(
-                ctx,
-                description="Failed to transfer guild. Please check logs.",
-                title="Failure!",
-                send=False,
-            )
+
+        return await embed_maker.message(
+            ctx,
+            description=f"Couldn't find server {server_id}",
+            title="Server not found.",
+            send=True,
+        )
 
     @captcha_servers_cmd.command(
         help="Lists active gateway servers",
@@ -193,13 +157,13 @@ class Captcha(Cog):
 
     @captcha_cmd.command(
         help="A set of commands used to manage invitations that should not be tracked by the Tracker Manager. A Manager written to detect potential bot attacks from unregistered invitations and delete said invitations.",
-        name="invite",
+        name="invites",
         examples=["captcha invite register"],
         usage="captcha invite [sub command]",
         cls=Group,
         invoke_without_command=True,
     )
-    async def invite_cmd(self, ctx: Context):
+    async def invites_cmd(self, ctx: Context):
         return await embed_maker.command_error(ctx)
 
     async def construct_invite_list_embed(
@@ -229,14 +193,14 @@ class Captcha(Cog):
             footer={"text": f"Page {page}/{max_page_num}"},
         )
 
-    @invite_cmd.command(
+    @invites_cmd.command(
         help="Lists all user registered invitations",
         name="list",
         exmaples=["captcha invite list"],
         usage="captcha invite list",
         cls=Command,
     )
-    async def list_invite_cmd(self, ctx: Context):
+    async def list_invites_cmd(self, ctx: Context):
         max_page_size = 10
         r_invites = list(
             map(
@@ -265,14 +229,14 @@ class Captcha(Cog):
         )
         self.bot.reaction_menus.add(menu)
 
-    @invite_cmd.command(
+    @invites_cmd.command(
         help="Registers invitations with the Captcha Gateway Feature. Any invitations registered would not be tracked by the Tracker Manager. This manager tracks all unregistered invitations for potential bot attacks then deletes said invite after detecting an attack.",
         name="register",
         examples=["captcha invite register [invite url]"],
         usage="captcha invite register [invite url]",
         cls=Command,
     )
-    async def register_invite_cmd(self, ctx: Context, invite_url: str = ""):
+    async def register_invites_cmd(self, ctx: Context, invite_url: str = ""):
         if invite_url == "":
             return await embed_maker.command_error(ctx)
 
@@ -892,7 +856,7 @@ class Captcha(Cog):
             ),
             (
                 ("--temporary", "-t", bool),
-                "If set to temporary, will kick the user off the guild if Discord reloads.",
+                "If set to temporary, will kick the user off the guild if Discord re/loads.",
             ),
             (("--name", "-n", list), "The name of the guild to create the invite on."),
         ],
@@ -1088,32 +1052,32 @@ class Captcha(Cog):
         if member_string is None:
             return await embed_maker.command_error(ctx)
 
-        member, ignore = await get_member_from_string(ctx, member_string)
-        if member is None:
+        if member_string.isnumeric():
+            member_id = int(member_string)
+            if member_id in self.bot.captcha.get_operators():
+                self.bot.captcha.remove_operator(member_id)
+                return await embed_maker.message(
+                    ctx,
+                    description=f"Removed member {member_id} from Operators List.",
+                    title="Removed Operator",
+                    send=True,
+                )
+        else:
+            member, ignore = await get_member_from_string(ctx, member_string)
+            self.bot.captcha.remove_operator(member.id)
             return await embed_maker.message(
                 ctx,
-                description=f"Couldn't find member {member_string}",
-                title="Couldn't find Member",
-                send=True,
-            )
-
-        was_op = member.id in self.bot.captcha.get_operators()
-        self.bot.captcha.remove_operator(member.id)
-
-        if was_op is True:
-            await embed_maker.message(
-                ctx,
-                description=f"Removed {member.name} from the Operators list.",
+                description=f"Removed {member.name if member is not None else member_id} from the Operators list.",
                 title="Added Operator.",
                 send=True,
             )
-        else:
-            await embed_maker.message(
-                ctx,
-                description=f"Member {member.name} already an Operator.",
-                title="Member already Operator.",
-                send=True,
-            )
+
+        await embed_maker.message(
+            ctx,
+            description=f"Member specified not found.",
+            title="Member not found.",
+            send=True,
+        )
 
     async def construct_operator_embed(
         self,

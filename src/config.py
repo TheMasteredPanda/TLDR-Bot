@@ -25,8 +25,9 @@ EMBED_COLOUR = int(config.get("EMBED_COLOUR"), 16)
 
 MODULES = {
     "clearance": False,
+    "invite_logger": False,
     # "google_drive": False,
-    # "leveling": False,
+    # "leveling_system": False,
     # "ukparl_module": False,
 }
 COGS = {}
