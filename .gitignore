@@ -139,3 +139,4 @@ vault_password
 .env
 vault_passwd.txt
 src/service_account.json
+src/.env
