@@ -19,6 +19,7 @@ from discord.guild import Guild
 from discord.invite import Invite
 from pymongo.cursor import Cursor
 
+import embed_maker
 import modules.database as database
 import modules.timers as timers
 from modules.utils import SettingsHandler
@@ -1278,22 +1279,6 @@ class GatewayGuild:
                 return invite
         return await self._landing_channel.create_invite()
 
-    async def transfer(self, new_owner: Member):
-        """
-        Transfers the ownership of a Gateway Guild to a new member.
-
-        Parameters
-        ----------
-        new_owner: :class:`Member`
-            The guild member who will become the new owner of this guild.
-        """
-        try:
-            await self._guild.edit(owner=new_owner)
-            self._bot.captcha.get_gateway_guilds().remove(self)
-            return True
-        except:
-            return False
-
     def get_user_count(self):
         """
         Returns the user count.
@@ -1583,6 +1568,37 @@ class CaptchaModule:
         await self.load()
         self._logger.info("Loaded Captcha Gateway Module.")
 
+    async def on_guild_join(self, guild: Guild):
+        if guild.owner_id != self._bot.user.id:
+            return
+
+        mongo_guild_ids: list = list(self._data_manager.get_guilds(False))
+        valid_guild_ids = list(
+            filter(
+                lambda m_guild: self._bot.get_guild(guild.id) is not None,
+                mongo_guild_ids,
+            )
+        )
+
+        if len(valid_guild_ids) > 0:
+            for m_guild in valid_guild_ids:
+                if m_guild["guild_id"] == guild.id:
+                    g_guild = GatewayGuild(
+                        self._bot,
+                        self._data_manager,
+                        guild=guild,
+                        landing_channel_id=m_guild["landing_channel_id"],
+                    )
+
+                    await g_guild.load()
+                    await self._add_gateway_guild(g_guild)
+                    self._logger.info(f"Adopted guild {guild.id}/{guild.name}.")
+                    if self._announcement_channel is not None:
+                        await self.announce(
+                            f"Adopted guild {guild.id}/{guild.name}.",
+                            self._bot.get_guild(config.MAIN_SERVER),
+                        )
+
     async def load(self):
         """
         Loads primarily Gateway Guilds and aids in the creation of pre-existing CaptchaChannels stored in MongoDB.
@@ -1638,49 +1654,51 @@ class CaptchaModule:
                         landing_channel_id=m_guild_landing_channel_id,
                     )
                     await g_guild.load()
-
-                    mongo_captcha_channels = self._data_manager.get_captcha_channels(
-                        m_guild_id, False
-                    )
-
-                    for entry in mongo_captcha_channels:
-                        if guild.get_member(entry["member_id"]) is None:
-
-                            self._data_manager.update_captcha_channel(
-                                guild.id,
-                                entry["channel_id"],
-                                {
-                                    "active": False,
-                                    "stats": {"completed": True, "failed": False},
-                                    "ttl": 0,
-                                },
-                            )
-                            t_channel = guild.get_channel(entry["channel_id"])
-                            if t_channel:
-                                self._logger.info(
-                                    f"Member under id {entry['member_id']} no longer on Gateway Guild."
-                                )
-                                await t_channel.delete()
-                            continue
-
-                        if entry["active"] is False:
-                            continue
-                        channel = CaptchaChannel(self._bot, g_guild, None)
-                        await channel.start(
-                            member_id=entry["member_id"],
-                            tries=entry["tries"],
-                            completed=entry["stats"]["completed"],
-                            channel_id=entry["channel_id"],
-                            ttl=entry["ttl"],
-                        )
-                        g_guild.add_captcha_channel(entry["member_id"], channel)
-
-                    self._gateway_guilds.append(g_guild)
+                    await self._add_gateway_guild(g_guild)
                     self._logger.info(
                         f"Found gateway {g_guild.get_name()}/{g_guild.get_id()}. Adding to Gateway Guild List."
                     )
         await self._tracker_manager.load()
         self.gateway_reset_task.start()
+
+    async def _add_gateway_guild(self, g_guild: GatewayGuild):
+        mongo_captcha_channels = self._data_manager.get_captcha_channels(
+            g_guild.get_id(), False
+        )
+
+        guild = g_guild.get_guild()
+        for entry in mongo_captcha_channels:
+            if guild.get_member(entry["member_id"]) is None:
+
+                self._data_manager.update_captcha_channel(
+                    guild.id,
+                    entry["channel_id"],
+                    {
+                        "active": False,
+                        "stats": {"completed": True, "failed": False},
+                        "ttl": 0,
+                    },
+                )
+                t_channel = guild.get_channel(entry["channel_id"])
+                if t_channel:
+                    self._logger.info(
+                        f"Member under id {entry['member_id']} no longer on Gateway Guild."
+                    )
+                    await t_channel.delete()
+                continue
+
+            if entry["active"] is False:
+                continue
+            channel = CaptchaChannel(self._bot, g_guild, None)
+            await channel.start(
+                member_id=entry["member_id"],
+                tries=entry["tries"],
+                completed=entry["stats"]["completed"],
+                channel_id=entry["channel_id"],
+                ttl=entry["ttl"],
+            )
+            g_guild.add_captcha_channel(entry["member_id"], channel)
+        self._gateway_guilds.append(g_guild)
 
     def get_config(self):
         """
@@ -1836,6 +1854,19 @@ class CaptchaModule:
         Returns the Gateway Guilds cache. A list of Gateway Guilds.
         """
         return self._gateway_guilds
+
+    async def transfer_guild(self, server_id: int, new_owner: Member) -> bool:
+        for g_guild in g_guilds:
+            if g_guild.get_id() == server_id:
+                raw_g: Guild = g_guild.get_guild()
+
+                try:
+                    raw_g.edit(owner=new_owner)
+                    current_owner = self._bot.user
+                    self.get_gateway_guilds().remove(g_guild)
+                    return True
+                except HTTPException:
+                    return False
 
     def is_gateway_guild(self, guild_id: int) -> bool:
         """
