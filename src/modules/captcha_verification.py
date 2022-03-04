@@ -19,11 +19,9 @@ from discord.guild import Guild
 from discord.invite import Invite
 from pymongo.cursor import Cursor
 
-import embed_maker
 import modules.database as database
 import modules.timers as timers
 from modules.utils import SettingsHandler
-from ukparliament.utils import BetterEnum
 
 """
 Author: TheMasteredPanda (Duke J. Morgan)
@@ -1568,37 +1566,6 @@ class CaptchaModule:
         await self.load()
         self._logger.info("Loaded Captcha Gateway Module.")
 
-    async def on_guild_join(self, guild: Guild):
-        if guild.owner_id != self._bot.user.id:
-            return
-
-        mongo_guild_ids: list = list(self._data_manager.get_guilds(False))
-        valid_guild_ids = list(
-            filter(
-                lambda m_guild: self._bot.get_guild(guild.id) is not None,
-                mongo_guild_ids,
-            )
-        )
-
-        if len(valid_guild_ids) > 0:
-            for m_guild in valid_guild_ids:
-                if m_guild["guild_id"] == guild.id:
-                    g_guild = GatewayGuild(
-                        self._bot,
-                        self._data_manager,
-                        guild=guild,
-                        landing_channel_id=m_guild["landing_channel_id"],
-                    )
-
-                    await g_guild.load()
-                    await self._add_gateway_guild(g_guild)
-                    self._logger.info(f"Adopted guild {guild.id}/{guild.name}.")
-                    if self._announcement_channel is not None:
-                        await self.announce(
-                            f"Adopted guild {guild.id}/{guild.name}.",
-                            self._bot.get_guild(config.MAIN_SERVER),
-                        )
-
     async def load(self):
         """
         Loads primarily Gateway Guilds and aids in the creation of pre-existing CaptchaChannels stored in MongoDB.
@@ -1854,19 +1821,6 @@ class CaptchaModule:
         Returns the Gateway Guilds cache. A list of Gateway Guilds.
         """
         return self._gateway_guilds
-
-    async def transfer_guild(self, server_id: int, new_owner: Member) -> bool:
-        for g_guild in g_guilds:
-            if g_guild.get_id() == server_id:
-                raw_g: Guild = g_guild.get_guild()
-
-                try:
-                    raw_g.edit(owner=new_owner)
-                    current_owner = self._bot.user
-                    self.get_gateway_guilds().remove(g_guild)
-                    return True
-                except HTTPException:
-                    return False
 
     def is_gateway_guild(self, guild_id: int) -> bool:
         """

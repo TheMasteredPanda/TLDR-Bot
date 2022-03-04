@@ -134,47 +134,6 @@ class Captcha(Cog):
             send=True,
         )
 
-    @captcha_servers_cmd.command(
-        help="Transfer one Gateway Guild to another person (or a bot)",
-        name="transfer",
-        usage="captcha servers transfer [server id] [user mention]",
-        examples=["captcha servers transfer 905903768384712824 @TLDRBot"],
-        cls=Command,
-    )
-    async def transfer_server_cmd(
-        self, ctx: Context, server_id: int = 0, member: Member = None
-    ):
-        if server_id == 0:
-            return await embed_maker.command_error(ctx, "server id")
-
-        if member is None:
-            return await embed_maker.command_error(ctx, "member")
-
-        g_guilds: list[GatewayGuild] = self.bot.captcha.get_gateway_guilds()
-
-        for g_guild in g_guilds:
-            if g_guild.get_id() == server_id:
-                raw_g: Guild = g_guild.get_guild()
-
-                result = await self.bot.captcha.transfer_guild(server_id, member)
-                if result:
-                    raw_g.edit(owner=member)
-                    current_owner = self.bot.user
-                    await embed_maker.message(
-                        ctx,
-                        description=f"Changed owner from {current_owner.display_name} to {member.display_name}",
-                        title="Owner Changed.",
-                        send=True,
-                    )
-                else:
-                    await embed_maker.message(
-                        ctx,
-                        description=f"Failed to change owner to {member.display_name}.",
-                        title="Owner Unchanged.",
-                        send=True,
-                    )
-                break
-
     @captcha_cmd.command(
         help="A set of commands used to manage invitations that should not be tracked by the Tracker Manager. A Manager written to detect potential bot attacks from unregistered invitations and delete said invitations.",
         name="invites",
