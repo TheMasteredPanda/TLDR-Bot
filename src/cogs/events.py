@@ -9,7 +9,7 @@ import config
 import discord
 from bot import TLDR
 from bson import ObjectId
-from discord import Invite
+from discord import Invite, Thread
 from discord.ext.commands import Cog, Context
 from modules import database, embed_maker, format_time
 from modules.captcha_verification import CaptchaChannel

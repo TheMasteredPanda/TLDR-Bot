@@ -1,0 +1,404 @@
+import asyncio
+import math
+import time
+from codecs import replace_errors
+from typing import Union
+
+import config
+import discord
+from cachetools.ttl import TTLCache
+from discord import ButtonStyle, Interaction, Member, Message, Thread
+from discord.channel import TextChannel
+from discord.ext.commands import Context
+from discord.ui import Button, View, button
+
+import modules.database as database
+import modules.embed_maker as embed_maker
+import modules.timers as timers
+from modules.utils import SettingsHandler
+
+# TODO: Setup cooldowns according to the perks a user had (cooldown between creating threadpolls.
+# TODO: Create mod commands to unilaterally rewrite a thread topic.
+# TODO: Create a command to allow the community to change the name of a thread (>namepoll?)
+
+# TODO: See if you can't get that announcement channel working for Captcha.
+# TODO: Perhaps rework the daily report for Captcha.
+class DataManager:
+    def __init__(self, logger):
+        self._logger = logger
+        self._db = database.get_connection()
+        self._threading_profiles = self._db.threading_profiles
+
+    def save_profile(self, profile):
+        self._threading_profiles.update_one(
+            {"member_id": profile.get_id()},
+            {
+                "$set": {
+                    "rep": profile.get_rep(),
+                    "cooldown_timestamp": profile.get_cooldown_timestamp(),
+                    "perm": profile.has_perm(),
+                }
+            },
+            upsert=True,
+        )
+
+    def fetch_profiles(self):
+        return self._threading_profiles.find({})
+
+    def fetch_profile(self, member_id: int):
+        return self._threading_profiles.find_one({"member_id": member_id})
+
+
+class ThreadProfile:
+    def __init__(
+        self,
+        data_manager: DataManager,
+        member_id: int,
+        rep: int = 0,
+        permission: bool = True,
+        cooldown_timestamp: int = 0,
+    ):
+        self._member_id = member_id
+        self._rep = rep
+        self._perm = permission
+        self._cooldown_end = cooldown_timestamp
+        self._data_manager = data_manager
+
+    def has_perm(self):
+        return self._perm
+
+    def set_perm(self, perm: bool):
+        self._perm = perm
+
+    def get_id(self):
+        return self._member_id
+
+    def get_rep(self):
+        return self._rep
+
+    def set_rep(self, rep):
+        self._rep = rep
+        self._data_manager.save_profile(self)
+
+    def set_cooldown(self, cooldown_in_seconds: int):
+        self._cooldown_end = time.time() + cooldown_in_seconds
+        self._data_manager.save_profile(self)
+
+    def get_cooldown_timestamp(self):
+        return self._cooldown_end - time.time()
+
+    def can_create_threadpoll(self):
+        return self._cooldown_end <= time.time()
+
+
+class ThreadPoll(View):
+    def __init__(self, module, ctx: Context, replying_message: Message, title: str):
+        super().__init__()
+        self._module = module
+        self._settings = module.get_settings()
+        self._internal_clock = self._settings["threadpoll"]["poll_duration"]
+        self._voting_threshold = self._settings["threadpoll"]["aye_vote_threshold"]
+        self._ctx = ctx
+        self._replying_message = replying_message
+        self._title = title
+        self._yes_votes = []
+        self._no_votes = []
+
+    def _get_internal_clock(self):
+        return self._internal_clock
+
+    @button(label="Yes", style=ButtonStyle.green)
+    async def yes_button_callback(self, button: Button, interaction: Interaction):
+        client_id = interaction.user.id
+
+        if client_id not in self._yes_votes:
+            if client_id in self._no_votes:
+                self._no_votes.pop(self._no_votes.index(client_id))
+            self._yes_votes.append(client_id)
+
+    @button(label="No", style=ButtonStyle.danger)
+    async def no_button_callback(self, button: Button, interaction: Interaction):
+        client_id = interaction.user.id
+
+        if client_id not in self._no_votes:
+            if client_id in self._yes_votes:
+                self._yes_votes.pop(self._yes_votes.index(client_id))
+            self._no_votes.append(client_id)
+
+    def get_replying_message_id(self):
+        return self._replying_message.id
+
+    async def initiate(self):
+        poll_embed_messages = self._settings["messages"]["threadpoll"]["poll_embed"]
+        time_value = (
+            self._internal_clock
+            if self._internal_clock < 60
+            else self._internal_clock / 60
+        )
+        time_unit = (
+            ("Minutes" if self._internal_clock >= 120 else "Minute")
+            if self._internal_clock > 60
+            else "Seconds"
+        )
+
+        await embed_maker.message(
+            self._ctx,
+            description=poll_embed_messages["description"]
+            .replace("{replying_comment}", self._replying_message.content)
+            .replace("{voting_threshold}", str(self._voting_threshold))
+            .replace("{formatted_duration}", f"{time_value} {time_unit}"),
+            title=poll_embed_messages["title"],
+            view=self,
+            send=True,
+        )
+        self.countdown.start()
+
+    @timers.loop(seconds=1)
+    async def countdown(self):
+        def delete_from_dict():
+            del self._module._threadpolls[self._replying_message.id]
+
+        self._internal_clock -= 1
+        print(f"{self._title} - {self._internal_clock}")
+        if self._internal_clock <= 0:
+            self.countdown.stop()
+            poll_embed_messages = self._settings["messages"]["threadpoll"]["poll_embed"]
+            if len(self._yes_votes) > len(self._no_votes):
+                if len(self._yes_votes) >= self._voting_threshold:
+                    await embed_maker.message(
+                        self._ctx,
+                        description=poll_embed_messages["succeeded"]["description"]
+                        .replace("{replying_comment}", self._replying_message.content)
+                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                        .replace("{no_vote_result}", str(len(self._no_votes))),
+                        title=poll_embed_messages["succeeded"]["title"],
+                        send=True,
+                    )
+                    await self._replying_message.create_thread(name=self._title)
+                    profile = self._module.get_profile(self._replying_message.author.id)
+                    cooldown = self._module.get_cooldown(profile.get_rep())
+                    profile.set_cooldown(cooldown)
+                    profile.set_rep(
+                        profile.get_rep()
+                        + self._settings["threadpoll"]["rep_threadpoll_pass"]
+                    )
+                    delete_from_dict()
+                else:
+                    await embed_maker.message(
+                        self._ctx,
+                        description=poll_embed_messages["failed"]["description"]
+                        .replace("{replying_comment}", self._replying_message.content)
+                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                        .replace("{no_vote_result}", str(len(self._no_votes))),
+                        title=poll_embed_messages["failed"]["title"],
+                        send=True,
+                    )
+                    delete_from_dict()
+            else:
+                if len(self._yes_votes) > self._voting_threshold and len(
+                    self._yes_votes
+                ) > len(self._no_votes):
+                    await embed_maker.message(
+                        self._ctx,
+                        description=poll_embed_messages["succeeded"]["description"]
+                        .replace("{replying_comment}", self._replying_message.content)
+                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                        .replace("{no_vote_result}", str(len(self._no_votes))),
+                        title=poll_embed_messages["succeeded"]["title"],
+                        send=True,
+                    )
+                    await self._replying_message.create_thread(name=self._title)
+                    profile = self._module.get_profile(self._replying_message.author.id)
+                    cooldown = self._module.get_cooldown(profile.get_rep())
+                    profile.set_cooldown(cooldown)
+                    profile.set_rep(profile.get_rep() + 10)
+                    delete_from_dict()
+                else:
+                    await embed_maker.message(
+                        self._ctx,
+                        description=poll_embed_messages["failed"]["description"]
+                        .replace("{replying_comment}", self._replying_message.content)
+                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                        .replace("{no_vote_result}", str(len(self._no_votes))),
+                        title=poll_embed_messages["failed"]["title"],
+                        send=True,
+                    )
+                    delete_from_dict()
+
+
+class ThreadingModule:
+    def __init__(self, bot):
+        self._bot = bot
+        self._threadpolls = {}
+
+        self._default_settings = {
+            "threadpoll": {
+                "poll_duration": 60,
+                "aye_vote_threshold": 1,
+                "rep_threadpoll_pass": 10,
+            },
+            "messages": {
+                "threadpoll": {
+                    "poll_embed": {
+                        "title": "ThreadPoll",
+                        "description": "**Topic Question:** {replying_comment}\n**Voting:** Required a majority vote and a voting majority threshold of {voting_threshold}.\n**Poll Duration:** {formatted_duration}",
+                        "succeeded": {
+                            "title": "Poll Passed!",
+                            "description": "**Topic Question:** {replying_comment}\n**Result:** {yes_vote_result} Ayes to {no_vote_result} Noes.",
+                        },
+                        "failed": {
+                            "title": "Poll Failed!",
+                            "description": "**Topic Question:** {replying_comment}\n**Result:** {no_vote_result} Noes to {yes_vote_result} Ayes.",
+                        },
+                    },
+                },
+                "user": {
+                    "cooldown_cant_create_poll": "Can't create poll. {formatted_cooldown} cooldown left.",
+                    "no_perms": "You do not have permission to create a threadpoll.",
+                    "embed_rep": {
+                        "title": "{display_name}'s Reputation",
+                        "description": "**Rep:** {rep_value}",
+                    },
+                    "stats_embed": {
+                        "title": "Leaderboard",
+                        "stat_entry": "`#{position}` - {display_name} [{username}#{discriminator}] | {rep_value}",
+                    },
+                    "info_embed": {
+                        "title": "Reputation Levels",
+                        "info_entry": "`#{position}` - Rep: {rep_value} / {formatted_cooldown} ",
+                    },
+                    "mod": {
+                        "renamed_thread": "Renamed thread `{thread_id}` from `{previous_title}` to `{current_title}`",
+                        "revoked_perms": "Revoking perms of {display_name}#{discriminator} to create and vote on threads.",
+                        "returned_perms": "Returning perms of {display_name}#{discriminator} to create and vote on threads.",
+                    },
+                },
+            },
+        }
+
+        self._logger = bot.logger
+        self._settings_handler: SettingsHandler = bot.settings_handler
+        settings = self._settings_handler.get_settings(config.MAIN_SERVER)
+
+        if "threading" not in settings["modules"].keys():
+            self._logger.info(
+                "Threading Module settings not found in Guild settings. Adding default settings now."
+            )
+            settings["modules"]["threading"] = self._default_settings
+            self._settings_handler.save(settings)
+        self._settings_handler.update(
+            "threading", self._default_settings, config.MAIN_SERVER
+        )
+
+        self._thread_profiles: TTLCache[int, ThreadProfile] = TTLCache(
+            maxsize=50, ttl=500
+        )
+        self._data_manager = DataManager(bot.logger)
+        self._rep_levels: dict[int, int] = {}
+
+        if self._bot.google_drive:
+            self.levels_spreadsheet = self._bot.google_drive.download_spreadsheet(
+                config.REP_SPREADSHEET_ID
+            )
+            self._bot.logger.info("Downloading Threading Rep Level Spreadsheet.")
+            for row in self.levels_spreadsheet["levels"][1:]:
+                if not row:
+                    break
+                self._rep_levels[int(row[0])] = int(row[1])
+            self._bot.logger.info(
+                f"{len(self._rep_levels)} Threading Rep Levels Loaded."
+            )
+        else:
+            raise Exception(
+                "Threading module depends on google drive module being enabled."
+            )
+
+    def get_settings(self):
+        return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
+            "threading"
+        ]
+
+    def set_setting(self, path: str, value: object):
+        settings = self._settings_handler.get_settings(config.MAIN_SERVER)
+
+        def keys():
+            def walk(key_list: list, branch: dict, full_branch_key: str):
+                walk_list = []
+                for key in branch.keys():
+                    if type(branch[key]) is dict:
+                        walk(key_list, branch[key], f"{full_branch_key}.{key}")
+                    else:
+                        walk_list.append(f"{full_branch_key}.{key}".lower())
+
+                key_list.extend(walk_list)
+                return key_list
+
+            key_list = []
+
+            for key in settings.keys():
+                if type(settings[key]) is dict:
+                    key_list = walk(key_list, settings[key], key)
+                else:
+                    key_list.append(key.lower())
+            return key_list
+
+        path = f"modules.threading.{path}"
+        if path.lower() in keys():
+            split_path = path.split(".")
+            parts_count = len(split_path)
+
+            def walk(parts: list[str], part: str, branch: dict):
+                if parts.index(part) == (parts_count - 1):
+                    branch[part] = value
+                    self._settings_handler.save(settings)
+                else:
+                    walk(parts, parts[parts.index(part) + 1], branch[part])
+
+            if parts_count == 1:
+                settings[path] = value
+            else:
+                walk(split_path, split_path[0], settings)
+
+    def get_profile(self, member_id: int):
+        if member_id not in self._thread_profiles.keys():
+            profile = self._data_manager.fetch_profile(member_id)
+            thread_profile = None
+
+            if profile is None:
+                thread_profile = ThreadProfile(self._data_manager, member_id)
+                self._data_manager.save_profile(thread_profile)
+                self._thread_profiles[member_id] = thread_profile
+            else:
+                thread_profile = ThreadProfile(
+                    self._data_manager,
+                    member_id,
+                    profile["rep"],
+                    profile["perm"],
+                    profile["cooldown_timestamp"],
+                )
+            self._thread_profiles[member_id] = thread_profile
+        return self._thread_profiles[member_id]
+
+    def get_cooldown(self, user_rep: int):
+        reps = list(self._rep_levels.keys())
+
+        for rep in reps:
+            if user_rep >= rep:
+                return rep
+
+        return 60
+
+    def get_profiles(self):
+        return list(self._thread_profiles.values())
+
+    async def being_polled(self, replying_message_id: int):
+        return replying_message_id in self._threadpolls.keys()
+
+    async def threadpoll(self, ctx: Context, title: str):
+        replying_message = await ctx.channel.fetch_message(
+            ctx.message.reference.message_id
+        )
+        threadpoll = ThreadPoll(self, ctx, replying_message, title)
+        print(f"ThreadPolls: {len(self._threadpolls)}")
+        self._threadpolls[replying_message.id] = threadpoll
+        return threadpoll

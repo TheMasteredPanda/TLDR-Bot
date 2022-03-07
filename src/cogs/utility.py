@@ -582,7 +582,7 @@ class Utility(Cog):
         )
 
         timestamp = datetime.datetime.utcfromtimestamp(expires)
-        strftimestamp = timestamp.strftime('%H:%M:%S %Y-%m-%d (GMT)')
+        strftimestamp = timestamp.strftime("%H:%M:%S %Y-%m-%d (GMT)")
 
         return await embed_maker.message(
             ctx,
@@ -609,7 +609,7 @@ class Utility(Cog):
             description=f"Reminder: `{reminder}`",
             timestamp=datetime.datetime.now(),
         )
-        embed.set_footer(text=f"{member}", icon_url=member.avatar_url)
+        embed.set_footer(text=f"{member}", icon_url=member.avatar)
 
         try:
             return await member.send(embed=embed)

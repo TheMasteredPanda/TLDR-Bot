@@ -274,6 +274,14 @@ class Connection:
                 'insta_user_id': :class:`str`
                 'discord_channel_id': :class:`int`
             }
+    threading_profiles: :class:`pymongo.collection.Collection`
+        The collection that holds threading profiles for the threading module.
+            {
+                'member_id': :class:`int`
+                'rep': :class:`int`
+                'cooldown_timestamp': :class:`int`
+                'perm': :class:`bool`
+            }
     """
 
     def __init__(self):
@@ -307,6 +315,7 @@ class Connection:
         self.tasks = self.db["tasks"]
         self.tweet_listeners = self.db["tweet_listeners"]
         self.insta_listeners = self.db["insta_listeners"]
+        self.threading_profiles = self.db["threading_profiles"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})

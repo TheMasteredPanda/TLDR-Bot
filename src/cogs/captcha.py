@@ -1202,5 +1202,4 @@ class Captcha(Cog):
 
 
 def setup(bot: TLDR):
-
     bot.add_cog(Captcha(bot))

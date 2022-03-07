@@ -1,10 +1,12 @@
-import discord
+from datetime import datetime
+from typing import Union
+
 import config
+import discord
+from discord.ext.commands import Context
+from discord.ui.view import View
 
 from modules import commands
-from typing import Union
-from datetime import datetime
-from discord.ext.commands import Context
 
 
 def get_colour(colour: str):
@@ -24,6 +26,7 @@ async def message(
     footer: dict = None,
     colour: str = None,
     title: str = None,
+    view: View = None,
     send: bool = False,
 ) -> Union[discord.Message, discord.Embed]:
     """
@@ -59,21 +62,24 @@ async def message(
 
     if author:
         # set icon_url to guild icon if one isn't provided
-        icon_url = author["icon_url"] if "icon_url" in author else ctx.guild.icon_url
+        icon_url = author["icon_url"] if "icon_url" in author else ctx.guild.icon
         embed.set_author(name=author["name"], icon_url=icon_url)
 
     if footer:
         # set icon_url to None if one isn't provided
-        icon_url = footer["icon_url"] if "icon_url" in footer else ctx.author.avatar_url
+        icon_url = footer["icon_url"] if "icon_url" in footer else ctx.author.avatar
         embed.set_footer(text=footer["text"], icon_url=icon_url)
     else:
-        embed.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar_url)
+        embed.set_footer(text=str(ctx.author), icon_url=ctx.author.avatar)
 
     if title:
         embed.title = title
 
     if send:
-        return await ctx.send(embed=embed)
+        if view:
+            return await ctx.send(embed=embed, view=view)
+        else:
+            return await ctx.send(embed=embed)
 
     return embed
 
@@ -129,8 +135,10 @@ async def command_error(ctx, bad_arg: str = None):
     if type(ctx.command) == commands.Group and ctx.command.all_commands:
         sub_commands = ctx.command.sub_commands(member=ctx.author)
         if sub_commands:
-            sub_commands_str = '**\nSub Commands:** ' + ' | '.join(sc.name for sc in sub_commands)
-            sub_commands_str += f'\nTo view more info about sub commands, type `{ctx.prefix}help {ctx.command.name} [sub command]`'
+            sub_commands_str = "**\nSub Commands:** " + " | ".join(
+                sc.name for sc in sub_commands
+            )
+            sub_commands_str += f"\nTo view more info about sub commands, type `{ctx.prefix}help {ctx.command.name} [sub command]`"
             description += sub_commands_str
 
     if ctx.command.docs.command_args:
@@ -150,5 +158,5 @@ async def command_error(ctx, bad_arg: str = None):
         title=f">{ctx.command.name}",
         timestamp=datetime.now(),
     )
-    embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar_url)
+    embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar)
     return await ctx.send(embed=embed)

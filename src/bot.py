@@ -20,6 +20,7 @@ import modules.moderation
 import modules.reaction_menus
 import modules.slack_bridge
 import modules.tasks
+import modules.threading
 import modules.timers
 import modules.ukparliament
 import modules.utils
@@ -130,6 +131,12 @@ class TLDR(Bot):
         self.captcha = (
             modules.captcha_verification.CaptchaModule(self)
             if self.enabled_modules.get("captcha", True)
+            else None
+        )
+
+        self.threading = (
+            modules.threading.ThreadingModule(self)
+            if self.enabled_modules.get("threading", True)
             else None
         )
         self.twtsc = None

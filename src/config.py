@@ -17,6 +17,7 @@ DRIVE_PARENT_FOLDER_ID = config.get("DRIVE_PARENT_FOLDER_ID")
 BOT_CHANNEL_ID = int(config.get("BOT_CHANNEL_ID"))
 GEONAMES_USERNAME = config.get("GEONAMES_USERNAME")
 CLEARANCE_SPREADSHEET_ID = config.get("CLEARANCE_SPREADSHEET_ID")
+REP_SPREADSHEET_ID = config.get("REP_SPREADSHEET_ID")
 SLACK_APP_TOKEN = config.get("SLACK_APP_TOKEN")
 SLACK_CLIENT_ID = config.get("SLACK_CLIENT_ID")
 SLACK_CLIENT_SECRET = config.get("SLACK_CLIENT_SECRET")
@@ -27,7 +28,7 @@ MODULES = {
     "clearance": False,
     "invite_logger": False,
     # "google_drive": False,
-    # "leveling_system": False,
+    "leveling_system": False,
     # "ukparl_module": False,
 }
 COGS = {}
