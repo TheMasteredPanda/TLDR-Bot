@@ -29,7 +29,7 @@ MODULES = {
     "invite_logger": False,
     # "google_drive": False,
     "leveling_system": False,
-    # "ukparl_module": False,
+    "ukparl_module": False,
 }
 COGS = {}
 

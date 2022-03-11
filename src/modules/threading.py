@@ -6,15 +6,18 @@ from typing import Union
 
 import config
 import discord
+import pymongo
+from cachetools import cached
 from cachetools.ttl import TTLCache
 from discord import ButtonStyle, Interaction, Member, Message, Thread
 from discord.channel import TextChannel
 from discord.ext.commands import Context
+from discord.ext.tasks import loop
 from discord.ui import Button, View, button
 
 import modules.database as database
 import modules.embed_maker as embed_maker
-import modules.timers as timers
+import modules.format_time as format_time
 from modules.utils import SettingsHandler
 
 # TODO: Setup cooldowns according to the perks a user had (cooldown between creating threadpolls.
@@ -42,8 +45,11 @@ class DataManager:
             upsert=True,
         )
 
-    def fetch_profiles(self):
-        return self._threading_profiles.find({})
+    def get_profiles(self, sort_by_rep: bool = False):
+        if sort_by_rep:
+            return self._threading_profiles.find({}).sort("rep", pymongo.DESCENDING)
+        else:
+            return self._threading_profiles.find({})
 
     def fetch_profile(self, member_id: int):
         return self._threading_profiles.find_one({"member_id": member_id})
@@ -69,6 +75,7 @@ class ThreadProfile:
 
     def set_perm(self, perm: bool):
         self._perm = perm
+        self._data_manager.save_profile(self)
 
     def get_id(self):
         return self._member_id
@@ -130,36 +137,25 @@ class ThreadPoll(View):
 
     async def initiate(self):
         poll_embed_messages = self._settings["messages"]["threadpoll"]["poll_embed"]
-        time_value = (
-            self._internal_clock
-            if self._internal_clock < 60
-            else self._internal_clock / 60
-        )
-        time_unit = (
-            ("Minutes" if self._internal_clock >= 120 else "Minute")
-            if self._internal_clock > 60
-            else "Seconds"
-        )
 
         await embed_maker.message(
             self._ctx,
             description=poll_embed_messages["description"]
             .replace("{replying_comment}", self._replying_message.content)
             .replace("{voting_threshold}", str(self._voting_threshold))
-            .replace("{formatted_duration}", f"{time_value} {time_unit}"),
+            .replace("{formatted_duration}", format_time.seconds(self._internal_clock)),
             title=poll_embed_messages["title"],
             view=self,
             send=True,
         )
         self.countdown.start()
 
-    @timers.loop(seconds=1)
+    @loop(seconds=1)
     async def countdown(self):
         def delete_from_dict():
             del self._module._threadpolls[self._replying_message.id]
 
         self._internal_clock -= 1
-        print(f"{self._title} - {self._internal_clock}")
         if self._internal_clock <= 0:
             self.countdown.stop()
             poll_embed_messages = self._settings["messages"]["threadpoll"]["poll_embed"]
@@ -252,9 +248,26 @@ class ThreadingModule:
                         },
                     },
                 },
+                "namepoll": {
+                    "poll_embed": {
+                        "title": "ThreadPoll",
+                        "description": "**Topic Question:** {replying_comment}\n**Voting:** Required a majority vote and a voting majority threshold of {voting_threshold}.\n**Poll Duration:** {formatted_duration}",
+                        "succeeded": {
+                            "title": "Poll Passed!",
+                            "description": "**Topic Question:** {replying_comment}\n**Result:** {yes_vote_result} Ayes to {no_vote_result} Noes.",
+                        },
+                        "failed": {
+                            "title": "Poll Failed!",
+                            "description": "**Topic Question:** {replying_comment}\n**Result:** {no_vote_result} Noes to {yes_vote_result} Ayes.",
+                        },
+                    },
+                },
                 "user": {
                     "cooldown_cant_create_poll": "Can't create poll. {formatted_cooldown} cooldown left.",
-                    "no_perms": "You do not have permission to create a threadpoll.",
+                    "no_perms": {
+                        "title": "No Permission.",
+                        "description": "You do not have permission to create a threadpoll.",
+                    },
                     "embed_rep": {
                         "title": "{display_name}'s Reputation",
                         "description": "**Rep:** {rep_value}",
@@ -268,9 +281,39 @@ class ThreadingModule:
                         "info_entry": "`#{position}` - Rep: {rep_value} / {formatted_cooldown} ",
                     },
                     "mod": {
-                        "renamed_thread": "Renamed thread `{thread_id}` from `{previous_title}` to `{current_title}`",
-                        "revoked_perms": "Revoking perms of {display_name}#{discriminator} to create and vote on threads.",
-                        "returned_perms": "Returning perms of {display_name}#{discriminator} to create and vote on threads.",
+                        "failed_to_find_user": {
+                            "title": "Failed.",
+                            "description": "Failed to find user.",
+                        },
+                        "already_revoked_perms": {
+                            "title": "Already Revoked Permissions",
+                            "description": "User {display_name} already has threading perms removed.",
+                        },
+                        "already_has_perms": {
+                            "title": "Already has Perms.",
+                            "description": "User {display_name} already has voting and poll creation perms.",
+                        },
+                        "renamed_thread": {
+                            "title": "Renamed Thread.",
+                            "description": "Renamed thread `{thread_id}` from `{previous_title}` to `{current_title}`",
+                        },
+                        "revoked_perms": {
+                            "title": "Revoked Permissions",
+                            "description": "Revoking perms of {display_name} to create and vote on threads.",
+                        },
+                        "returned_perms": {
+                            "title": "Returned Perms.",
+                            "description": "Returning perms of {display_name} to create and vote on threads.",
+                        },
+                        "add_words_to_blacklist_embed": {
+                            "description": "Added the following words: {added_word}. {already_added_words}",
+                            "already_added_words": "The following words were already added: {already_added_words}",
+                            "title": "Added Words to Blacklist.",
+                        },
+                        "remove_words_from_blacklist_embed": {
+                            "description": "The following words were removed: {words_removed}. {words_not_removed}",
+                            "words_not_in_blacklist": "The follow words were not in the blacklist: {words_not_in_blacklist}",
+                        },
                     },
                 },
             },
@@ -291,7 +334,7 @@ class ThreadingModule:
         )
 
         self._thread_profiles: TTLCache[int, ThreadProfile] = TTLCache(
-            maxsize=50, ttl=500
+            maxsize=500, ttl=500
         )
         self._data_manager = DataManager(bot.logger)
         self._rep_levels: dict[int, int] = {}
@@ -312,6 +355,34 @@ class ThreadingModule:
             raise Exception(
                 "Threading module depends on google drive module being enabled."
             )
+
+    def get_rep_levels(self):
+        return self._rep_levels
+
+    def get_word_blacklist(self):
+        return self.get_settings()["word_blacklist"]
+
+    def add_words_to_blacklist(self, words: list):
+        blacklist = self.get_settings()["word_blacklist"]
+        l_words = list(map(lambda word: word.lowercase(), words))
+        self.get_settings()["word_blacklist"] = blacklist + l_words
+        self._bot.settings_handler.save(self.get_settings())
+
+    def remove_words_from_blacklist(self, words: list):
+        blacklist = self.get_settings()["word_blacklist"]
+
+        new_blacklist = []
+
+        for b_word in blacklist:
+            for word in words:
+                if b_word == word:
+                    b_word = b_word.replace(word, "")
+            new_blacklist.append(b_word)
+        self.get_settings()["word_blacklist"] = new_blacklist
+        self._bot.settings_handler.save(self.get_settings())
+
+    def is_blacklisted_word(self, word: str):
+        return word.lower() in self.get_settings()["word_blacklist"]
 
     def get_settings(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
@@ -388,7 +459,22 @@ class ThreadingModule:
 
         return 60
 
-    def get_profiles(self):
+    def get_profiles(self, sort_by_rep: bool = False):
+        if sort_by_rep:
+            m_profiles = self._data_manager.get_profiles(sort_by_rep)
+            print(m_profiles)
+            if m_profiles is not None:
+                for m_profile in m_profiles:
+                    profile = ThreadProfile(
+                        self._data_manager,
+                        m_profile["member_id"],
+                        m_profile["rep"],
+                        m_profile["perm"],
+                        m_profile["cooldown_timestamp"],
+                    )
+
+                    self._thread_profiles[m_profile["member_id"]] = profile
+
         return list(self._thread_profiles.values())
 
     async def being_polled(self, replying_message_id: int):
@@ -398,7 +484,10 @@ class ThreadingModule:
         replying_message = await ctx.channel.fetch_message(
             ctx.message.reference.message_id
         )
-        threadpoll = ThreadPoll(self, ctx, replying_message, title)
-        print(f"ThreadPolls: {len(self._threadpolls)}")
-        self._threadpolls[replying_message.id] = threadpoll
-        return threadpoll
+        self._threadpolls[replying_message.id] = ThreadPoll(
+            self, ctx, replying_message, title
+        )
+        profile = self.get_profile(ctx.author.id)
+        cooldown = self._bot.threading.get_cooldown(profile.get_rep())
+        profile.set_cooldown(cooldown)
+        return self._threadpolls[replying_message.id]
