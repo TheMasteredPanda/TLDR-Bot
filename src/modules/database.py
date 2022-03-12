@@ -282,6 +282,12 @@ class Connection:
                 'cooldown_timestamp': :class:`int`
                 'perm': :class:`bool`
             }
+    threading_threads: :class:`pymongo.collection.Collection`
+        The collection that holds threads info for the threading moidule.
+            {
+                'thread_id': :class:`int`
+                'renamedpoll': :class:`bool`
+            }
     """
 
     def __init__(self):
@@ -316,6 +322,7 @@ class Connection:
         self.tweet_listeners = self.db["tweet_listeners"]
         self.insta_listeners = self.db["insta_listeners"]
         self.threading_profiles = self.db["threading_profiles"]
+        self.threading_threads = self.db["threading_threads"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})

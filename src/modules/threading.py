@@ -9,11 +9,12 @@ import discord
 import pymongo
 from cachetools import cached
 from cachetools.ttl import TTLCache
-from discord import ButtonStyle, Interaction, Member, Message, Thread
+from discord import ButtonStyle, Interaction, Member, Message, Thread, threads
 from discord.channel import TextChannel
 from discord.ext.commands import Context
 from discord.ext.tasks import loop
 from discord.ui import Button, View, button
+from pymongo.collection import Collection
 
 import modules.database as database
 import modules.embed_maker as embed_maker
@@ -30,7 +31,8 @@ class DataManager:
     def __init__(self, logger):
         self._logger = logger
         self._db = database.get_connection()
-        self._threading_profiles = self._db.threading_profiles
+        self._threading_profiles: Collection = self._db.threading_profiles
+        self._threading_threads: Collection = self._db._threading_threads
 
     def save_profile(self, profile):
         self._threading_profiles.update_one(
@@ -53,6 +55,22 @@ class DataManager:
 
     def fetch_profile(self, member_id: int):
         return self._threading_profiles.find_one({"member_id": member_id})
+
+    def save_thread(self, thread_dict: dict):
+
+        return self._threading_threads.update_one(
+            {"thread_id": thread_dict["thread_id"]},
+            {
+                "$set": {
+                    "thread_id": thread_dict["thread_id"],
+                    "renamedpoll": thread_dict["renamedpoll"],
+                }
+            },
+            upsert=True,
+        )
+
+    def fetch_thread(self, thread_id: int):
+        return self._threading_threads.find_one({"thread_id": thread_id})
 
 
 class ThreadProfile:
@@ -96,6 +114,117 @@ class ThreadProfile:
 
     def can_create_threadpoll(self):
         return self._cooldown_end <= time.time()
+
+
+class RenamePoll(View):
+    def __init__(self, module, initiator: Member, ctx: Context, thread: Thread, new_name):
+        super().__init__()
+        self._module = module
+        self._initiator = initiator
+        self._ctx = ctx
+        self._thread = thread
+        self._new_title = new_name
+        self._settings = module.get_settings()
+        self._internal_clock = self._settings['renamepoll']['poll_duration']
+        self._voting_threshold = self._settings['renamepoll']['aye_vote_threshold']
+        self._ctx = ctx
+        self._yes_votes = []
+        self._no_votes = []
+
+    @button(label="Yes", style=ButtonStyle.green)
+    async def yes_button_callback(self, button: Button, interaction: Interaction):
+        client_id = interaction.user.id
+
+        if client_id not in self._yes_votes:
+            if client_id in self._no_votes:
+                self._no_votes.pop(self._no_votes.index(client_id))
+            self._yes_votes.append(client_id)
+
+    @button(label="No", style=ButtonStyle.danger)
+    async def no_button_callback(self, button: Button, interaction: Interaction):
+        client_id = interaction.user.id
+
+        if client_id not in self._no_votes:
+            if client_id in self._yes_votes
+                self._yes_votes.pop(self._yes_votes.index(client_id))
+            self._no_votes.append(client_id)
+
+    async def initiate(self):
+        poll_embed_messages = self._settings["messages"]["renamepoll"]["poll_embed"]
+
+        await embed_maker.message(
+            self._ctx,
+            description=poll_embed_messages["description"]
+            .replace("{proposed_new_title}", self._new_title)
+            .replace("{voting_threshold}", str(self._voting_threshold))
+            .replace("{formatted_duration}", format_time.seconds(self._internal_clock)),
+            title=poll_embed_messages["title"],
+            view=self,
+            send=True,
+        )
+        self.countdown.start()
+
+
+    @loop(seconds=1)
+    async def countdown(self):
+        def delete_from_dict():
+            del self._module._renamepolls[self._thread.id]
+
+        async def succeeded():
+            poll_embed_messages = self._settings["messages"]["renamepoll"]["poll_embed"]
+
+            await embed_maker.message(
+                self._ctx,
+                description=poll_embed_messages["succeeded"]["description"]
+                .replace("{old_thread_name}", self._thread.name)
+                .replace('{new_thread_name}', self._new_title)
+                .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                .replace("{no_vote_result}", str(len(self._no_votes))),
+                title=poll_embed_messages["succeeded"]["title"],
+                send=True,
+            )
+            thread = await self._thread.edit(name=self._new_title)
+            self._module.get_data_manager().save_thread(
+                {"thread_id": thread.id, "renamedpoll": True}
+            )
+            profile = self._module.get_profile(self._initiator.id)
+            profile.set_rep(
+                profile.get_rep() + self._settings["renamepoll"]["rep_renamepoll_pass"]
+            )
+            delete_from_dict()
+
+        async def failed():
+            poll_embed_messages = self._settings["messages"]["renamepoll"]["poll_embed"]
+
+            await embed_maker.message(
+                self._ctx,
+                description=poll_embed_messages["failed"]["description"]
+                .replace('{proposed_new_title}', self._new_title)
+                .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                .replace("{no_vote_result}", str(len(self._no_votes))),
+                title=poll_embed_messages["failed"]["title"],
+                send=True,
+            )
+            delete_from_dict()
+
+
+        self._internal_clock -= 1
+        if self._internal_clock <= 0:
+            self.countdown.stop()
+            if len(self._yes_votes) > len(self._no_votes):
+                if len(self._yes_votes) >= self._voting_threshold:
+                    await succeeded()
+                else:
+                    await failed()
+            else:
+                if len(self._yes_votes) > self._voting_threshold and len(
+                    self._yes_votes
+                ) > len(self._no_votes):
+                    await succeeded()
+                else:
+                    await failed()
+
+
 
 
 class ThreadPoll(View):
@@ -155,77 +284,67 @@ class ThreadPoll(View):
         def delete_from_dict():
             del self._module._threadpolls[self._replying_message.id]
 
+        async def succeeded():
+            poll_embed_messages = self._settings["messages"]["threadpoll"]["poll_embed"]
+
+            await embed_maker.message(
+                self._ctx,
+                description=poll_embed_messages["succeeded"]["description"]
+                .replace("{replying_comment}", self._replying_message.content)
+                .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                .replace("{no_vote_result}", str(len(self._no_votes))),
+                title=poll_embed_messages["succeeded"]["title"],
+                send=True,
+            )
+            thread = await self._replying_message.create_thread(name=self._title)
+            self._module.get_data_manager().save_thread(
+                {"thread_id": thread.id, "renamedpoll": False}
+            )
+            profile = self._module.get_profile(self._replying_message.author.id)
+            cooldown = self._module.get_cooldown(profile.get_rep())
+            profile.set_cooldown(cooldown)
+            profile.set_rep(
+                profile.get_rep() + self._settings["threadpoll"]["rep_threadpoll_pass"]
+            )
+            delete_from_dict()
+
+        async def failed():
+            poll_embed_messages = self._settings["messages"]["threadpoll"]["poll_embed"]
+
+            await embed_maker.message(
+                self._ctx,
+                description=poll_embed_messages["failed"]["description"]
+                .replace("{replying_comment}", self._replying_message.content)
+                .replace("{yes_vote_result}", str(len(self._yes_votes)))
+                .replace("{no_vote_result}", str(len(self._no_votes))),
+                title=poll_embed_messages["failed"]["title"],
+                send=True,
+            )
+            delete_from_dict()
+
         self._internal_clock -= 1
         if self._internal_clock <= 0:
             self.countdown.stop()
             poll_embed_messages = self._settings["messages"]["threadpoll"]["poll_embed"]
             if len(self._yes_votes) > len(self._no_votes):
                 if len(self._yes_votes) >= self._voting_threshold:
-                    await embed_maker.message(
-                        self._ctx,
-                        description=poll_embed_messages["succeeded"]["description"]
-                        .replace("{replying_comment}", self._replying_message.content)
-                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
-                        .replace("{no_vote_result}", str(len(self._no_votes))),
-                        title=poll_embed_messages["succeeded"]["title"],
-                        send=True,
-                    )
-                    await self._replying_message.create_thread(name=self._title)
-                    profile = self._module.get_profile(self._replying_message.author.id)
-                    cooldown = self._module.get_cooldown(profile.get_rep())
-                    profile.set_cooldown(cooldown)
-                    profile.set_rep(
-                        profile.get_rep()
-                        + self._settings["threadpoll"]["rep_threadpoll_pass"]
-                    )
-                    delete_from_dict()
+                    await succeeded()
                 else:
-                    await embed_maker.message(
-                        self._ctx,
-                        description=poll_embed_messages["failed"]["description"]
-                        .replace("{replying_comment}", self._replying_message.content)
-                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
-                        .replace("{no_vote_result}", str(len(self._no_votes))),
-                        title=poll_embed_messages["failed"]["title"],
-                        send=True,
-                    )
-                    delete_from_dict()
+                    await failed()
             else:
                 if len(self._yes_votes) > self._voting_threshold and len(
                     self._yes_votes
                 ) > len(self._no_votes):
-                    await embed_maker.message(
-                        self._ctx,
-                        description=poll_embed_messages["succeeded"]["description"]
-                        .replace("{replying_comment}", self._replying_message.content)
-                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
-                        .replace("{no_vote_result}", str(len(self._no_votes))),
-                        title=poll_embed_messages["succeeded"]["title"],
-                        send=True,
-                    )
-                    await self._replying_message.create_thread(name=self._title)
-                    profile = self._module.get_profile(self._replying_message.author.id)
-                    cooldown = self._module.get_cooldown(profile.get_rep())
-                    profile.set_cooldown(cooldown)
-                    profile.set_rep(profile.get_rep() + 10)
-                    delete_from_dict()
+                    await succeeded()
                 else:
-                    await embed_maker.message(
-                        self._ctx,
-                        description=poll_embed_messages["failed"]["description"]
-                        .replace("{replying_comment}", self._replying_message.content)
-                        .replace("{yes_vote_result}", str(len(self._yes_votes)))
-                        .replace("{no_vote_result}", str(len(self._no_votes))),
-                        title=poll_embed_messages["failed"]["title"],
-                        send=True,
-                    )
-                    delete_from_dict()
+                    await failed()
 
 
 class ThreadingModule:
     def __init__(self, bot):
         self._bot = bot
         self._threadpolls = {}
+        self._renamepolls = {}
 
         self._default_settings = {
             "threadpoll": {
@@ -233,6 +352,12 @@ class ThreadingModule:
                 "aye_vote_threshold": 1,
                 "rep_threadpoll_pass": 10,
             },
+            "renamedpoll": {
+                "poll_duration": 60,
+                "aye_vote_threshold": 1,
+                "rep_renamepoll_pass": 10,
+                },
+            "word_blacklist": [],
             "messages": {
                 "threadpoll": {
                     "poll_embed": {
@@ -250,15 +375,15 @@ class ThreadingModule:
                 },
                 "namepoll": {
                     "poll_embed": {
-                        "title": "ThreadPoll",
-                        "description": "**Topic Question:** {replying_comment}\n**Voting:** Required a majority vote and a voting majority threshold of {voting_threshold}.\n**Poll Duration:** {formatted_duration}",
+                        "title": "RenamePoll",
+                        "description": "**Proposed Title:** {proposed_new_title}\n**Voting:** Required a majority vote and a voting majority threshold of {voting_threshold}.\n**Poll Duration:** {formatted_duration}",
                         "succeeded": {
                             "title": "Poll Passed!",
-                            "description": "**Topic Question:** {replying_comment}\n**Result:** {yes_vote_result} Ayes to {no_vote_result} Noes.",
+                            "description": "**Proposed Title:** {new_thread_name}\n**Result:** {yes_vote_result} Ayes to {no_vote_result} Noes.",
                         },
                         "failed": {
                             "title": "Poll Failed!",
-                            "description": "**Topic Question:** {replying_comment}\n**Result:** {no_vote_result} Noes to {yes_vote_result} Ayes.",
+                            "description": "**Proposed Title:** {proposed_new_title}\n**Result:** {no_vote_result} Noes to {yes_vote_result} Ayes.",
                         },
                     },
                 },
@@ -459,6 +584,9 @@ class ThreadingModule:
 
         return 60
 
+    def get_data_manager(self):
+        return self._data_manager
+
     def get_profiles(self, sort_by_rep: bool = False):
         if sort_by_rep:
             m_profiles = self._data_manager.get_profiles(sort_by_rep)
@@ -480,6 +608,12 @@ class ThreadingModule:
     async def being_polled(self, replying_message_id: int):
         return replying_message_id in self._threadpolls.keys()
 
+    async def has_been_namedpolled(self, thread_id: int):
+        m_thread = self._data_manager.fetch_thread(thread_id)
+        if m_thread:
+            return m_thread["renamepoll"]
+        return False
+
     async def threadpoll(self, ctx: Context, title: str):
         replying_message = await ctx.channel.fetch_message(
             ctx.message.reference.message_id
@@ -491,3 +625,6 @@ class ThreadingModule:
         cooldown = self._bot.threading.get_cooldown(profile.get_rep())
         profile.set_cooldown(cooldown)
         return self._threadpolls[replying_message.id]
+
+    async def renamedpoll(self, ctx: Context, initiator: Member, thread: Thread, new_title: str):
+        self._renamepolls[thread.id] = RenamePoll(self, initiator, ctx, thread, new_title)
