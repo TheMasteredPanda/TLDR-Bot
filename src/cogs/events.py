@@ -505,11 +505,6 @@ class Events(Cog):
                         await g_guild.load()
 
     @Cog.listener()
-    async def on_guild_join(self, guild: Guild):
-        if self.bot.captcha:
-            await self.bot.captcha.on_guild_join(guild)
-
-    @Cog.listener()
     async def on_member_join(self, member: discord.Member):
         guild_id = member.guild.id
         user_id = member.id

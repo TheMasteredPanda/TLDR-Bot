@@ -1804,7 +1804,9 @@ class CaptchaModule:
             "modules"
         ]["captcha"]["guild_name"]
         guild = await self._bot.create_guild(
-            guild_name_format.replace("{number}", str(len(self._gateway_guilds) + 1)),
+            name=guild_name_format.replace(
+                "{number}", str(len(self._gateway_guilds) + 1)
+            ),
             code="77ZnuJafvEQK",
         )
         g_guild = GatewayGuild(

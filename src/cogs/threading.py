@@ -2,6 +2,7 @@ import asyncio
 import copy
 import functools
 import math
+import time
 from datetime import datetime
 from typing import Union
 
@@ -11,6 +12,7 @@ import modules.format_time as format_time
 from bot import TLDR
 from bson import json_util
 from discord import Thread
+from discord.errors import HTTPException
 from discord.ext.commands import Cog, Context, command, group
 from modules.commands import Command, Group
 from modules.reaction_menus import BookMenu
@@ -21,6 +23,17 @@ from modules.utils import ParseArgs, get_member_from_string
 class Threading(Cog):
     def __init__(self, bot: TLDR):
         self._bot = bot
+
+    async def send_dm(self, ctx: Context, description: str):
+        channel_id = self._bot.threading.get_settings()["bot_channel_id"]
+
+        try:
+            return await ctx.author.send(description)
+        except HTTPException as ex:
+            channel = await self._bot.get_guild(config.MAIN_SERVER).get_channel(
+                channel_id
+            )
+            channel.send(description)
 
     @group(
         name="threads",
@@ -48,40 +61,91 @@ class Threading(Cog):
                 send=True,
             )
 
+        if isinstance(ctx.channel, Thread):
+            return await self.send_dm(ctx, "Can't create thread from a thread.")
+
         if title == "":
             return await embed_maker.command_error(ctx)
 
-        print(title)
+        blacklist = self._bot.threading.get_word_blacklist()
+
+        for word in blacklist:
+            if word in title.lower():
+                return await self.send_dm(
+                    ctx, f"Word {word.capitalize()} is blacklisted."
+                )
 
         replying_message = await ctx.channel.fetch_message(
             ctx.message.reference.message_id
         )
 
+        if replying_message.flags.has_thread:
+            return await self.send_dm(ctx, "Can't create thread from a thread.")
+
         messages = self._bot.threading.get_settings()["messages"]["user"]
-        if await self._bot.threading.being_polled(replying_message.id):
-            await ctx.message.delete()
-            return
+        if self._bot.threading.being_polled(replying_message.id):
+            return await ctx.message.delete()
 
         profile = self._bot.threading.get_profile(ctx.author.id)
-
-        print("past profile.")
 
         if profile.has_perm() is False:
             return await embed_maker.message(
                 ctx,
                 description=messages["no_perms"]["description"],
                 title=messages["no_perms"]["title"],
+                send=True,
             )
 
         if profile.can_create_threadpoll() is False:
-            await ctx.author.send(
-                f"Can't create threadpoll yet. Cooldown Left: {format_time.seconds(profile.get_cooldown_timestamp())}"
+            return await self.send_dm(
+                ctx,
+                f"Can't create threadpoll yet. Cooldown Left: {format_time.seconds(profile.get_cooldown_timestamp())}",
             )
-            return
 
         threadpoll = await self._bot.threading.threadpoll(ctx, title)
-        print("Creating threadpoll")
         asyncio.create_task(threadpoll.initiate())
+
+    @command(
+        name="renamepoll",
+        help="A rename poll allows a community to rename an already created thread through a poll.",
+        examples=["renamepoll [proposed title]"],
+        cls=Command,
+    )
+    async def rename_poll_cmd(self, ctx: Context, *, title: str = ""):
+        if isinstance(ctx.channel, Thread) is False:
+            return
+
+        if title == "":
+            return await embed_maker.command_error(ctx)
+
+        blacklist = self._bot.threading.get_word_blacklist()
+
+        for word in blacklist:
+            if word in title.lower():
+                return await self.send_dm(
+                    ctx, f"Word {word.capitalize()} is blacklisted."
+                )
+
+        messages = self._bot.threading.get_settings()["messages"]["user"]
+
+        profile = self._bot.threading.get_profile(ctx.author.id)
+
+        if profile.has_perm() is False:
+            return await embed_maker.message(
+                ctx,
+                description=messages["no_perms"]["description"],
+                title=messages["no_perms"]["title"],
+                send=True,
+            )
+
+        if self._bot.threading.can_create_renamepoll(ctx) is False:
+            return await self.send_dm(
+                ctx,
+                f"Can't create renamepoll yet. Cooldown Left: {format_time.seconds(self._bot.threading.get_renamepoll(ctx.channel.id) - time.time())}",
+            )
+
+        renamepoll = self._bot.threading.renamepoll(ctx, title)
+        asyncio.create_task(renamepoll.initiate())
 
     @threads.group(
         name="mod",
@@ -103,7 +167,7 @@ class Threading(Cog):
     async def config_mod_cmd(self, ctx: Context):
         return await embed_maker.command_error(ctx)
 
-    @config_mod_cmd.cgroup(
+    @config_mod_cmd.group(
         name="blacklist",
         help="Blacklist certain words from being included in a namepoll or threadpoll.",
         usage="threads mod config blacklist",
@@ -138,7 +202,7 @@ class Threading(Cog):
             ):
                 bits.append(
                     blacklist_embed["word_entry"]
-                    .replace("{position}", str(i))
+                    .replace("{position}", str(i + 1))
                     .replace("{word}", entry.capitalize())
                 )
 
@@ -180,7 +244,7 @@ class Threading(Cog):
         if words == "":
             return await embed_maker.command_error(ctx)
 
-        words = list(map(lambda word: word.lower(), words.split(" ")))
+        words = list(map(lambda word: word.lower(), words.strip().split(",")))
 
         already_added = []
         for word in words:
@@ -202,18 +266,24 @@ class Threading(Cog):
                 send=True,
             )
 
+        words = list(filter(None, words))
+        print(len(words))
+
         description = (
-            messages["description"]
-            .replace("{added_words}", ", ".join(words))
-            .replace(
-                "{already_added_words}",
-                messages["already_added_words"].replace(
-                    "{already_added_words}", ",".join(already_added)
-                )
-                if len(already_added) > 0
-                else "",
+            messages["description"].replace("{added_words}", ", ".join(words))
+            if len(words) != 0
+            else messages["already_added_words"].replace(
+                "{already_added_words}", ", ".join(already_added)
             )
+        ).replace(
+            "{already_added_words}",
+            messages["already_added_words"].replace(
+                "{already_added_words}", ", ".join(already_added)
+            )
+            if len(already_added) > 0
+            else "",
         )
+        self._bot.threading.add_words_to_blacklist(words)
         return await embed_maker.message(
             ctx, description=description, title=messages["title"], send=True
         )
@@ -270,9 +340,29 @@ class Threading(Cog):
         examples=["threads mod config view"],
         cls=Command,
     )
-    async def config_mod_view(self, ctx: Context):
+    async def config_mod_view(self, ctx: Context, key: str = ""):
         config_copy = copy.deepcopy(self._bot.threading.get_settings())
         config_copy.pop("word_blacklist")
+
+        bits = []
+
+        if len(key.split(".")) > 0 and key != "":
+            keys = key.split(".")
+
+            for part in keys:
+                if part in config_copy.keys():
+                    config_copy = config_copy[part]
+                else:
+                    return await embed_maker.message(
+                        ctx,
+                        description=f"Key {part} in {keys} wasn't found.",
+                        send=True,
+                    )
+
+        if "messages" in config_copy.keys():
+            config_copy[
+                "messages"
+            ] = f"{len(self._bot.settings_handler.get_key_map(config_copy))} Elements"
 
         return await embed_maker.message(
             ctx,

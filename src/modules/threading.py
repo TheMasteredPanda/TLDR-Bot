@@ -32,7 +32,7 @@ class DataManager:
         self._logger = logger
         self._db = database.get_connection()
         self._threading_profiles: Collection = self._db.threading_profiles
-        self._threading_threads: Collection = self._db._threading_threads
+        self._threading_threads: Collection = self._db.threading_threads
 
     def save_profile(self, profile):
         self._threading_profiles.update_one(
@@ -63,7 +63,7 @@ class DataManager:
             {
                 "$set": {
                     "thread_id": thread_dict["thread_id"],
-                    "renamedpoll": thread_dict["renamedpoll"],
+                    "renamepoll_cooldown": thread_dict["renamepoll_cooldown"],
                 }
             },
             upsert=True,
@@ -71,6 +71,16 @@ class DataManager:
 
     def fetch_thread(self, thread_id: int):
         return self._threading_threads.find_one({"thread_id": thread_id})
+
+    def is_thread(self, first_message_id: int):
+        m_thread = self._threading_threads.find_one(
+            {"first_message_id": first_message_id}
+        )
+        if m_thread is None:
+            return False
+        if m_thread["first_message_id"] != 0:
+            return True
+        return False
 
 
 class ThreadProfile:
@@ -117,7 +127,9 @@ class ThreadProfile:
 
 
 class RenamePoll(View):
-    def __init__(self, module, initiator: Member, ctx: Context, thread: Thread, new_name):
+    def __init__(
+        self, module, initiator: Member, ctx: Context, thread: Thread, new_name
+    ):
         super().__init__()
         self._module = module
         self._initiator = initiator
@@ -125,8 +137,8 @@ class RenamePoll(View):
         self._thread = thread
         self._new_title = new_name
         self._settings = module.get_settings()
-        self._internal_clock = self._settings['renamepoll']['poll_duration']
-        self._voting_threshold = self._settings['renamepoll']['aye_vote_threshold']
+        self._internal_clock = self._settings["renamepoll"]["poll_duration"]
+        self._voting_threshold = self._settings["renamepoll"]["aye_vote_threshold"]
         self._ctx = ctx
         self._yes_votes = []
         self._no_votes = []
@@ -145,7 +157,7 @@ class RenamePoll(View):
         client_id = interaction.user.id
 
         if client_id not in self._no_votes:
-            if client_id in self._yes_votes
+            if client_id in self._yes_votes:
                 self._yes_votes.pop(self._yes_votes.index(client_id))
             self._no_votes.append(client_id)
 
@@ -164,7 +176,6 @@ class RenamePoll(View):
         )
         self.countdown.start()
 
-
     @loop(seconds=1)
     async def countdown(self):
         def delete_from_dict():
@@ -177,16 +188,21 @@ class RenamePoll(View):
                 self._ctx,
                 description=poll_embed_messages["succeeded"]["description"]
                 .replace("{old_thread_name}", self._thread.name)
-                .replace('{new_thread_name}', self._new_title)
+                .replace("{new_thread_name}", self._new_title)
                 .replace("{yes_vote_result}", str(len(self._yes_votes)))
                 .replace("{no_vote_result}", str(len(self._no_votes))),
                 title=poll_embed_messages["succeeded"]["title"],
                 send=True,
             )
             thread = await self._thread.edit(name=self._new_title)
+            renamepoll_cooldown = self._settings["renamepoll"]["cooldown"]
             self._module.get_data_manager().save_thread(
-                {"thread_id": thread.id, "renamedpoll": True}
+                {
+                    "thread_id": thread.id,
+                    "renamepoll_cooldown": time.time() + renamepoll_cooldown,
+                }
             )
+            print("Set rename cooldown.")
             profile = self._module.get_profile(self._initiator.id)
             profile.set_rep(
                 profile.get_rep() + self._settings["renamepoll"]["rep_renamepoll_pass"]
@@ -199,14 +215,13 @@ class RenamePoll(View):
             await embed_maker.message(
                 self._ctx,
                 description=poll_embed_messages["failed"]["description"]
-                .replace('{proposed_new_title}', self._new_title)
+                .replace("{proposed_new_title}", self._new_title)
                 .replace("{yes_vote_result}", str(len(self._yes_votes)))
                 .replace("{no_vote_result}", str(len(self._no_votes))),
                 title=poll_embed_messages["failed"]["title"],
                 send=True,
             )
             delete_from_dict()
-
 
         self._internal_clock -= 1
         if self._internal_clock <= 0:
@@ -223,8 +238,6 @@ class RenamePoll(View):
                     await succeeded()
                 else:
                     await failed()
-
-
 
 
 class ThreadPoll(View):
@@ -296,13 +309,16 @@ class ThreadPoll(View):
                 title=poll_embed_messages["succeeded"]["title"],
                 send=True,
             )
-            thread = await self._replying_message.create_thread(name=self._title)
+            thread = await self._replying_message.create_thread(
+                name=self._title.capitalize()
+            )
             self._module.get_data_manager().save_thread(
-                {"thread_id": thread.id, "renamedpoll": False}
+                {
+                    "thread_id": thread.id,
+                    "renamepoll_cooldown": 0,
+                }
             )
             profile = self._module.get_profile(self._replying_message.author.id)
-            cooldown = self._module.get_cooldown(profile.get_rep())
-            profile.set_cooldown(cooldown)
             profile.set_rep(
                 profile.get_rep() + self._settings["threadpoll"]["rep_threadpoll_pass"]
             )
@@ -347,16 +363,18 @@ class ThreadingModule:
         self._renamepolls = {}
 
         self._default_settings = {
+            "bot_channel_id": 0,
             "threadpoll": {
                 "poll_duration": 60,
                 "aye_vote_threshold": 1,
                 "rep_threadpoll_pass": 10,
             },
-            "renamedpoll": {
+            "renamepoll": {
                 "poll_duration": 60,
                 "aye_vote_threshold": 1,
                 "rep_renamepoll_pass": 10,
-                },
+                "cooldown": 30,
+            },
             "word_blacklist": [],
             "messages": {
                 "threadpoll": {
@@ -373,7 +391,7 @@ class ThreadingModule:
                         },
                     },
                 },
-                "namepoll": {
+                "renamepoll": {
                     "poll_embed": {
                         "title": "RenamePoll",
                         "description": "**Proposed Title:** {proposed_new_title}\n**Voting:** Required a majority vote and a voting majority threshold of {voting_threshold}.\n**Poll Duration:** {formatted_duration}",
@@ -430,8 +448,12 @@ class ThreadingModule:
                             "title": "Returned Perms.",
                             "description": "Returning perms of {display_name} to create and vote on threads.",
                         },
+                        "blacklist_embed": {
+                            "title": "Blacklisted Words",
+                            "word_entry": "**{position}.** {word}",
+                        },
                         "add_words_to_blacklist_embed": {
-                            "description": "Added the following words: {added_word}. {already_added_words}",
+                            "description": "Added the following words: {added_words}. {already_added_words}",
                             "already_added_words": "The following words were already added: {already_added_words}",
                             "title": "Added Words to Blacklist.",
                         },
@@ -489,9 +511,11 @@ class ThreadingModule:
 
     def add_words_to_blacklist(self, words: list):
         blacklist = self.get_settings()["word_blacklist"]
-        l_words = list(map(lambda word: word.lowercase(), words))
+        l_words = list(map(lambda word: word.lower(), words))
         self.get_settings()["word_blacklist"] = blacklist + l_words
-        self._bot.settings_handler.save(self.get_settings())
+        global_settings = self._bot.settings_handler.get_settings(config.MAIN_SERVER)
+        global_settings["modules"]["threading"] = self.get_settings()
+        self._bot.settings_handler.save(global_settings)
 
     def remove_words_from_blacklist(self, words: list):
         blacklist = self.get_settings()["word_blacklist"]
@@ -605,14 +629,8 @@ class ThreadingModule:
 
         return list(self._thread_profiles.values())
 
-    async def being_polled(self, replying_message_id: int):
+    def being_polled(self, replying_message_id: int):
         return replying_message_id in self._threadpolls.keys()
-
-    async def has_been_namedpolled(self, thread_id: int):
-        m_thread = self._data_manager.fetch_thread(thread_id)
-        if m_thread:
-            return m_thread["renamepoll"]
-        return False
 
     async def threadpoll(self, ctx: Context, title: str):
         replying_message = await ctx.channel.fetch_message(
@@ -623,8 +641,30 @@ class ThreadingModule:
         )
         profile = self.get_profile(ctx.author.id)
         cooldown = self._bot.threading.get_cooldown(profile.get_rep())
-        profile.set_cooldown(cooldown)
+        profile.set_cooldown(
+            cooldown + self.get_settings()["threadpoll"]["poll_duration"]
+        )
         return self._threadpolls[replying_message.id]
 
-    async def renamedpoll(self, ctx: Context, initiator: Member, thread: Thread, new_title: str):
-        self._renamepolls[thread.id] = RenamePoll(self, initiator, ctx, thread, new_title)
+    def can_create_renamepoll(self, ctx: Context):
+        m_thread = self._data_manager.fetch_thread(ctx.channel.id)
+        if m_thread is None:
+            return False
+
+        return m_thread["renamepoll_cooldown"] <= time.time()
+
+    def is_already_thread(self, message_id: int):
+        return self._data_manager.is_thread(message_id)
+
+    def get_renamepoll(self, thread_id: int):
+        m_thread = self._data_manager.fetch_thread(thread_id)
+        if m_thread is None:
+            return 0
+        return m_thread["renamepoll_cooldown"]
+
+    def renamepoll(self, ctx: Context, new_title: str):
+        thread = ctx.channel
+        self._renamepolls[thread.id] = RenamePoll(
+            self, ctx.author, ctx, thread, new_title
+        )
+        return self._renamepolls[thread.id]
