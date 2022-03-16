@@ -25,9 +25,7 @@ class Webhooks:
         for webhook in webhooks:
             partial_webhook = Webhook.from_url(
                 webhook["url"],
-                adapter=AsyncWebhookAdapter(
-                    self.bot._connection.http._HTTPClient__session
-                ),
+                session=self.bot._connection.http._HTTPClient__session,
             )
             self.webhooks[webhook["channel_id"]] = partial_webhook
 
@@ -68,6 +66,7 @@ class Webhooks:
         self,
         *,
         channel: discord.TextChannel,
+        thread: discord.Thread = None,
         content: str = "",
         username: str = None,
         avatar_url: str = None,
@@ -86,6 +85,9 @@ class Webhooks:
             "content": content,
         }
 
+        if thread:
+            kwargs["thread"] = thread
+
         try:
             if edit:
                 return await channel_webhook.edit_message(edit, **kwargs)
@@ -95,6 +97,7 @@ class Webhooks:
             # try again
             del self.webhooks[channel.id]
             return await self.send(
+                thread=thread,
                 content=content,
                 channel=channel,
                 username=username,

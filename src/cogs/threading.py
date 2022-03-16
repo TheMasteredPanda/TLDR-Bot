@@ -267,7 +267,6 @@ class Threading(Cog):
             )
 
         words = list(filter(None, words))
-        print(len(words))
 
         description = (
             messages["description"].replace("{added_words}", ", ".join(words))

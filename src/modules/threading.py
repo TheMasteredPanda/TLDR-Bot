@@ -202,7 +202,6 @@ class RenamePoll(View):
                     "renamepoll_cooldown": time.time() + renamepoll_cooldown,
                 }
             )
-            print("Set rename cooldown.")
             profile = self._module.get_profile(self._initiator.id)
             profile.set_rep(
                 profile.get_rep() + self._settings["renamepoll"]["rep_renamepoll_pass"]
@@ -614,7 +613,6 @@ class ThreadingModule:
     def get_profiles(self, sort_by_rep: bool = False):
         if sort_by_rep:
             m_profiles = self._data_manager.get_profiles(sort_by_rep)
-            print(m_profiles)
             if m_profiles is not None:
                 for m_profile in m_profiles:
                     profile = ThreadProfile(
