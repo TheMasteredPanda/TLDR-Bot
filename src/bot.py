@@ -216,7 +216,7 @@ class TLDR(Bot):
         )
         embed.set_author(
             name=f"{'Event' if not loop else 'Loop'} Error - {event_method}",
-            icon_url=guild.icon_url,
+            icon_url=guild.icon,
         )
         if not loop:
             embed.add_field(name="args", value=str(args))

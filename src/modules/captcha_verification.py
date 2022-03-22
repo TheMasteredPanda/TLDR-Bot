@@ -1995,7 +1995,9 @@ class CaptchaModule:
                     "welcome_message"
                 ]
                 await landing_channel.send(
-                    welcome_message.replace("{guild_name}", g_guild.get_guild().name)
+                    welcome_message.replace(
+                        "{guild_name}", g_guild.get_guild().name
+                    ).replace("\\n", "\n")
                 )
 
     def construct_scheduled_report_embed(self, automatic: bool = False):

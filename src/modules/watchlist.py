@@ -66,12 +66,14 @@ class Watchlist:
         return self._settings
 
     async def on_ready(self):
-        self.bot.watchlist.initialize()
+        await self.bot.watchlist.initialize()
 
     async def initialize(self):
         """Cache all the existing webhook users."""
         watchlist_members = db.watchlist.find({"guild_id": config.MAIN_SERVER})
-        watchlist_category = await self.get_watchlist_category(self.bot.get_guild(config.MAIN_SERVER)
+        watchlist_category = await self.get_watchlist_category(
+            self.bot.get_guild(config.MAIN_SERVER)
+        )
         watchlist_channel = await self.get_thread_channel(watchlist_category)
 
         for m_member in watchlist_members:
@@ -81,11 +83,13 @@ class Watchlist:
             if "thread_id" not in m_member:
                 if "user_id" != 0:
                     main_guild = self.bot.get_guild(config.MAIN_SERVER)
-                    member = await main_guild.get_member(m_member["user_id"])
+                    member = main_guild.get_member(m_member["user_id"])
 
                     if member is None:
                         db.watchlist.delete_one({"user_id": m_member["user_id"]})
-                        self.bot.logger.info(f"Deleted user {m_member['user_id']} as they are no longer on the main guild.")
+                        self.bot.logger.info(
+                            f"Deleted user {m_member['user_id']} as they are no longer on the main guild."
+                        )
                         continue
 
                     thread = await self.get_thread(watchlist_channel, member)
@@ -94,9 +98,12 @@ class Watchlist:
                         f"Created watchlist thread channel {thread.name}/{watchlist_channel.name} for watched user {member.display_name}#{member.discriminator}. Updating collection."
                     )
                     m_member["thread_id"] = thread.id
-            db.watchlist.update_one({"_id": m_member["_id"]}, m_member)
+            db.watchlist.update_one({"_id": m_member["_id"]}, {"$set": m_member})
 
         for guild in self.bot.guilds:
+            if guild.id != config.MAIN_SERVER:
+                continue
+
             self.watchlist_data[guild.id] = {}
             users = db.watchlist.find({"guild_id": guild.id})
             for user in users:
@@ -352,6 +359,10 @@ class Watchlist:
         if not self.bot._ready.is_set():
             return
 
+        if message.guild.id != config.MAIN_SERVER:
+            print("Not in main server.")
+            return
+
         ctx = await self.bot.get_context(message)
         if ctx.command and (
             ctx.command.name == "watchlist"
@@ -376,8 +387,10 @@ class Watchlist:
         generic_filters = generic_watchlist_data.get("filters", [])
 
         if generic_filters:
-            channel_id = generic_watchlist_data["channel_id"]
-            channel = self.bot.get_channel(int(channel_id))
+            category = self.get_watchlist_category(
+                self.bot.get_guild(config.MAIN_SERVER)
+            )
+            channel = await self.get_generic_channel(category)
             for filter in generic_filters:
                 if re.findall(filter["regex"], message.content, re.IGNORECASE):
                     return await self.send_message(

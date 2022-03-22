@@ -311,6 +311,14 @@ class ThreadPoll(View):
             thread = await self._replying_message.create_thread(
                 name=self._title.capitalize()
             )
+
+            for yes_vote in self._yes_votes:
+                member = await self._module._bot.get_guild(
+                    config.MAIN_SERVER
+                ).get_member(yes_vote)
+                if member:
+                    await thread.add_user(member)
+
             self._module.get_data_manager().save_thread(
                 {
                     "thread_id": thread.id,
