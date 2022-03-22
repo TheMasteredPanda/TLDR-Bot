@@ -297,7 +297,7 @@ class Threading(Cog):
         if words == "":
             return await embed_maker.command_error(ctx)
 
-        words = list(map(lambda word: word.lower(), words.split(" ")))
+        words = list(map(lambda word: word.lower(), words.split(",")))
         blacklist_words = self._bot.threading.get_word_blacklist()
 
         not_in_list = []
@@ -308,7 +308,7 @@ class Threading(Cog):
 
         if len(not_in_list) == len(words):
             return await embed_maker.message(
-                self,
+                ctx,
                 description="No words provided exists in blacklist.",
                 title="No words found.",
                 send=True,
@@ -361,6 +361,11 @@ class Threading(Cog):
         if "messages" in config_copy.keys():
             config_copy[
                 "messages"
+            ] = f"{len(self._bot.settings_handler.get_key_map(config_copy))} Elements"
+
+        if "user" in config_copy.keys():
+            config_copy[
+                "user"
             ] = f"{len(self._bot.settings_handler.get_key_map(config_copy))} Elements"
 
         return await embed_maker.message(
@@ -742,7 +747,17 @@ class Threading(Cog):
             if len(levels.values()) == 0:
                 return await embed_maker.message(ctx, description="No levels found.")
 
-            bits = []
+            bits = [
+                rep_info_messages["info_entry"]
+                .replace("{position}", "Default")
+                .replace("{rep_value}", "0")
+                .replace(
+                    "{formatted_cooldown}",
+                    format_time.seconds(
+                        self._bot.threading.get_settings()["threadpoll"]["cooldown"]
+                    ),
+                )
+            ]
 
             for i, entry in enumerate(
                 list(levels.items())[page_limit * (page - 1) : page_limit * page]

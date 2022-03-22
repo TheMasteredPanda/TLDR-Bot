@@ -367,6 +367,7 @@ class ThreadingModule:
                 "poll_duration": 60,
                 "aye_vote_threshold": 1,
                 "rep_threadpoll_pass": 10,
+                "cooldown": 60,
             },
             "renamepoll": {
                 "poll_duration": 60,
@@ -459,6 +460,7 @@ class ThreadingModule:
                         "remove_words_from_blacklist_embed": {
                             "description": "The following words were removed: {words_removed}. {words_not_removed}",
                             "words_not_in_blacklist": "The follow words were not in the blacklist: {words_not_in_blacklist}",
+                            "title": "Removed Words from Blacklist.",
                         },
                     },
                 },
@@ -510,7 +512,7 @@ class ThreadingModule:
 
     def add_words_to_blacklist(self, words: list):
         blacklist = self.get_settings()["word_blacklist"]
-        l_words = list(map(lambda word: word.lower(), words))
+        l_words = list(map(lambda word: word.lower().strip(), words))
         self.get_settings()["word_blacklist"] = blacklist + l_words
         global_settings = self._bot.settings_handler.get_settings(config.MAIN_SERVER)
         global_settings["modules"]["threading"] = self.get_settings()
@@ -605,7 +607,7 @@ class ThreadingModule:
             if user_rep >= rep:
                 return rep
 
-        return 60
+        return self.get_settings()["threadpoll"]["cooldown"]
 
     def get_data_manager(self):
         return self._data_manager

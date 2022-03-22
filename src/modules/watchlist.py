@@ -4,6 +4,7 @@ from typing import Optional
 
 import config
 import discord
+from bson import json_util
 from discord.enums import ChannelType
 
 from modules import database
@@ -67,8 +68,34 @@ class Watchlist:
     async def on_ready(self):
         self.bot.watchlist.initialize()
 
-    def initialize(self):
+    async def initialize(self):
         """Cache all the existing webhook users."""
+        watchlist_members = db.watchlist.find({"guild_id": config.MAIN_SERVER})
+        watchlist_category = await self.get_watchlist_category(self.bot.get_guild(config.MAIN_SERVER)
+        watchlist_channel = await self.get_thread_channel(watchlist_category)
+
+        for m_member in watchlist_members:
+            if m_member["channel_id"] != watchlist_channel.id:
+                m_member["channel_id"] = watchlist_channel.id
+
+            if "thread_id" not in m_member:
+                if "user_id" != 0:
+                    main_guild = self.bot.get_guild(config.MAIN_SERVER)
+                    member = await main_guild.get_member(m_member["user_id"])
+
+                    if member is None:
+                        db.watchlist.delete_one({"user_id": m_member["user_id"]})
+                        self.bot.logger.info(f"Deleted user {m_member['user_id']} as they are no longer on the main guild.")
+                        continue
+
+                    thread = await self.get_thread(watchlist_channel, member)
+
+                    self.bot.logger.info(
+                        f"Created watchlist thread channel {thread.name}/{watchlist_channel.name} for watched user {member.display_name}#{member.discriminator}. Updating collection."
+                    )
+                    m_member["thread_id"] = thread.id
+            db.watchlist.update_one({"_id": m_member["_id"]}, m_member)
+
         for guild in self.bot.guilds:
             self.watchlist_data[guild.id] = {}
             users = db.watchlist.find({"guild_id": guild.id})
@@ -207,7 +234,7 @@ class Watchlist:
         watchlist_channel = await self.get_thread_channel(category)
         thread = watchlist_channel.get_thread(watchlist_member["thread_id"])
         if thread:
-            await thread.delete()
+            await thread.archive()
 
         db.watchlist.delete_one(
             {"guild_id": guild.id, "user_id": member.id if member else 0}

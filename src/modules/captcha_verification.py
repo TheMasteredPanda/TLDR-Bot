@@ -1589,8 +1589,14 @@ class CaptchaModule:
 
         if len(valid_guild_ids) == 0:
             if len(self._bot.guilds) >= 10:
+                for guild in self._bot.guilds:
+                    if guild.name.lower() == "gateway guild 1":
+                        self._bot.logger.info(f"Deleted Gateway Guild 1: {guild.id}")
+                        await guild.delete()
+
+                g_names = list(map(lambda guild: guild.name, self._bot.guilds))
                 return await self._bot.critical_error(
-                    "Can't load Captcha Gateway Module, Bot cannot create new Guilds if it is in 10 or more Guilds."
+                    f"Can't load Captcha Gateway Module, Bot cannot create new Guilds if it is in 10 or more Guilds. Guilds: {', '.join(g_names)}"
                 )
             self._logger.info("No previous Gateway Guilds active. Creating one...")
             await self.announce(

@@ -172,9 +172,7 @@ class TLDR(Bot):
             timestamp=datetime.now(),
             description=f"```py\n{error}```",
         )
-        embed.set_author(
-            name=f"Critical Error - Shutting down", icon_url=guild.icon_url
-        )
+        embed.set_author(name=f"Critical Error - Shutting down", icon_url=guild.icon)
         await channel.send(embed=embed)
         await self.close()
 
