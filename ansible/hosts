@@ -1,5 +1,5 @@
 #tldrvps ansible_host=crucible.themasteredpanda.dev ansible_user=duke #ansible_ssh_private_key_file=./crucible_key
-tldrvps ansible_host=51.195.221.87 ansible_user=ubuntu
+tldrvps ansible_host=51.195.221.87 ansible_user=duke
 
 [tldrbot]
 tldrvps
