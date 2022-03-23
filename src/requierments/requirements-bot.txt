@@ -59,10 +59,9 @@ typing_extensions==4.1.1
 tzdata==2021.5
 tzlocal==4.1
 ujson==5.1.0
-ukparliament==2.5.11
 uritemplate==4.1.1
 urllib3==1.26.8
 uvloop==0.16.0
 websockets==10.2
 yarl==1.7.2
-
+git+https://github.com/TheMasteredPanda/UK-Parliament-Library.git@master#egg=ukparliament
