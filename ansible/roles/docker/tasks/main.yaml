@@ -3,6 +3,11 @@
     name:
       - docker
       - docker-compose
+- name: Pip install Requests
+  pip:
+    name: 
+      - requests 
+      - docker 
 
 - name: create tldr-net network
   docker_network:

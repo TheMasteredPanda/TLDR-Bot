@@ -4,7 +4,7 @@ from typing import Union
 import config
 import discord
 from discord.ext.commands import Context
-from discord.ui.view import View
+from discord.ui import View
 
 from modules import commands
 
