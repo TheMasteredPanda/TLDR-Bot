@@ -28,7 +28,7 @@ MODULES = {
     # "clearance": False,
     "invite_logger": False,
     # "google_drive": False,
-    # "captcha": False,
+    "captcha": False,
     # "leveling_system": False,
     # "ukparl_module": False,
     # "watchlist": False,
