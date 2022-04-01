@@ -675,7 +675,7 @@ class Utility(Cog):
 
         embed.add_field(name="ID", value=member.id, inline=False)
 
-        created_at = datetime.datetime.now() - member.created_at
+        created_at = datetime.datetime.now(datetime.timezone.utc) - member.created_at
         created_at_seconds = int(created_at.total_seconds())
         embed.add_field(
             name="Account Created",
@@ -683,7 +683,7 @@ class Utility(Cog):
             inline=False,
         )
 
-        joined_at = datetime.datetime.now() - member.joined_at
+        joined_at = datetime.datetime.now(datetime.timezone.utc) - member.joined_at
         joined_at_seconds = int(joined_at.total_seconds())
         embed.add_field(
             name="Joined Server",
@@ -692,7 +692,7 @@ class Utility(Cog):
         )
 
         embed.add_field(name="Status", value=str(member.status), inline=False)
-        embed.set_thumbnail(url=member.avatar_url)
+        embed.set_thumbnail(url=member.avatar)
 
         return await ctx.send(embed=embed)
 

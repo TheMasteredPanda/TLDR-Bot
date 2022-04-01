@@ -65,7 +65,7 @@ class Leveling(Cog):
     )
     async def rep(self, ctx: Context, *, member_reason: str = None):
         # check if user has been in server for more than 7 days
-        now_datetime = datetime.datetime.now()
+        now_datetime = datetime.datetime.now(datetime.timezone.utc)
         joined_at = ctx.author.joined_at
         diff = now_datetime - joined_at
         if round(diff.total_seconds()) < 86400 * 7:  # 7 days
@@ -920,7 +920,7 @@ class Leveling(Cog):
 
         rank_embed = await embed_maker.message(
             ctx,
-            footer={"text": str(member), "icon_url": member.avatar_url},
+            footer={"text": str(member), "icon_url": member.avatar},
             author={"name": f"{member.name} - Rank"},
         )
 

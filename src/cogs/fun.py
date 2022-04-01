@@ -1,17 +1,16 @@
+import asyncio
 import json
 import random
-
-import requests
 import re
-import config
-import aiohttp
-import asyncio
-import discord
-
-from modules.utils import get_member
-from modules import commands, embed_maker
-from discord.ext.commands import Cog, command, Context
 from io import BytesIO
+
+import aiohttp
+import config
+import discord
+import requests
+from discord.ext.commands import Cog, Context, command
+from modules import commands, embed_maker
+from modules.utils import get_member
 
 
 class Fun(Cog):
@@ -32,7 +31,7 @@ class Fun(Cog):
             url = ctx.message.attachments[0].url
 
         if source is None and url is None:
-            url = str(ctx.author.avatar_url)
+            url = str(ctx.author.avatar)
             url = url.replace("webp", "png")
         elif url is None:
             # check if source is member

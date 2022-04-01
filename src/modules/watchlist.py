@@ -361,6 +361,9 @@ class Watchlist:
         if not self.bot._ready.is_set():
             return
 
+        if message.guild is None:
+            return
+
         if message.guild.id != config.MAIN_SERVER:
             print("Not in main server.")
             return
