@@ -1107,8 +1107,8 @@ class LevelingMember(LevelingUser):
 
             embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
             embed.description = perks_message
-            embed.set_author(name="New Perks!", icon_url=self.guild.guild.icon_url)
-            embed.set_footer(text=str(self.member), icon_url=self.member.avatar_url)
+            embed.set_author(name="New Perks!", icon_url=self.guild.guild.icon)
+            embed.set_footer(text=str(self.member), icon_url=self.member.avatar)
 
             try:
                 await self.member.send(embed=embed)
@@ -1162,7 +1162,7 @@ class LevelingMember(LevelingUser):
             The percent number, with one decimal point of how close user is to leveling up
         """
         # points needed to gain next level from beginning of user level
-        points_to_level_up = 5 * (user_branch.level ** 2) + 50 * user_branch.level + 100
+        points_to_level_up = 5 * (user_branch.level**2) + 50 * user_branch.level + 100
 
         next_level = user_branch.level + 1
         # total points needed to gain next level
