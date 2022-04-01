@@ -79,7 +79,7 @@ class Fun(Cog):
             extension = split[0]
 
         embed = discord.Embed()
-        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+        embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar)
         embed.set_image(url=f"attachment://pride.{extension}")
         return await ctx.send(
             file=discord.File(fp=image, filename=f"pride.{extension}"), embed=embed
