@@ -38,9 +38,10 @@ class Watchlist:
             )
             settings["modules"]["watchlist"] = self._default_settings
             self._settings_handler.save(settings)
-        self._settings_handler.update(
-            "watchlist", self._default_settings, config.MAIN_SERVER
-        )
+            self._settings_handler.update(
+                "watchlist", self._default_settings, config.MAIN_SERVER
+            )
+
         self._settings = settings["modules"]["watchlist"]
 
     def add_role(self, role: discord.Role = None):
@@ -71,6 +72,7 @@ class Watchlist:
     async def initialize(self):
         """Cache all the existing webhook users."""
         watchlist_members = db.watchlist.find({"guild_id": config.MAIN_SERVER})
+        print(watchlist_members.count())
         watchlist_category = await self.get_watchlist_category(
             self.bot.get_guild(config.MAIN_SERVER)
         )
