@@ -47,7 +47,7 @@ class Fun(Cog):
                     # take source as url
                     url = source
             else:
-                url = str(mem.avatar_url)
+                url = str(mem.avatar)
                 url = url.replace("webp", "png")
 
         if url is None:
