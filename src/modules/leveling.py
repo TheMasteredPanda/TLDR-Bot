@@ -988,8 +988,8 @@ class LevelingMember(LevelingUser):
         # send level up message
         embed = discord.Embed(colour=config.EMBED_COLOUR, timestamp=datetime.now())
         embed.description = reward_text
-        embed.set_author(name="Level Up!", icon_url=self.guild.guild.icon_url)
-        embed.set_footer(text=str(self.member), icon_url=self.member.avatar_url)
+        embed.set_author(name="Level Up!", icon_url=self.guild.guild.icon)
+        embed.set_footer(text=str(self.member), icon_url=self.member.avatar)
 
         # @ user if they have @me enabled
         content = f"<@{self.id}>" if self.settings.at_me else ""

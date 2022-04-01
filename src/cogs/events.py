@@ -179,7 +179,7 @@ class Events(Cog):
                     timestamp=datetime.datetime.now(),
                 )
                 embed.set_author(name="Daily Debate Poll")
-                embed.set_footer(text="Started at", icon_url=guild.icon_url)
+                embed.set_footer(text="Started at", icon_url=guild.icon)
 
                 description += "\n".join(
                     f"\n{e} | **{o}**" for e, o in zip(poll_emotes, poll_options)
@@ -214,7 +214,7 @@ class Events(Cog):
                     embed.set_author(
                         name="Daily Debate - Which statement(s) do you agree with?"
                     )
-                    embed.set_footer(text="Started at", icon_url=guild.icon_url)
+                    embed.set_footer(text="Started at", icon_url=guild.icon)
 
                     description += "\n".join(
                         f"\n{e} | **{o}**" for e, o in topic_options.items()
