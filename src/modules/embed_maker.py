@@ -63,7 +63,7 @@ async def message(
     if author:
         # set icon_url to guild icon if one isn't provided
         icon_url = author["icon_url"] if "icon_url" in author else ctx.guild.icon
-        embed.set_author(name=author["name"], icon=icon_url)
+        embed.set_author(name=author["name"], icon_url=icon_url)
 
     if footer:
         # set icon_url to None if one isn't provided

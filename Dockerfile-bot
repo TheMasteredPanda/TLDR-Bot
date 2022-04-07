@@ -18,6 +18,7 @@ WORKDIR /TLDR-Bot
 
 COPY src/requierments/requirements-bot.txt .
 
+RUN python3.9 -m pip install -U py-cord --pre
 RUN python3.9 -m pip install -r requirements-bot.txt
 
 COPY src/ .

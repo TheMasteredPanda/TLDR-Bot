@@ -607,7 +607,7 @@ class Events(Cog):
             description=description,
             timestamp=datetime.datetime.now(),
         )
-        embed.set_author(name="Rep timer", icon_url=guild.icon_url)
+        embed.set_author(name="Rep timer", icon_url=guild.icon)
         try:
             await member.send(embed=embed)
         except Exception:
