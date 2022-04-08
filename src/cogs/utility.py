@@ -692,7 +692,8 @@ class Utility(Cog):
         )
 
         embed.add_field(name="Status", value=str(member.status), inline=False)
-        embed.set_thumbnail(url=member.avatar)
+        if member.avatar:
+            embed.set_thumbnail(url=member.avatar)
 
         return await ctx.send(embed=embed)
 

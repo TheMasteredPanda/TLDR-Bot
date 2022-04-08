@@ -1264,6 +1264,7 @@ class LevelingSystem:
         ):
             return
 
+        print(f"Message from {message.author.name}: {message.content}")
         leveling_cog = self.bot.get_cog("Leveling")
         await leveling_cog.process_message(message)
 
