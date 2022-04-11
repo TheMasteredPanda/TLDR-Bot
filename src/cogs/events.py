@@ -407,7 +407,7 @@ class Events(Cog):
             embed = discord.Embed(
                 colour=embed_colour, timestamp=datetime.datetime.now()
             )
-            embed.set_footer(text=f"{guild.name}", icon_url=guild.icon_url)
+            embed.set_footer(text=f"{guild.name}", icon_url=guild.icon.url)
 
             pick_count = int(anon_poll_data["pick_count"])
             options_picked_count = (
