@@ -424,7 +424,7 @@ class Events(Cog):
                 timestamp=datetime.datetime.now(),
             )
             embed.set_footer(
-                text=f"You can pick {pick_count} option(s)", icon_url=guild.icon_url
+                text=f"You can pick {pick_count} option(s)", icon_url=guild.icon.url
             )
 
             emote_options = anon_poll_data["options"]
