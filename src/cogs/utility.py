@@ -282,6 +282,7 @@ class Utility(Cog):
 
         # start timer
         # we shall also use the timer to keep track of votes and who voted
+        print(f"Question: {question}")
         self.bot.timers.create(
             guild_id=ctx.guild.id,
             expires=expires,

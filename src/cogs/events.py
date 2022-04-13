@@ -390,6 +390,7 @@ class Events(Cog):
             member = await guild.fetch_member(user_id)
 
         if emote == "🇻":
+            print(anon_poll_data)
             question = anon_poll_data["question"]
 
             # check if poll is restricted to role
