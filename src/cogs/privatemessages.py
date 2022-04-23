@@ -108,7 +108,9 @@ class PrivateMessages(Cog):
                 title=f">{command.name}",
                 timestamp=datetime.now(),
             )
-            embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar_url)
+            embed.set_footer(
+                text=f"{ctx.author}", icon_url=ctx.author.display_avatar.url
+            )
             return await ctx.author.send(embed=embed)
 
         embed_colour = config.EMBED_COLOUR
@@ -119,14 +121,16 @@ class PrivateMessages(Cog):
                 timestamp=datetime.now(),
                 description=error_msg,
             )
-            embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar_url)
+            embed.set_footer(
+                text=f"{ctx.author}", icon_url=ctx.author.display_avatar.url
+            )
             return await ctx.author.send(embed=embed)
 
         main_guild = self.bot.get_guild(config.MAIN_SERVER)
         ticket_embed = discord.Embed(colour=embed_colour, timestamp=datetime.now())
-        ticket_embed.set_footer(text=ctx.author, icon_url=ctx.author.avatar_url)
+        ticket_embed.set_footer(text=ctx.author, icon_url=ctx.author.display_avatar.url)
         ticket_embed.set_author(
-            name="New Ticket - Reported Issue(s)", icon_url=main_guild.icon_url
+            name="New Ticket - Reported Issue(s)", icon_url=main_guild.icon.url
         )
         ticket_embed.add_field(
             name=">Reporter", value=f"<@{ctx.author.id}>", inline=False
