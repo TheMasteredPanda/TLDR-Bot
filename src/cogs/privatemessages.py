@@ -85,9 +85,11 @@ class PrivateMessages(Cog):
                     colour=embed_colour, timestamp=datetime.now(), description=cmd_help
                 )
                 embed.set_author(
-                    name=f"Help - {cmd.name}", icon_url=self.bot.user.avatar_url
+                    name=f"Help - {cmd.name}", icon_url=self.bot.user.display_avatar.url
                 )
-                embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar_url)
+                embed.set_footer(
+                    text=f"{ctx.author}", icon_url=ctx.author.display_avatar.url
+                )
                 return await ctx.author.send(embed=embed)
             else:
                 embed = discord.Embed(
@@ -216,7 +218,7 @@ class PrivateMessages(Cog):
         embed = discord.Embed(
             colour=discord.Colour.green(), timestamp=datetime.now(), description=msg
         )
-        embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.avatar_url)
+        embed.set_footer(text=f"{ctx.author}", icon_url=ctx.author.display_avatar.url)
         await ctx.author.send(embed=embed)
 
         # adds to tickets document
