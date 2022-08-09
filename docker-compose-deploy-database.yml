@@ -11,7 +11,7 @@ services:
       - ./.env
     environment:
       MONGO_INITDB_ROOT_USERNAME: tldrdb
-      MONGO_INITDB_ROOT_PASSWORD: bt4C63DRkGMM7LI4p
+      MONGO_INITDB_ROOT_PASSWORD: ${database_password}
       MONGO_INITDB_DATABASE: admin
     ports:
       - "27017:27017"
