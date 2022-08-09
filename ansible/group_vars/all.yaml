@@ -7,9 +7,6 @@ image_processor_repo: https://github.com/TheMasteredPanda/image_processor
 #  30346638316631343331396532376339343064666335626532643231343361666130333734656437
 #  3662646438656537320a643330336331393239653838356536393933326363663764663338613334
 #  3861
-duckdns_domain: tldrcommunity
-duckdns_token: "" 
-certbot_email: hattyot@gmail.com
 database_username: tldrdb
 database_password: !vault |
   $ANSIBLE_VAULT;1.1;AES256
