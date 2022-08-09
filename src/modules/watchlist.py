@@ -365,7 +365,6 @@ class Watchlist:
             return
 
         if message.guild.id != config.MAIN_SERVER:
-            print("Not in main server.")
             return
 
         ctx = await self.bot.get_context(message)

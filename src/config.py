@@ -25,7 +25,7 @@ SLACK_REDIRECT_DOMAIN = config.get("SLACK_REDIRECT_DOMAIN")
 EMBED_COLOUR = int(config.get("EMBED_COLOUR"), 16)
 
 MODULES = {
-    # "clearance": False,
+    "clearance": False,
     "invite_logger": False,
     # "google_drive": False,
     # "captcha": False,

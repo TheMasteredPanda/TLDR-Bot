@@ -141,3 +141,4 @@ vault_passwd.txt
 src/service_account.json
 src/.env
 bot-env
+tldr_ansible_password.txt

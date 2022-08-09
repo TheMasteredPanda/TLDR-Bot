@@ -347,4 +347,5 @@ class TLDR(Bot):
 if __name__ == "__main__":
     logger = modules.utils.get_logger()
     logger.info("Starting TLDR Bot.")
+    print(config.BOT_TOKEN)
     TLDR().run(config.BOT_TOKEN)

@@ -23,6 +23,8 @@ class Clearance:
         self.bot.add_listener(self.on_ready, "on_ready")
 
         self.bot.logger.debug(f"Downloading clearance spreadsheet")
+        print('Clerance Spreadsheet ID:')
+        print(config.CLEARANCE_SPREADSHEET_ID)
 
         if self.bot.google_drive:
             self.clearance_spreadsheet = self.bot.google_drive.download_spreadsheet(
