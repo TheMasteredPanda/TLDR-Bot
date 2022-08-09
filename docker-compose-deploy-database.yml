@@ -10,8 +10,8 @@ services:
     env_file:
       - ./.env
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${DATABASE_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${DATABASE_PASSWORD}
+      MONGO_INITDB_ROOT_USERNAME: tldrdb
+      MONGO_INITDB_ROOT_PASSWORD: bt4C63DRkGMM7LI4p
       MONGO_INITDB_DATABASE: admin
     ports:
       - "27017:27017"
