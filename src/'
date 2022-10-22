@@ -4,8 +4,6 @@ import math
 import time
 from typing import Union
 
-import bs4
-import config
 import dateparser
 import discord
 from bot import TLDR
@@ -13,7 +11,6 @@ from bson import ObjectId, json_util
 from discord.ext.commands import Cog, Context, command, group
 from modules import (commands, database, embed_maker, format_time,
                      reaction_menus)
-from modules.moderation import Case
 from modules.reaction_menus import BookMenu
 from modules.utils import (ParseArgs, get_guild_role, get_member,
                            get_member_by_id, get_member_from_string)
@@ -972,47 +969,6 @@ class Mod(Cog):
         )
         return embed
 
-    def cg_to_string(
-        self, tags: bs4.element.Tag, asked_for: list[str], parent: str = ""
-    ):
-        spacer = f'|{"-" * 4}'
-        string = ""
-        parent_count = len(parent.split(".")) if parent else 0
-        asked_for_cg_number = (
-            asked_for[parent_count] if len(asked_for) > parent_count else None
-        )
-
-        for i, cg in enumerate(filter(lambda cg: type(cg) == bs4.element.Tag, tags)):
-            contents = cg.contents
-
-            cg_number = str(i + 1)
-            if asked_for_cg_number is None or asked_for_cg_number == cg_number:
-                new_parent = f'{parent + ("." if parent else "")}{cg_number}'
-                if len(contents) > 1:
-                    sub_cg = self.cg_to_string(contents[1], asked_for, new_parent)
-                    string += f"{spacer * parent_count}`{new_parent}.`: {contents[0]}"
-                    string += f"{sub_cg}"
-                else:
-                    string += (
-                        f"{spacer * parent_count}`{new_parent}.`: {cg.contents[0]}\n"
-                    )
-
-        return string
-
-    async def get_cg(self, asked_for: list[str]):
-        # This session needs to be gotten in this weird way cause it's a double underscore variable
-        aiohttp_session = getattr(self.bot.http, "_HTTPClient__session")
-        async with aiohttp_session.get(
-            "https://tldrnews.co.uk/discord-community-guidelines/"
-        ) as resp:
-            content = await resp.text()
-
-            soup = bs4.BeautifulSoup(content, "html.parser")
-            entry = soup.find("div", {"class": "entry-content"})
-            cg_list = [*entry.children][15]
-
-            return self.cg_to_string(cg_list, asked_for)
-
     @command(
         help="Moderation reprimand command. Used to establish a qorum before exacting punishment.",
         usage="reprimand (username) (cg id(s) violated) (link(s) to offending messages)",
@@ -1021,64 +977,19 @@ class Mod(Cog):
     )
     async def reprimand(self, ctx: Context, *, args: Union[ParseArgs, str] = None):
         if args is None or args["pre"] == "":
-            return await embed_maker.error(ctx, "No parameters given.")
+            await embed_maker.error(ctx, "No parameters given.")
+            return
 
         split_args = args["pre"].split(" ")
 
+        print(split_args)
         result = await get_member_from_string(ctx, split_args[0])
 
         if result[0] is None:
-            return await embed_maker.error(
-                ctx, f"Member {result[1]} isn't on the guild"
-            )
+            await embed_maker.error(ctx, f"Member {result[1]} isn't on the guild")
+            return
 
-        cg_result = await self.get_cg(split_args[1].split("."))
 
-        if not cg_result:
-            return await embed_maker.error(ctx, f"CG {split_args[1]} doesn't exist.")
-
-        user = result[0]
-
-        cases = self.bot.moderation.cases.get_cases(ctx.guild.id, member_id=user.id)
-
-        @staticmethod
-        async def construct_cases_embed(
-            ctx: Context,
-            cases: list[Case],
-            masx_page_num: int,
-            page_limit: int,
-            *,
-            page: int,
-        ):
-            pass
-
-        async def voting_embed(user: discord.Member):
-            description = f"**Community Guideline Possibily Breached**\n{cg_result}\n\nPoll\n:one: | None\n:two: | Informal\n:three: | 1 Formal\n:four: | 2 Formals\n:five: | Ban\n:six: | Abstain"
-            embed = await embed_maker.message(ctx, description=description)
-            msg: discord.Message = await ctx.send(embed=embed)
-            await msg.add_reaction("1️⃣")
-            await msg.add_reaction("2️⃣")
-            await msg.add_reaction("3️⃣")
-            await msg.add_reaction("4️⃣")
-            await msg.add_reaction("5️⃣")
-            return msg
-
-        msg = await voting_embed(user)
-
-        print(len(msg.reactions))
-        for reaction in msg.reactions:
-            print("Iterating")
-            async for user in reaction.users():
-                print(user.id)
-        return
-
-        embed = await embed_maker.message(
-            ctx,
-            description=":one: | None\n:two: | Informal\n:three:|1 Formal\n:four:|2 Formals\n:five:|Ban\n:six:|Abstain",
-            title=f"Reprimand for {user.name} for accused breach of cg {split_args[1]}",
-        )
-
-        await ctx.send(embed=embed)
 
     @group(
         invoke_without_command=True,

@@ -288,6 +288,37 @@ class Connection:
                 'thread_id': :class:`int`
                 'renamedpoll': :class:`bool`
             }
+    reprimands: :class:`pymongo.collection.Collection`
+        The collection that holds data reguarding ongoing reprimands for the reprimand module.
+            {
+                'reprimand_id': :class:`int`
+                'accused_id': :class:`int`
+                evidence_links: [
+                    'http://evidencehere.com/fdjaklfjadsl;kf'
+                ]
+                'cgs': [
+                    {
+                        'cg_id': :class:str:
+                        'ayes': []
+                        'noes': []
+                        'abstains': []
+                    }
+                'punishment_poll': {
+                        'cg_ids': []
+                        'deadline': :class:`int`
+                        'results: [
+                            {
+                                'informal': [],
+                                'warning': [],
+                                '2warnings': [],
+                                'mute': []
+                                'ban': []
+                                'abstain': []
+                            }
+                        ]
+                    }
+                ]
+            }
     """
 
     def __init__(self):
@@ -323,6 +354,7 @@ class Connection:
         self.insta_listeners = self.db["insta_listeners"]
         self.threading_profiles = self.db["threading_profiles"]
         self.threading_threads = self.db["threading_threads"]
+        self.reprimands = self.db["reprimands"]
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})
