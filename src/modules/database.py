@@ -209,6 +209,7 @@ class Connection:
                 'updated_at': :class:`int`
             }
 
+
     webhooks: :class:`pymongo.collection.Collection`
         The webhooks collection
             {
@@ -293,30 +294,20 @@ class Connection:
             {
                 'reprimand_id': :class:`int`
                 'accused_id': :class:`int`
-                evidence_links: [
+                'created_at': :class:`datetime`
+                'updated_at': :class:`datetime`
+                'countdown': :class:`int`
+                'evidence_links': [
                     'http://evidencehere.com/fdjaklfjadsl;kf'
-                ]
-                'cgs': [
+                ],
+                'cg_polls': [
                     {
-                        'cg_id': :class:str:
-                        'ayes': []
-                        'noes': []
-                        'abstains': []
+                        'cg_id': :class:`str`:,
+                        'message_id': :class:`str`
                     }
-                'punishment_poll': {
-                        'cg_ids': []
-                        'deadline': :class:`int`
-                        'results: [
-                            {
-                                'informal': [],
-                                'warning': [],
-                                '2warnings': [],
-                                'mute': []
-                                'ban': []
-                                'abstain': []
-                            }
-                        ]
-                    }
+
+                ],
+                'punishment_poll': :class:`str`
                 ]
             }
     """

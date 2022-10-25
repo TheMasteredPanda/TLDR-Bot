@@ -1,14 +1,23 @@
+import json
+import random
 import time
 from typing import Union
 
 import config
 import discord
 from bot import TLDR
+from bson import json_util
+from discord.channel import TextChannel
+from discord.enums import ChannelType
 from discord.ext.commands import Bot, bot_has_any_role
 from discord.message import Message
+from discord.threads import Thread
 from pyasn1.type.univ import Null
+from pymongo.collection import Collection
 
+import modules.database as database
 from modules import database
+from modules.timers import loop
 from modules.utils import SettingsHandler
 
 db = database.get_connection()
@@ -106,63 +115,159 @@ class Cases:
 
         return Case(case_data)
 
+class Poll:
+    async def load(self):
+        pass
 
-class CGPoll:
-    def __init__(self, reprimand, cg_id: str):
+    def get_ayes(self) -> int:
+        pass
+
+    def get_noes(self) -> int:
+        pass
+
+
+class CGPoll(Poll):
+    def __init__(self, reprimand, **kwargs):
         self._reprimand = reprimand
         self._reprimand_module = reprimand._get_module()
-        self._cg_id = cg_id
-        self._message: Union[Message, None] = None
 
-    async def start(self):
-        cg_description = self._reprimand_module.get_bot().moderation.get_cg(self._cg_id)
-        cg_poll_embed = self._reprimand_module.get_settings()["messages"]["cg_poll_embed"]
-        accused: discord.Member = self._reprimand_module.get_accused()
-        embed = discord.Embed(
-            colour=config.EMBED_COLOUR,
-            description=cg_poll_embed["body"].replace(
-                "{cg_description}", cg_description
-            ),
-            title=cg_poll_embed["header"].replace(
-                "{user}", f"{accused.name}#{accused.discriminator}"
-            ),
-        )
-        self._message: Message = await self._reprimand_module.get_voting_channel().send(embed=embed)
-        await self._message.add_reaction("👍")
-        await self._message.add_reaction("👎")
+        if 'cg_id' in kwargs.keys():
+            self._cg_id = kwargs['cg_id']
+        else:
+            if kwargs['cg_data']:
+                raise Exception("cg_id nor cg_data was passed in CGPoll instantiation.")
 
-class PunishmentPoll:
-    def __init__(self, bot, reprimand, cg_id: str = None):
+            self._cg_id = kwargs['cg_data']['cg_id']
 
-class Reprimand:
-    def __init__(
-        self,
-        module,
-        accused: discord.Member,
-        cgs_breached: list[str],
-        evidence_links: list[str],
-    ):
-        self._module = module
-        self._accused = accused
-        self._cgs = cgs_breached
-        self._evidence_links = evidence_links
-        self._settings = module.get_config()
-        self._polls = []
+        self._thread: TextChannel = self._reprimand._get_thread()
+        self._message_id = kwargs['cg_data']['message_id'] if 'message_id' in kwargs['cg_data'].keys() else None
+        self._message: Message = None
 
-        if len(self._cgs) > 1:
-            for cg_id in self._cgs:
-                self._polls.append(CGPoll(self, cg_id))
+    async def load(self):
+        if self._message_id:
+            self._message = await self._thread.fetch_message(self._message_id)
+
+        if self._message is None:
+            cg_description = self._reprimand_module.get_bot().moderation.get_cg(self._cg_id)
+            cg_poll_embed = self._reprimand_module.get_settings()["messages"][
+                "cg_poll_embed"
+            ]
+            accused: discord.Member = self._reprimand_module.get_accused()
+            embed = discord.Embed(
+                colour=config.EMBED_COLOUR,
+                description=cg_poll_embed["body"].replace(
+                    "{cg_description}", cg_description
+                ),
+                title=cg_poll_embed["header"].replace(
+                    "{user}", f"{accused.name}#{accused.discriminator}"
+                ),
+            )
+            self._message: Message = await self._reprimand_module.get_voting_channel().send(
+                embed=embed
+            )
+            await self._message.add_reaction("👍")
+            await self._message.add_reaction("👎")
+
+    def get_message(self):
+        return self._message
+
+    def get_cg_id(self):
+        return self._cg_id
+
+    def get_ayes(self) -> int:
+        reactions = self._message.reactions
+
+        for reaction in reactions:
+            if reaction.emoji == "👍":
+                return reaction.count
+        return 0
+
+    def get_noes(self) -> int:
+        reactions = self._message.reactions
+
+        for reaction in reactions:
+
+            if reaction.emoji == "👎":
+                return reaction.count
+        return 0
+
+class PunishmentPoll(Poll):
+    def __init__(self, reprimand, **kwargs):
+        self._reprimand = reprimand
+        self._cg_id = kwargs['cg_id']
+        self._message_id = kwargs['message_id']
+
+    async def load(self):
+        thread: Thread = self._reprimand._get_thread()
+
+        if self._message_id:
+            self._message = await thread.fetch_message(self._message_id)
         else:
             pass
+            #Construct punishment embed here.
+
+    def get_ayes(self) -> int:
+        reactions = self._message.reactions
+
+        for reaction in reactions:
+            if reaction.emoji == "👍":
+                return reaction.count
+        return 0
+
+    def get_notes(self) -> int:
+        reactions = self._message.reactions
+
+        for reaction in reactions:
+            if reaction.emoji == "👎":
+                return reaction.count
+        return 0
+
+class Reprimand:
+    def __init__(self, module)
+        self._module = module
+        self._settings = module.get_config()
+        self._polls: list [Poll] = []
+
+    async def load(self, **kwargs):
+        bot = self._module.get_bot()
+        self._accused: discord.Member = kwargs['accused'] if 'accused' in kwargs.keys() else bot.get_guild(config.MAIN_SERVER).get_member(kwargs['accused_id'])
+        self._channel: TextChannel = self._module.get_channel()
+
+        if 'thread_id' not in kwargs.keys():
+            self._thread = await self._channel.create_thread(f"{self._accused.name}_{random.randint(0, 4)}", type=ChannelType.text)
+        else:
+            self._thread = self._channel.get_thread(kwargs['thread_id'])
+
+
+        self._polls.append(PunishmentPoll(self, kwargs['punishment_poll']) if 'punishment_poll' in kwargs.keys() else PunishmentPoll(self))
+        if 'cg_polls' in kwargs.keys():
+            for cg_poll_data in kwargs['cg_polls']:
+                self._polls.append(CGPoll(self, cg_data=cg_poll_data))
+
+        if 'cg_ids' in kwargs.keys():
+            for cg_id in kwargs['cg_ids']:
+                self._polls.append(CGPoll(self, cg_id=cg_id))
+
+        for poll in self._polls:
+            await poll.load()
+
+
+    def start(self):
+        self.countdown_loop.start()
+
+    @loop(seconds=1)
+    async def countdown_loop(self):
+        pass
 
     def _get_module(self):
         return self._module
 
-    def get_accused(self) -> Member:
+    def _get_thread(self) -> Thread:
+        return self._thread
+
+    def get_accused(self) -> discord.Member:
         return self._accused
 
-    def start(self):
-        pass
 
     def is_multi_cgs(self):
         return len(self._cgs) > 1
@@ -175,12 +280,11 @@ class ReprimandModule:
     def __init__(self, bot):
         self._bot: Bot = bot
         self._bot.logger.info("Reprimand Module has been initiated.")
-        self._reprimand_voting_channel = None
-        self._reprimand_discussion_channel = None
+        self._reprimand_channel: Union[TextChannel, None] = None
         self._settings_handler: SettingsHandler = bot.settings_handler
         self._logger = bot._logger
+        self._db = database.get_connection()
         self._live_reprimands: list[Reprimand] = []
-
 
         self._default_settings = {
             "punishments": {
@@ -205,10 +309,7 @@ class ReprimandModule:
                     "punishment_command": "",
                 },
             },
-            "channels": {
-                "reprimand_voting_channel": "",
-                "reprimand_discussion_channel": ""
-                },
+            "reprimand_channel": "",
             "messages": {
                 "case_log_messages": {},
                 "message_to_accused": {},
@@ -241,28 +342,32 @@ class ReprimandModule:
             "reprimand", self._default_settings, config.MAIN_SERVER
         )
 
-    async def _get_bot(self):
+    def _get_bot(self):
         return self._bot
+
+    async def load(self):
+        reprimand_collection = self._db.reprimands
+
+        for reprimand_data in reprimand_collection:
+            reprimand = Reprimand(self, reprimand_data)
+            await reprimand.start()
+            self._live_reprimands.append(reprimand)
 
     async def on_ready(self):
         guild = self._bot.get_guild(config.MAIN_SERVER)
-        channels = settings['channels']
+        channels = settings["channels"]
 
-        if channels['reprimand_voting_channel'] == "":
-            self._bot.logger.info("Reprimand Voting Channel not set.")
+        if channels["reprimand_channel"] == "":
+            self._bot.logger.info("Reprimand Channel not set.")
         else:
-            self._reprimand_voting_channel = guild.get_channel(channels['reprimand_voting_channel'])
+            self._reprimand_voting_channel = guild.get_channel(
+                channels["reprimand_channel"]
+            )
 
-        if channels['reprimand_discussion_channel'] == "":
-            self._bot.logger.info("Reprimand Discussion Channel not set.")
-        else:
-            self._reprimand_discussion_channel = guild.get_channel(channels['reprimand_discussion_channel'])
+        await self.load()
 
-    async def get_voting_channel(self):
-        return self._reprimand_voting_channel
-
-    async def get_discussion_channel(self):
-        return self._reprimand_discussion_channel
+    def get_channel(self):
+        return self._reprimand_channel
 
     def get_config(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][
@@ -272,7 +377,7 @@ class ReprimandModule:
     def create_reprimand(
         self, accused: discord.Member, cg_ids: list[str], evidence_links: list[str]
     ) -> Reprimand:
-        reprimand = Reprimand(self._bot, self, accused, cg_ids, evidence_links)
+        reprimand = Reprimand(self, accused=accused, cg_ids=cg_ids, evidence_links=evidence_links)
         self._live_reprimands.append(reprimand)
         return reprimand
 
