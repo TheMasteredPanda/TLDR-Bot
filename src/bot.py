@@ -108,6 +108,11 @@ class TLDR(Bot):
             if self.enabled_modules.get("moderation", True)
             else None
         )
+        self.reprimand = (
+            modules.moderation.ReprimandModule(self)
+            if self.enabled_modules.get("reprimand", True)
+            else None
+        )
         self.ukparl_module = (
             modules.ukparliament.UKParliamentModule(self)
             if self.enabled_modules.get("ukparl_module", True)

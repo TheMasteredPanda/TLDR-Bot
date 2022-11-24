@@ -1,3 +1,4 @@
+import copy
 import datetime
 import functools
 import math
@@ -1013,72 +1014,116 @@ class Mod(Cog):
 
             return self.cg_to_string(cg_list, asked_for)
 
-    @command(
+    @group(
         help="Moderation reprimand command. Used to establish a qorum before exacting punishment.",
         usage="reprimand (username) (cg id(s) violated) (link(s) to offending messages)",
-        examples=["reprimand TheMasteredPanda 1.6 http://imgur.com/evidenceoobad"],
+        examples=["reprimand poll TheMasteredPanda 1.6 evidence_link,evidence_link"],
+        cls=commands.Group,
+        invoke_without_command=True,
+    )
+    async def reprimand(self, ctx: Context):
+        return await embed_maker.command_error(ctx)
+
+    @reprimand.command(
+        help="Reprimand poll command. Used to establish a consensus on user breached CGs.",
+        usage="reprimand poll (username) (cg ids) (evidence links)",
+        name="poll",
+        examples=[
+            "reprimand poll TheMasteredPanda 1.6,1.15.6 evidence_link,evidence_link"
+        ],
         cls=commands.Command,
     )
-    async def reprimand(self, ctx: Context, *, args: Union[ParseArgs, str] = None):
+    async def reprimand_poll(self, ctx: Context, *, args: Union[ParseArgs, str] = None):
         if args is None or args["pre"] == "":
-            return await embed_maker.error(ctx, "No parameters given.")
+            return await embed_maker.command_error(ctx)
+
+        settings = self.bot.reprimand.get_settings()
+
+        if settings["reprimand_channel"] == "":
+            return await embed_maker.error(ctx, "Reprimand channel not set.")
 
         split_args = args["pre"].split(" ")
-
         result = await get_member_from_string(ctx, split_args[0])
 
-        if result[0] is None:
+        if not result[0]:
+            return await embed_maker.error(ctx, f"Can't find user {result[1]}")
+
+        if len(split_args) < 3:
             return await embed_maker.error(
-                ctx, f"Member {result[1]} isn't on the guild"
+                ctx,
+                f"Requires three arguments. Username, cg(s) violated, and image evidence links.",
             )
 
-        cg_result = await self.get_cg(split_args[1].split("."))
+        cg_ids = split_args[1].split(",")
 
-        if not cg_result:
-            return await embed_maker.error(ctx, f"CG {split_args[1]} doesn't exist.")
+        invalid_cgs = []
+        for cg_id in cg_ids:
+            if self.bot.moderation.is_valid_cg(cg_id):
+                continue
+            invalid_cgs.append(cg_id)
 
-        user = result[0]
+        if len(invalid_cgs) > 0:
+            return await embed_maker.error(
+                ctx, f"The following aren't valid CG IDs: {', '.join(invalid_cgs)}."
+            )
 
-        cases = self.bot.moderation.cases.get_cases(ctx.guild.id, member_id=user.id)
+        evidence_links = split_args[2].split(",")
 
-        @staticmethod
-        async def construct_cases_embed(
-            ctx: Context,
-            cases: list[Case],
-            masx_page_num: int,
-            page_limit: int,
-            *,
-            page: int,
-        ):
-            pass
-
-        async def voting_embed(user: discord.Member):
-            description = f"**Community Guideline Possibily Breached**\n{cg_result}\n\nPoll\n:one: | None\n:two: | Informal\n:three: | 1 Formal\n:four: | 2 Formals\n:five: | Ban\n:six: | Abstain"
-            embed = await embed_maker.message(ctx, description=description)
-            msg: discord.Message = await ctx.send(embed=embed)
-            await msg.add_reaction("1️⃣")
-            await msg.add_reaction("2️⃣")
-            await msg.add_reaction("3️⃣")
-            await msg.add_reaction("4️⃣")
-            await msg.add_reaction("5️⃣")
-            return msg
-
-        msg = await voting_embed(user)
-
-        print(len(msg.reactions))
-        for reaction in msg.reactions:
-            print("Iterating")
-            async for user in reaction.users():
-                print(user.id)
-        return
-
-        embed = await embed_maker.message(
-            ctx,
-            description=":one: | None\n:two: | Informal\n:three:|1 Formal\n:four:|2 Formals\n:five:|Ban\n:six:|Abstain",
-            title=f"Reprimand for {user.name} for accused breach of cg {split_args[1]}",
+        reprimand = await self.bot.reprimand.create_reprimand(
+            result[0], cg_ids, evidence_links
         )
 
-        await ctx.send(embed=embed)
+    @reprimand.group(
+        help="Reprimand Configuration Command. Used to configure the Reprimand module. Executing this command only will return the modules config.",
+        usage="reprimand config (subcommand)",
+        examples=["reprimand config set"],
+        name="config",
+        cls=commands.Group,
+        invoke_without_command=True,
+    )
+    async def reprimand_config(self, ctx: Context):
+        config_copy = copy.deepcopy(self.bot.reprimand.get_settings())
+        config_copy.pop("punishments")
+
+        return await embed_maker.message(
+            ctx,
+            description=f"```{json_util.dumps(config_copy, indent=4)}```",
+            title="Reprimand Settings",
+            send=True,
+        )
+
+    @reprimand_config.command(
+        help="Set a configuration value for the Reprimand module.",
+        usage="reprimand config set",
+        examples=["reprimand config set (config name) (config value)"],
+        name="set",
+        cls=commands.Command,
+    )
+    async def reprimand_config_set(
+        self, ctx: Context, *, args: Union[ParseArgs, str] = ""
+    ):
+        if args["pre"] != "":
+            split_pre = args["pre"].split(" ")
+            args["path"] = split_pre[0]
+            args["value"] = " ".join(split_pre[1:])
+        else:
+            if args["path"] is None:
+                return await embed_maker.command_error(ctx, "path")
+
+            if args["value"] is None:
+                return await embed_maker.command_error(ctx, "value")
+
+        await self.bot.reprimand.set_setting(
+            args["path"],
+            args["value"] if args["value"].isnumeric() is False else int(args["value"]),
+        )
+
+        await embed_maker.message(
+            ctx,
+            description=f"Set value {args['value']} on setting {args['path']}",
+            title="Changed Setting",
+            send=True,
+        )
 
     @group(
         invoke_without_command=True,

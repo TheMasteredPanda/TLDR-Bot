@@ -30,9 +30,8 @@ class Events(Cog):
         if not self.bot.leveling_system:
             self.bot.left_check.set()
 
-        if self.bot.moderation:
-            await self.bot.moderation.parse_cgs()
-            await self.bot.moderation.reprimand.on_ready()
+        if self.bot.reprimand:
+            await self.bot.reprimand.on_ready()
 
         self.bot.logger.info(f"{self.bot.user} is ready")
 
