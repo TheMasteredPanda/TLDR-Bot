@@ -203,23 +203,28 @@ class CGPoll(Poll):
 
 
 class PunishmentPoll(Poll):
-    def __init__(self, reprimand, **kwargs):
+    def __init__(self, reprimand):
         self._reprimand = reprimand
         self._settings = reprimand._get_module().get_settings()
         self._message: Union[discord.Message, None] = None
 
     async def load(self, **kwargs):
+        print("Loading Punishement Poll.")
         thread: Thread = self._reprimand._get_thread()
 
-        if self._message_id:
-            self._message = await thread.fetch_message(self._message_id)
+        if "message_id" in kwargs.keys():
+            print("Kwargs has message id.")
+            self._message = await thread.fetch_message(kwargs["message_id"])
         else:
+            print("Kwargs doesn't have message id.")
             punishment_embed_msgs = self._settings["messages"]["punishment_poll_embed"]
             punishment_entry = punishment_embed_msgs["punishment_entry"]
             punishments = self._settings["punishments"]
+
             desc = ""
 
-            for name, entry in punishments:
+            print(f"Puishments: {','.join(punishments.keys())}")
+            for name, entry in punishments.items():
                 desc = desc + punishment_entry.replace(
                     "{emoji}", entry["emoji"]
                 ).replace("{name}", name).replace(
@@ -281,11 +286,21 @@ class Reprimand:
 
         if "thread_id" not in kwargs.keys():
             self._thread = await self._channel.create_thread(
-                name=f"{self._accused.name}#{self._accused.discriminator}",
+                name=f"{self._accused.name} {self._accused.discriminator}",
                 type=ChannelType.public_thread,
             )
         else:
             self._thread = self._channel.get_thread(kwargs["thread_id"])
+
+        # This part is for new Reprimand threads, not existing ones being loaded.
+        p_poll = PunishmentPoll(self)
+        await p_poll.load()
+
+        return
+        if "cg_ids" in kwargs.keys():
+            if len(kwargs["cg_ids"]) > 1:
+                for cg_id in kwargs["cg_ids"]:
+                    self._polls.append(CGPoll(self, cg_id=cg_id))
 
         return
         self._polls.append(
@@ -293,7 +308,7 @@ class Reprimand:
             if "punishment_poll" in kwargs.keys()
             else PunishmentPoll(self)
         )
-        if "cg_polls" in kwargs.keys():
+        if "cg_polls" in len(kwargs.keys()) > 1:
             for cg_poll_data in kwargs["cg_polls"]:
                 self._polls.append(CGPoll(self, cg_data=cg_poll_data))
 
@@ -341,17 +356,21 @@ class ReprimandModule:
             "punishments": {
                 "informal": {
                     "description": "An informal warning, often a word said to them thorough a ticket or direct messages. This form of punishment doesn't appear on their record.",
-                    "short_description": "",
+                    "short_description": "Informal warning.",
                     "emoji": "",
-                    "punishment_type": "",
+                    "punishment_type": "WARNING",
                     "punishment_duration": "",
                 },
                 "1formal": {
                     "description": "A formal warning. Unlike informal warnings this does appear on their record, and is given thorough the bot to the user on a ticket or thorough DMs",
-                    "punishment_command": "",
+                    "emoji": "",
+                    "punishment_type": "WARNING",
+                    "short_description": "Formal warning.",
+                    "punishment_duration": "",
                 },
                 "2formal": {
                     "description": "Two formal warnings",
+                    "short_description": "Two formal warnings.",
                     "punishment_command": "",
                 },
                 "mute": {
