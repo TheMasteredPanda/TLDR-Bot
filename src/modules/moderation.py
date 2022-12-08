@@ -129,54 +129,46 @@ class Poll:
     def get_noes(self) -> int:
         pass
 
+    def tick(self, remaining_seconds: int):
+        pass
+
 
 class CGPoll(Poll):
-    def __init__(self, reprimand, **kwargs):
+    def __init__(self, reprimand):
         self._reprimand = reprimand
         self._reprimand_module = reprimand._get_module()
-
-        if "cg_id" in kwargs.keys():
-            self._cg_id = kwargs["cg_id"]
-        else:
-            if kwargs["cg_data"]:
-                raise Exception("cg_id nor cg_data was passed in CGPoll instantiation.")
-
-            self._cg_id = kwargs["cg_data"]["cg_id"]
-
         self._thread: TextChannel = self._reprimand._get_thread()
-        self._message_id = (
-            kwargs["cg_data"]["message_id"]
-            if "message_id" in kwargs["cg_data"].keys()
-            else None
-        )
         self._message: Message = None
 
-    async def load(self):
-        if self._message_id:
-            self._message = await self._thread.fetch_message(self._message_id)
+    async def load(self, **kwargs):
+        if "cg_id" in kwargs.keys():
+            self._cg_id = kwargs["cg_id"]
 
-        if self._message is None:
-            cg_description = self._reprimand_module.get_bot().moderation.get_cg(
-                self._cg_id
-            )
-            cg_poll_embed = self._reprimand_module.get_settings()["messages"][
-                "cg_poll_embed"
-            ]
-            accused: discord.Member = self._reprimand_module.get_accused()
-            embed = discord.Embed(
-                colour=config.EMBED_COLOUR,
-                description=cg_poll_embed["body"].replace(
-                    "{cg_description}", cg_description
-                ),
-                title=cg_poll_embed["title"].replace(
-                    "{user}", f"{accused.name}#{accused.discriminator}"
-                ),
-            )
-            self._message: Message = (
-                await self._reprimand_module.get_voting_channel().send(embed=embed)
-            )
-            await self._message.add_reaction("👍")
-            await self._message.add_reaction("👎")
+        cg_poll_embed = self._reprimand_module.get_settings()["messages"][
+            "cg_poll_embed"
+        ]
+        accused: discord.Member = self._reprimand.get_accused()
+        parsed_cgs = self._reprimand_module._get_bot().moderation.get_parsed_cgs()
+        selected_cgs = {}
+        for key in parsed_cgs.keys():
+            if self._cg_id.startswith(key):
+                selected_cgs[key] = parsed_cgs[key]
+
+        desc = ""
+
+        for key, value in selected_cgs.items():
+            desc = desc + f"`{key}` {value}"
+
+        embed = discord.Embed(
+            colour=config.EMBED_COLOUR,
+            description=cg_poll_embed["body"].replace("{cg_description}", desc),
+            title=cg_poll_embed["title"]
+            .replace("{cg_id}", self._cg_id)
+            .replace("{user}", f"{accused.name}#{accused.discriminator}"),
+        )
+        self._message: Message = await self._reprimand._get_thread().send(embed=embed)
+        await self._message.add_reaction("👍")
+        await self._message.add_reaction("👎")
 
     def get_message(self):
         return self._message
@@ -189,7 +181,7 @@ class CGPoll(Poll):
 
         for reaction in reactions:
             if reaction.emoji == "👍":
-                return reaction.count
+                return reaction.count  # Accounting for the bot emoji.
         return 0
 
     def get_noes(self) -> int:
@@ -198,7 +190,7 @@ class CGPoll(Poll):
         for reaction in reactions:
 
             if reaction.emoji == "👎":
-                return reaction.count
+                return reaction.count - 1  # Accounting for the bot emoji.
         return 0
 
 
@@ -209,42 +201,76 @@ class PunishmentPoll(Poll):
         self._message: Union[discord.Message, None] = None
 
     async def load(self, **kwargs):
-        print("Loading Punishement Poll.")
         thread: Thread = self._reprimand._get_thread()
 
         if "message_id" in kwargs.keys():
-            print("Kwargs has message id.")
             self._message = await thread.fetch_message(kwargs["message_id"])
         else:
-            print("Kwargs doesn't have message id.")
             punishment_embed_msgs = self._settings["messages"]["punishment_poll_embed"]
             punishment_entry = punishment_embed_msgs["punishment_entry"]
             punishments = self._settings["punishments"]
 
             desc = ""
 
-            print(f"Puishments: {','.join(punishments.keys())}")
-            for name, entry in punishments.items():
-                desc = desc + punishment_entry.replace(
-                    "{emoji}", entry["emoji"]
-                ).replace("{name}", name).replace(
-                    "{short_description}", entry["short_description"]
-                ).replace(
-                    "{type}", entry["punishment_type"]
+            for p_id, entry in punishments.items():
+                desc = (
+                    desc
+                    + punishment_entry.replace("{emoji}", entry["emoji"])
+                    .replace("{name}", entry["name"].capitalize())
+                    .replace("{short_description}", entry["short_description"])
+                    .replace("{type}", entry["punishment_type"])
+                    + "\n"
+                )
+
+            title = None
+
+            async def send_cg_embed(cg_id: str, thread: Thread):
+                parsed_cgs = self._module._get_bot().moderation.get_parsed_cgs()
+                selected_cgs = {}
+                for key in parsed_cgs.keys():
+                    if cg_id.startswith(key):
+                        selected_cgs[key] = parsed_cgs[key]
+
+                desc = ""
+
+                for key, value in selected_cgs.items():
+                    desc = desc + f"`{key}` {value}"
+
+                cg_embed: discord.Embed = discord.embeds.Embed(
+                    colour=config.EMBED_COLOUR,
+                    description=f"{desc}",
+                    title=f"CG: {cg_id}",
+                )
+
+                await thread.send(embed=cg_embed)
+
+            if "cg_id" in kwargs.keys():
+                if "message_id" not in kwargs.keys():
+                    await send_cg_embed(kwargs["cg_id"], self._reprimand._get_thread())
+
+                title = (
+                    punishment_embed_msgs["title"]["singular"]
+                    .replace("{cg_id}", kwargs["cg_id"])
+                    .replace(
+                        "{accused_name}",
+                        f"{self._reprimand.get_accused().name}#{self._reprimand.get_accused().discriminator}",
+                    )
+                )
+            else:
+                title = punishment_embed_msgs["title"]["multiple"].replace(
+                    "{accused_name}",
+                    f"{self._reprimand.get_accused().name}#{self._reprimand.get_accused().discriminator}",
                 )
 
             embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
-                title=punishment_embed_msgs["title"].replace(
-                    "{username}",
-                    f"{self._reprimand.get_accused().name}#{self._reprimand.get_accused().discriminator}",
-                ),
+                title=title,
                 description=desc,
             )
-            self._message = self._reprimand._get_thread().send(embed=embed)
+            self._message = await self._reprimand._get_thread().send(embed=embed)
 
             for entry in punishments.values():
-                self._message.add_reaction(entry["emoji"])
+                await self._message.add_reaction(entry["emoji"])
 
     def get_ayes(self) -> int:
         if not self._message:
@@ -254,7 +280,7 @@ class PunishmentPoll(Poll):
 
         for reaction in reactions:
             if reaction.emoji == "👍":
-                return reaction.count
+                return reaction.count - 1  # Accounting for the the emoji.
         return 0
 
     def get_noes(self) -> int:
@@ -265,7 +291,7 @@ class PunishmentPoll(Poll):
 
         for reaction in reactions:
             if reaction.emoji == "👎":
-                return reaction.count
+                return reaction.count - 1  # Accounting for the bot emoji.
         return 0
 
 
@@ -274,6 +300,7 @@ class Reprimand:
         self._module = module
         self._settings = module.get_settings()
         self._polls: list[Poll] = []
+        self._accused: discord.Member = None
 
     async def load(self, **kwargs):
         bot = self._module._get_bot()
@@ -293,8 +320,23 @@ class Reprimand:
             self._thread = self._channel.get_thread(kwargs["thread_id"])
 
         # This part is for new Reprimand threads, not existing ones being loaded.
-        p_poll = PunishmentPoll(self)
-        await p_poll.load()
+
+        cg_ids = kwargs["cg_ids"]
+
+        if len(cg_ids) > 1:
+            for cg_id in cg_ids:
+                cg_poll = CGPoll(self)
+                self._polls.append(cg_poll)
+                await cg_poll.load(cg_id=cg_id)
+
+            self._polls.append(PunishmentPoll(self))
+        else:
+            p_poll = PunishmentPoll(self)
+            self._polls.append(p_poll)
+            cg_id = kwargs["cg_ids"][0]
+            await p_poll.load(cg_id=kwargs["cg_ids"][0])
+
+        self.countdown_loop.start()
 
         return
         if "cg_ids" in kwargs.keys():
@@ -324,7 +366,11 @@ class Reprimand:
 
     @loop(seconds=1)
     async def countdown_loop(self):
-        pass
+        for poll in self._polls:
+            poll.tick(self._seconds_remaining)
+
+            if self._seconds_remaining <= 0:
+                self.countdown_loop.stop()
 
     def _get_module(self):
         return self._module
@@ -357,44 +403,61 @@ class ReprimandModule:
                 "informal": {
                     "description": "An informal warning, often a word said to them thorough a ticket or direct messages. This form of punishment doesn't appear on their record.",
                     "short_description": "Informal warning.",
-                    "emoji": "",
+                    "emoji": "1️⃣",
+                    "name": "Informal Warning",
                     "punishment_type": "WARNING",
                     "punishment_duration": "",
                 },
                 "1formal": {
                     "description": "A formal warning. Unlike informal warnings this does appear on their record, and is given thorough the bot to the user on a ticket or thorough DMs",
-                    "emoji": "",
+                    "emoji": "2️⃣",
+                    "name": "1 Formal Warning",
                     "punishment_type": "WARNING",
                     "short_description": "Formal warning.",
                     "punishment_duration": "",
                 },
                 "2formal": {
                     "description": "Two formal warnings",
+                    "name": "2 Formal Warnings",
                     "short_description": "Two formal warnings.",
-                    "punishment_command": "",
+                    "punishment_type": "WARNING",
+                    "emoji": "3️⃣",
                 },
                 "mute": {
                     "description": "Mutes a user for an alloted amount of time, this will obviously appear on their record. The amount of time a person gets can be determined thorough a poll or preestablished times.",
-                    "punishment_command": "",
+                    "emoji": "4️⃣",
+                    "name": "Mute",
+                    "short_description": "Mute",
+                    "punishment_type": "MUTE",
                 },
                 "ban": {
                     "description": "Bans a user from the server, this will appear on their record too.",
-                    "punishment_command": "",
+                    "short_description": "Ban",
+                    "name": "Ban",
+                    "punishment_type": "BAN",
+                    "emoji": "5️⃣",
                 },
             },
             "reprimand_channel": "",
+            "duration": {
+                "single_poll": 500,
+                "multiple_poll": {"cg_poll": 500, "punishment_poll": 600},
+            },
             "messages": {
                 "case_log_messages": {},
                 "message_to_accused": {},
                 "cg_poll_embed": {
                     "title": "Has {user} breached {cg_id}?",
                     "footer": "",
-                    "body": "{cg_description}",
+                    "body": "{cg_description}\n\n**Options**\n👍 to vote in the affirmative\n👎 to vote in the negative",
                 },
                 "punishment_poll_embed": {
-                    "title": "",
+                    "title": {
+                        "singular": "{accused_name} accused of breaching {cg_id}. What action should be taken?",
+                        "multiple": "{accused_name} accused of breaching multiple CGs. What action should be taken?.",
+                    },
                     "footer": "",
-                    "punishment_entry": "**{punishment_name}:** {punishment_description}",
+                    "punishment_entry": "{emoji} | **{name}:**  {short_description}",
                 },
                 "evidence_messages": {},
                 "cg_embed": {},
@@ -594,6 +657,9 @@ class ModerationSystem:
 
     def is_valid_cg(self, cg_id: str) -> bool:
         return cg_id in self.parsed_cgs.keys()
+
+    def get_parsed_cgs(self):
+        return self.parsed_cgs
 
     def get_cg(self, cg_id: str) -> str:
         return self.parsed_cgs[cg_id]
