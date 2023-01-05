@@ -25,6 +25,7 @@ db = database.get_connection()
 class Mod(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+        self._reprimand_module = bot.reprimand
 
     @staticmethod
     async def construct_cases_embed(
@@ -1091,6 +1092,46 @@ class Mod(Cog):
             title="Reprimand Settings",
             send=True,
         )
+
+    @command(
+        help="A command used within a reprimand thread to check the time left on the polls within said thread.",
+        usage="rtime",
+        examples=["rtime"],
+        name="rtime",
+        cls=commands.Command,
+    )
+    async def reprimand_time_thread_cmd(
+        self, ctx: Context, *, args: Union[ParseArgs, str] = ""
+    ):
+        channel = ctx.channel
+
+        if channel.type != discord.ChannelType.public_thread:
+            return
+
+        if self._reprimand_module.is_reprimand_thread(channel.id) is False:
+            return
+
+        reprimand = self._reprimand_module.get_reprimand(channel.id)
+
+        if reprimand is None:
+            raise Exception(
+                f"Reprimand object supposedly associated with thread under id {channel.id} not found."
+            )
+
+        polls = reprimand.get_polls()
+        poll_dict = {}
+
+        for poll in polls:
+            p_type = poll.get_type()
+
+            if p_type == 1:
+                cg_id = poll.get_cg_id()
+                poll_dict[p_type] = {
+                    "cg_id": cg_id,
+                    "duration": poll.get_seconds_remaining(),
+                }
+            else:
+                poll_dict[p_type] = {"duration": poll.get_seconds_remaining()}
 
     @reprimand_config.command(
         help="Set a configuration value for the Reprimand module.",
