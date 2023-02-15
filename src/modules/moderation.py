@@ -8,6 +8,7 @@ from typing import Union
 import bs4
 import config
 import discord
+import pymongo
 from bot import TLDR
 from bs4.element import Tag
 from bson import json_util
@@ -120,9 +121,53 @@ class Cases:
 
         return Case(case_data)
 
+
 class PollType(Enum):
-    GC_POLL = 1️⃣
-    PUNISHMENT_POLL = 2️⃣
+    GC_POLL = 1
+    PUNISHMENT_POLL = 2
+
+
+class ReprimandDataManager:
+    """
+    A class dedicated to addeding, removing, and updating temporal information associated with reprimand polls.
+    """
+
+    def __init__(self):
+        self._db = database.get_connection()
+        self._reprimand_polls: Collection = self._db.reprimand_polls
+        self._reprimand_cases: Collection = self._db.reprimand_cases
+
+    def add_poll(self, thread_id: int, message_id: int, remaining_seconds: int):
+        self._reprimand_polls.insert_one(
+            {
+                "thread_id": thread_id,
+                "message_id": message_id,
+                "remaining_seconds": remaining_seconds,
+            }
+        )
+
+    def rm_poll(self, thread_id: int, message_id: int):
+        self._reprimand_polls.delete_one(
+            {"thread_id": thread_id, "message_id": message_id}
+        )
+
+    def rm_polls(self, thread_id: int):
+        self._reprimand_polls.delete_many({"thread_id": thread_id})
+
+    def update_poll(self, thread_id: int, message_id: int, remaining_seconds: int):
+        self._reprimand_polls.update_one(
+            {"thread_id": thread_id, "message_id": message_id},
+            {"$set": {"remaining_seconds": remaining_seconds}},
+        )
+
+    def get_polls(self):
+        return self._reprimand_polls.find()
+
+    def get_poll(self, thread_id: int, message_id: int):
+        return self._reprimand_polls.find_one(
+            {"thread_id": thread_id, "message_id": message_id}
+        )
+
 
 class Poll:
     async def load(self):
@@ -194,12 +239,23 @@ class CGPoll(Poll):
         await self._message.add_reaction("👍")
         await self._message.add_reaction("👎")
 
+    def save(self):
+        """
+        Saves current duration of poll to relevant collection.
+        """
+        self._reprimand_module.get_data_manager().update_poll(
+            self._thread.id, self._message.id, self._countdown
+        )
+
     def tick(self, reprimand):
         if self._countdown > 0:
             new_countdown = self._countdown - 1
             self._countdown = new_countdown
 
-        print(f"GCPoll (CG: {self._cg_id}): {self._countdown})")
+        if self._countdown % 60 == 0:
+            self.save()
+
+    # print(f"GCPoll (CG: {self._cg_id}): {self._countdown})")
 
     def _has_countdown_elapsed(self):
         return self._countdown <= 0
@@ -227,12 +283,12 @@ class CGPoll(Poll):
                 return reaction.count - 1  # Accounting for the bot emoji.
         return 0
 
-
     def get_type(self):
         return PollType.GC_POLL
 
     def get_seconds_remaining(self):
         return self._countdown
+
 
 class PunishmentPoll(Poll):
     def __init__(self, reprimand):
@@ -240,11 +296,11 @@ class PunishmentPoll(Poll):
         self._module = reprimand._get_module()
         self._settings = reprimand._get_module().get_settings()
         self._message: Union[discord.Message, None] = None
+        self._thread = self._reprimand._get_thread()
+        self._data_manager: ReprimandDataManager = self._module.get_data_manager()
         self._countdown = 0
 
     async def load(self, **kwargs):
-        thread: Thread = self._reprimand._get_thread()
-
         if "duration" not in kwargs.keys():
             raise Exception(
                 "Expected parameter 'duration' not included in PunishmentPoll. Can't load poll."
@@ -327,10 +383,27 @@ class PunishmentPoll(Poll):
             for entry in punishments.values():
                 await self._message.add_reaction(entry["emoji"])
 
+            if kwargs["is_new"]:
+                self._data_manager.add_poll(
+                    self._thread.id, self._message.id, self._countdown
+                )
+
+    def save(self):
+        """
+        Saves current duration of poll to relevant collection.
+        """
+        self._module.get_data_manager().update_poll(
+            self._thread.id, self._message.id, self._countdown
+        )
+
     def tick(self, reprimand):
         if self._countdown > 0:
             self._countdown = self._countdown - 1
-        print(self._countdown)
+
+        if self._countdown % 0 == 0:
+            self.save()
+
+    # print(self._countdown)
 
     def get_seconds_remaining(self):
         return self._countdown
@@ -364,6 +437,7 @@ class PunishmentPoll(Poll):
 class Reprimand:
     def __init__(self, module):
         self._module = module
+        self._data_manager: ReprimandDataManager = module.get_data_manager()
         self._settings = module.get_settings()
         self._polls: list[Poll] = []
         self._accused: discord.Member = None
@@ -407,7 +481,11 @@ class Reprimand:
             p_poll = PunishmentPoll(self)
             self._polls.append(p_poll)
             cg_id = kwargs["cg_ids"][0]
-            await p_poll.load(cg_id=kwargs["cg_ids"][0], duration=s_pun_poll_duration)
+            await p_poll.load(
+                cg_id=kwargs["cg_ids"][0],
+                duration=s_pun_poll_duration,
+                is_new=kwargs["is_new"] if "is_new" in kwargs.keys() else False,
+            )
 
         self.countdown_loop.start()
 
@@ -447,6 +525,7 @@ class ReprimandModule:
         self._logger = bot.logger
         self._db = database.get_connection()
         self._live_reprimands: list[Reprimand] = []
+        self._data_manager = ReprimandDataManager()
 
         self._settings = {
             "punishments": {
@@ -493,9 +572,17 @@ class ReprimandModule:
                 "single_poll": 500,
                 "multiple_poll": {"cg_poll": 500, "punishment_poll": 600},
             },
+            "notifications": {"500": "Notification Text"},
             "messages": {
                 "case_log_messages": {},
                 "message_to_accused": {},
+                "rtime": {
+                    "header": "Time Remaining",
+                    "entry": {
+                        "gc_poll": "{cg_id} GCPoll has {time_remaining}",
+                        "p_poll": "Poll has {time_remaining}",
+                    },
+                },
                 "cg_poll_embed": {
                     "title": "Has {user} breached {cg_id}?",
                     "footer": "",
@@ -510,8 +597,9 @@ class ReprimandModule:
                     "punishment_entry": "{emoji} | **{name}:**  {short_description}",
                     "description_format": "{punishment_entries} \n Poll Duration: {duration} (execute >time to see current time)",
                 },
-                "evidence_messages": {},
-                "cg_embed": {},
+                "evidence_messages": {
+                    "header": "-- Evidence --",
+                },
             },
         }
 
@@ -534,7 +622,10 @@ class ReprimandModule:
     def _get_bot(self):
         return self._bot
 
-    async def set_setting(self, path: str, value: object):
+    def get_data_manager(self) -> ReprimandDataManager:
+        return self._data_manager
+
+    def set_setting(self, path: str, value: object):
         settings = self._settings_handler.get_settings(config.MAIN_SERVER)
 
         def keys():
@@ -575,19 +666,6 @@ class ReprimandModule:
             else:
                 walk(split_path, split_path[0], settings)
 
-        if "welcome_message" in path:
-            for g_guild in self._gateway_guilds:
-                landing_channel: TextChannel = g_guild.get_landing_channel()
-                await landing_channel.purge()
-                welcome_message = self.get_module_settings()["messages"][
-                    "welcome_message"
-                ]
-                await landing_channel.send(
-                    welcome_message.replace(
-                        "{guild_name}", g_guild.get_guild().name
-                    ).replace("\\n", "\n")
-                )
-
     async def load(self):
         reprimand_collection = self._db.reprimands
 
@@ -622,6 +700,7 @@ class ReprimandModule:
         reprimands = self._live_reprimands
 
         for reprimand in reprimands:
+            print(f"Reprimand Thread ID: {reprimand._get_thread().id}")
             if reprimand._get_thread().id == thread_id:
                 return True
         return False
@@ -632,20 +711,20 @@ class ReprimandModule:
         ]
 
     async def create_reprimand(
-        self, accused: discord.Member, cg_ids: list[str], evidence_links: list[str]
+        self, accused: discord.Member, cg_ids: list[str]  # evidence_links: list[str]
     ) -> Reprimand:
         reprimand = Reprimand(self)
         await reprimand.load(
-            accused=accused, cg_ids=cg_ids, evidence_links=evidence_links
+            accused=accused, cg_ids=cg_ids, is_new=True  # evidence_links=evidence_links
         )
-        # self._live_reprimands.append(reprimand)
+        self._live_reprimands.append(reprimand)
         return reprimand
 
     def get_reprimand(self, thread_id: int) -> Union[Reprimand, None]:
         reprimands = self._live_reprimands
 
         for reprimand in reprimands:
-            if reprimand._get_thread() == thread_id:
+            if reprimand._get_thread().id == thread_id:
                 return reprimand
         return None
 

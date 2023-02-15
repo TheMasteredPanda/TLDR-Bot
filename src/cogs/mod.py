@@ -6,7 +6,6 @@ import time
 from typing import Union
 
 import bs4
-import config
 import dateparser
 import discord
 from bot import TLDR
@@ -14,7 +13,7 @@ from bson import ObjectId, json_util
 from discord.ext.commands import Cog, Context, command, group
 from modules import (commands, database, embed_maker, format_time,
                      reaction_menus)
-from modules.moderation import Case
+from modules.moderation import Case, PollType
 from modules.reaction_menus import BookMenu
 from modules.utils import (ParseArgs, get_guild_role, get_member,
                            get_member_by_id, get_member_from_string)
@@ -25,7 +24,10 @@ db = database.get_connection()
 class Mod(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
-        self._reprimand_module = bot.reprimand
+
+    @Cog.listener()
+    async def on_ready(self):
+        self._reprimand_module = self.bot.reprimand
 
     @staticmethod
     async def construct_cases_embed(
@@ -1027,11 +1029,9 @@ class Mod(Cog):
 
     @reprimand.command(
         help="Reprimand poll command. Used to establish a consensus on user breached CGs.",
-        usage="reprimand poll (username) (cg ids) (evidence links)",
+        usage="reprimand poll (username) (cg ids)",
         name="poll",
-        examples=[
-            "reprimand poll TheMasteredPanda 1.6,1.15.6 evidence_link,evidence_link"
-        ],
+        examples=["reprimand poll TheMasteredPanda 1.6,1.15.6"],
         cls=commands.Command,
     )
     async def reprimand_poll(self, ctx: Context, *, args: Union[ParseArgs, str] = None):
@@ -1049,7 +1049,7 @@ class Mod(Cog):
         if not result[0]:
             return await embed_maker.error(ctx, f"Can't find user {result[1]}")
 
-        if len(split_args) < 3:
+        if len(split_args) < 2:
             return await embed_maker.error(
                 ctx,
                 f"Requires three arguments. Username, cg(s) violated, and image evidence links.",
@@ -1068,11 +1068,10 @@ class Mod(Cog):
                 ctx, f"The following aren't valid CG IDs: {', '.join(invalid_cgs)}."
             )
 
-        evidence_links = split_args[2].split(",")
+        # Need to find a better way to implement evidence logging.
+        # evidence_links = split_args[2].split(",")
 
-        reprimand = await self.bot.reprimand.create_reprimand(
-            result[0], cg_ids, evidence_links
-        )
+        reprimand = await self.bot.reprimand.create_reprimand(result[0], cg_ids)
 
     @reprimand.group(
         help="Reprimand Configuration Command. Used to configure the Reprimand module. Executing this command only will return the modules config.",
@@ -1083,6 +1082,15 @@ class Mod(Cog):
         invoke_without_command=True,
     )
     async def reprimand_config(self, ctx: Context):
+        return embed_maker.command_error(ctx)
+
+    @reprimand_config.command(
+        help="View reprimand modules configuration file.",
+        usage="reprimand config view",
+        name="view",
+        cls=commands.Command,
+    )
+    async def reprimand_config_view(self, ctx: Context):
         config_copy = copy.deepcopy(self.bot.reprimand.get_settings())
         config_copy.pop("punishments")
 
@@ -1092,6 +1100,130 @@ class Mod(Cog):
             title="Reprimand Settings",
             send=True,
         )
+
+    @reprimand_config.group(
+        help="View, set, and remove notification announcements made in reprimand threads.",
+        usage="reprimand config notif",
+        examples=["reprimand config notif view"],
+        cls=commands.Group,
+        invoke_without_command=True,
+    )
+    async def reprimand_config_notification(self, ctx: Context):
+        return await embed_maker.command_error(ctx)
+
+    @reprimand_config_notification.command(
+        help="View currently set notification announcmenets.",
+        usage="reprimand config notif view",
+        examples=["reprimand config notif view"],
+        cls=commands.Command,
+    )
+    async def config_notification_view(self, ctx: Context):
+        notifications_config_copy = copy.deepcopy(
+            self.bot.reprimand.get_settings()["notifications"]
+        )
+        return await embed_maker.message(
+            ctx,
+            description=f"```{json_util.dumps(notifications_config_copy, indent=4)}```",
+            title="Reprimand Poll Notifications",
+            send=True,
+        )
+
+    @reprimand_config_notification.command(
+        help="Add a notification announcement.",
+        usage="reprimand config notif add [interval (when it will be announced in the countdown)] [message (what will be announced)]",
+        examples=["reprimand config notif add 5m Modpoll will end in 5 minutes"],
+        cls=commands.Command,
+    )
+    async def config_notification_add(
+        self, ctx: Context, interval: str, *, message: str = ""
+    ):
+        notifications_config_copy = copy.deepcopy(
+            self.bot.reprimand.get_settings()["notifications"]
+        )
+        keys = notifications_config_copy.keys()
+
+        if interval in keys:
+            return await embed_maker.message(
+                ctx,
+                description=f"A notification at interval '{interval}' already exists.",
+                title="Error",
+                send=True,
+            )
+
+        notifications_config_copy[interval] = message
+        self.bot.reprimand.set_setting("notifications", notifications_config_copy)
+        return await embed_maker.message(
+            ctx,
+            description=f"Notification message '{message}' set at interval '{interval}'.",
+            title="Notification Set",
+            send=True,
+        )
+
+    @reprimand_config_notification.command(
+        help="Remove a notification announcement by the interval it was meant to be announced at.",
+        usage="reprimand config notif remove [interval (when it would have been announced in the countdown)]",
+        examples=["reprimand config notif remove 5m"],
+        cls=commands.Command,
+    )
+    async def config_notification_remove(self, ctx: Context, interval: str = ""):
+        notification_config_copy = copy.deepcopy(
+            self.bot.reprimand.get_settings()["notifications"]
+        )
+        keys = notification_config_copy.keys()
+
+        if interval not in keys:
+            return await embed_maker.message(
+                ctx,
+                description=f"Interval '{interval}' has no associated notification.",
+                title="No Notification Found",
+                send=True,
+            )
+
+        del notification_config_copy[interval]
+        self.bot.reprimand.set_setting("notifications", notification_config_copy)
+        return await embed_maker.message(
+            ctx,
+            description="Deleted notification at interval '{interval}'.",
+            title="Notification Removed",
+            send=True,
+        )
+
+    @reprimand_config.group(
+        help="A command subset for configuring the punishment aspect of reprimands",
+        usage="reprimand config pun",
+        examples=["reprimand config pun view"],
+        cls=commands.Command,
+    )
+    async def config_punishments(self, ctx: Context):
+        return await embed_maker.command_error(ctx)
+
+    @config_punishments.command(
+        help="View all set punishments in reprimand",
+        usage="reprimand config pun view",
+        cls=commands.Command,
+    )
+    async def punishments_view(self, ctx: Context):
+        pass
+
+    # Search up how to generate a string if from the name of a punishment
+    @config_punishments.command(
+        help="Add a punishment to reprimand",
+        usage="reprimand config pun add [id] [type] [duration] [name]",
+        examples=[
+            "reprimand config pun add 3formal formal_warning 0s 3 Formal Warnings"
+        ],
+        cls=commands.Command,
+    )
+    async def punishment_add(self, ctx: Context):
+        pass
+
+    @config_punishments.command(
+        help="Remove a punishment from reprimand",
+        usage="reprimand config pun remove [id]",
+        cls=commands.Command,
+    )
+    async def punishment_remove(self, ctx: Context):
+        pass
 
     @command(
         help="A command used within a reprimand thread to check the time left on the polls within said thread.",
@@ -1119,19 +1251,42 @@ class Mod(Cog):
             )
 
         polls = reprimand.get_polls()
-        poll_dict = {}
+        settings = self._reprimand_module.get_settings()
+        rtime_messages = settings["messages"]["rtime"]
+        gc_poll_entry = rtime_messages["entry"]["gc_poll"]
+        p_poll_entry = rtime_messages["entry"]["p_poll"]
+        embed_description = ""
 
         for poll in polls:
             p_type = poll.get_type()
 
-            if p_type == 1:
+            if p_type == PollType.GC_POLL:
                 cg_id = poll.get_cg_id()
-                poll_dict[p_type] = {
-                    "cg_id": cg_id,
-                    "duration": poll.get_seconds_remaining(),
-                }
+                embed_description = (
+                    embed_description
+                    + "\n"
+                    + gc_poll_entry.replace("{cg_id}", cg_id).replace(
+                        "{time_remaining}",
+                        format_time.seconds(poll.get_seconds_remaining()),
+                    )
+                )
             else:
-                poll_dict[p_type] = {"duration": poll.get_seconds_remaining()}
+                embed_description = (
+                    embed_description
+                    + "\n"
+                    + p_poll_entry.replace(
+                        "{time_remaining}",
+                        format_time.seconds(poll.get_seconds_remaining()),
+                    )
+                )
+
+        await embed_maker.message(
+            ctx,
+            description=embed_description,
+            title=rtime_messages["header"],
+            send=True,
+        )
+        print("Sending embed")
 
     @reprimand_config.command(
         help="Set a configuration value for the Reprimand module.",
