@@ -1105,6 +1105,7 @@ class Mod(Cog):
         help="View, set, and remove notification announcements made in reprimand threads.",
         usage="reprimand config notif",
         examples=["reprimand config notif view"],
+        name="notif",
         cls=commands.Group,
         invoke_without_command=True,
     )
@@ -1115,6 +1116,7 @@ class Mod(Cog):
         help="View currently set notification announcmenets.",
         usage="reprimand config notif view",
         examples=["reprimand config notif view"],
+        name="view",
         cls=commands.Command,
     )
     async def config_notification_view(self, ctx: Context):
@@ -1132,6 +1134,7 @@ class Mod(Cog):
         help="Add a notification announcement.",
         usage="reprimand config notif add [interval (when it will be announced in the countdown)] [message (what will be announced)]",
         examples=["reprimand config notif add 5m Modpoll will end in 5 minutes"],
+        name="notif",
         cls=commands.Command,
     )
     async def config_notification_add(
@@ -1142,7 +1145,16 @@ class Mod(Cog):
         )
         keys = notifications_config_copy.keys()
 
-        if interval in keys:
+        if interval.endswith(("s", "m", "h")) is False:
+            return await embed_maker.message(
+                ctx,
+                description=f"No time unit found. use either h (hours), m (minutes) or s (seconds) to denote the unit of the value supplied immedately after the value. Eg. 10m, 5s, 4h",
+                title="Error",
+                send=True,
+            )
+
+        parsed_interval = format_time.parse(interval)
+        if parsed_interval in keys:
             return await embed_maker.message(
                 ctx,
                 description=f"A notification at interval '{interval}' already exists.",
@@ -1150,7 +1162,7 @@ class Mod(Cog):
                 send=True,
             )
 
-        notifications_config_copy[interval] = message
+        notifications_config_copy[parsed_interval] = message
         self.bot.reprimand.set_setting("notifications", notifications_config_copy)
         return await embed_maker.message(
             ctx,
@@ -1163,6 +1175,7 @@ class Mod(Cog):
         help="Remove a notification announcement by the interval it was meant to be announced at.",
         usage="reprimand config notif remove [interval (when it would have been announced in the countdown)]",
         examples=["reprimand config notif remove 5m"],
+        name="remove",
         cls=commands.Command,
     )
     async def config_notification_remove(self, ctx: Context, interval: str = ""):
@@ -1171,7 +1184,8 @@ class Mod(Cog):
         )
         keys = notification_config_copy.keys()
 
-        if interval not in keys:
+        parsed_interval = format_time.parse(interval)
+        if parsed_interval not in keys:
             return await embed_maker.message(
                 ctx,
                 description=f"Interval '{interval}' has no associated notification.",
@@ -1179,7 +1193,7 @@ class Mod(Cog):
                 send=True,
             )
 
-        del notification_config_copy[interval]
+        del notification_config_copy[parsed_interval]
         self.bot.reprimand.set_setting("notifications", notification_config_copy)
         return await embed_maker.message(
             ctx,
@@ -1192,7 +1206,9 @@ class Mod(Cog):
         help="A command subset for configuring the punishment aspect of reprimands",
         usage="reprimand config pun",
         examples=["reprimand config pun view"],
-        cls=commands.Command,
+        name="pun",
+        cls=commands.Group,
+        invoke_without_command=True,
     )
     async def config_punishments(self, ctx: Context):
         return await embed_maker.command_error(ctx)
@@ -1200,29 +1216,64 @@ class Mod(Cog):
     @config_punishments.command(
         help="View all set punishments in reprimand",
         usage="reprimand config pun view",
+        name="view",
         cls=commands.Command,
     )
     async def punishments_view(self, ctx: Context):
-        pass
+        punishments_config_copy = copy.deepcopy(
+            self.bot.reprimand.get_settings()["punishments"]
+        )
+        return await embed_maker.message(
+            ctx,
+            description=f"```{json_util.dumps(punishments_config_copy, indent=4)}```",
+            title="Punishment Configuration",
+            send=True,
+        )
 
     # Search up how to generate a string if from the name of a punishment
     @config_punishments.command(
         help="Add a punishment to reprimand",
-        usage="reprimand config pun add [id] [type] [duration] [name]",
+        usage="reprimand config pun add [id] [type] [duration] [name] [short description]",
         examples=[
             "reprimand config pun add 3formal formal_warning 0s 3 Formal Warnings"
         ],
+        name="add",
+        command_args=[
+            (("--id", "-id", str), "Id of the punishment (formal1 for example)"),
+            (("--type", "-t", str), "Type of punishment (mute, ban, warn)"),
+            (
+                ("--duration", "-d", str),
+                "Duration of the punishment (50m, 1h, 30s, &c)",
+            ),
+            (
+                ("--name", "-n", str),
+                "The full capitlised name of the punishment (Formal Warning, Informal Warning, 8 Hour Mute)",
+            ),
+            (
+                ("--shortdescription", "-sd", str),
+                "Short description of the punisment (An Informal Warning to the User, for example)",
+            ),
+        ],
         cls=commands.Command,
     )
-    async def punishment_add(self, ctx: Context):
+    async def punishment_add(
+        self,
+        ctx: Context,
+        punishment_id: str = "",
+        punishment_type: str = "",
+        duration: str = "",
+        *,
+        name: str = "",
+    ):
         pass
 
     @config_punishments.command(
         help="Remove a punishment from reprimand",
         usage="reprimand config pun remove [id]",
+        name="remove",
         cls=commands.Command,
     )
-    async def punishment_remove(self, ctx: Context):
+    async def punishment_remove(self, ctx: Context, punishment_id: str = ""):
         pass
 
     @command(
