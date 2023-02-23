@@ -516,6 +516,13 @@ class Reprimand:
         pass
 
 
+class PunishmentType(Enum):
+    INFORMAL = 0
+    FORMAL = 1
+    MUTE = 2
+    BAN = 3
+
+
 class ReprimandModule:
     def __init__(self, bot):
         self._bot: Bot = bot
@@ -704,6 +711,28 @@ class ReprimandModule:
             if reprimand._get_thread().id == thread_id:
                 return True
         return False
+
+    def get_punishments(self):
+        return self.get_settings()["punishments"]
+
+    def is_punishment_id(self, possible_id: str):
+        return possible_id in self.get_punishments().keys()
+
+    def get_punishment(self, punishment_id: str):
+        return self.get_punishments()[punishment_id]
+
+    def add_punishment(
+        self,
+        punishment_id: str,
+        punishment_type: PunishmentType,
+        duration: str,
+        name: str,
+        short_description: str,
+    ):
+        pass
+
+    def remove_punishment(self, punishment_id: str):
+        pass
 
     def get_settings(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][

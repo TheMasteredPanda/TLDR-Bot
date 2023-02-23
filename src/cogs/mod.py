@@ -1256,16 +1256,36 @@ class Mod(Cog):
         ],
         cls=commands.Command,
     )
-    async def punishment_add(
-        self,
-        ctx: Context,
-        punishment_id: str = "",
-        punishment_type: str = "",
-        duration: str = "",
-        *,
-        name: str = "",
-    ):
-        pass
+    async def punishment_add(self, ctx: Context, *, args: Union[ParseArgs, str] = None):
+        if args is None or args["pre"] == "":
+            return await embed_maker.command_error(ctx)
+
+        punishment_id = args["id"].lower()
+
+        if self._reprimand_module.is_punishment_id(punishment_id):
+            return await embed_maker.message(
+                ctx,
+                description="Punishment under id already exists.",
+                title="ID Already Exists",
+                send=True,
+            )
+
+        punishments = self._reprimand_module.get_punishments()
+
+        for punishment in punishments:
+            if punishment is not None:
+                if (
+                    punishment["duration"] == format_time.parse(args["duration"])
+                    and punishment["type"] == args["type"].lower()
+                ):
+                    return await embed_maker.message(
+                        ctx,
+                        description=f"Punishment under id {punishment['id']} has the same punishment type and duration.",
+                        title="Punishment Exists",
+                        send=True,
+                    )
+
+        print(args)
 
     @config_punishments.command(
         help="Remove a punishment from reprimand",
