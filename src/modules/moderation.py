@@ -13,6 +13,7 @@ from bot import TLDR
 from bs4.element import Tag
 from bson import json_util
 from discord.channel import TextChannel
+from discord.emoji import Emoji
 from discord.enums import ChannelType
 from discord.ext.commands import Bot, bot_has_any_role
 from discord.message import Message
@@ -728,11 +729,54 @@ class ReprimandModule:
         duration: str,
         name: str,
         short_description: str,
+        emoji: Emoji,
     ):
-        pass
+        """
+        Add a punishment to the reprimand config file.
+
+        Parameters
+        ----------
+        punishment_id: :class:`str`
+            The id of the punishment.
+        punishment_type: :class:`PunishmentType`
+            The type of punishment th is entry is.
+        duration: :class:`str`
+            The duration of the punishmen in string form (5m, 1h, 30s, 0s, &c)
+        name: :class:`str`
+            The formal name of the punishment.
+        short_description: :class:`str`
+            A very brief description of the punishment (One Formal Warning - for example)
+        emoji: :class:`Emoji`
+            The emoji used in a modpoll to sympolise a vote for this punishment/
+        """
+
+        punishment_settings = self.get_settings()["punishments"]
+
+        punishment_settings[punishment_id] = {
+            "short_description": short_description,
+            "type": punishment_type,
+            "duration": format_time.parse(duration),
+            "emoji": str(emoji),
+            "name": name,
+        }
+
+        self.set_setting("punishments", punishment_settings)
 
     def remove_punishment(self, punishment_id: str):
-        pass
+        """
+        Removes a punishment from the reprimand config file.
+
+        Parameters
+        ----------
+        punishment_id: :class:`str`
+            The id of the punishment being removed.
+        """
+        punishment_settings = self.get_settings()["punishments"]
+        p_ids = punishment_settings.keys()
+
+        if punishment_id in p_ids:
+            del punishment_settings[punishment_id]
+            self.set_setting("punishments", punishment_settings)
 
     def get_settings(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][

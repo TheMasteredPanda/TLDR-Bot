@@ -1253,6 +1253,10 @@ class Mod(Cog):
                 ("--shortdescription", "-sd", str),
                 "Short description of the punisment (An Informal Warning to the User, for example)",
             ),
+            (
+                ("--emoji", "-e", str),
+                "The emoji used to symbolise this punishment entry in a modpoll",
+            ),
         ],
         cls=commands.Command,
     )
