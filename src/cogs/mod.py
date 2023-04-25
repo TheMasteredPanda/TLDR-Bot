@@ -8,12 +8,13 @@ from typing import Union
 import bs4
 import dateparser
 import discord
+import emoji
 from bot import TLDR
 from bson import ObjectId, json_util
 from discord.ext.commands import Cog, Context, command, group
 from modules import (commands, database, embed_maker, format_time,
                      reaction_menus)
-from modules.moderation import Case, PollType
+from modules.moderation import Case, PollType, PunishmentType
 from modules.reaction_menus import BookMenu
 from modules.utils import (ParseArgs, get_guild_role, get_member,
                            get_member_by_id, get_member_from_string)
@@ -1071,7 +1072,9 @@ class Mod(Cog):
         # Need to find a better way to implement evidence logging.
         # evidence_links = split_args[2].split(",")
 
-        reprimand = await self.bot.reprimand.create_reprimand(result[0], cg_ids)
+        print(result[0])
+        print(cg_ids)
+        reprimand = await self._reprimand_module.create_reprimand(result[0], cg_ids)
 
     @reprimand.group(
         help="Reprimand Configuration Command. Used to configure the Reprimand module. Executing this command only will return the modules config.",
@@ -1082,7 +1085,7 @@ class Mod(Cog):
         invoke_without_command=True,
     )
     async def reprimand_config(self, ctx: Context):
-        return embed_maker.command_error(ctx)
+        return await embed_maker.command_error(ctx)
 
     @reprimand_config.command(
         help="View reprimand modules configuration file.",
@@ -1261,10 +1264,12 @@ class Mod(Cog):
         cls=commands.Command,
     )
     async def punishment_add(self, ctx: Context, *, args: Union[ParseArgs, str] = None):
-        if args is None or args["pre"] == "":
+        print(args)
+        if args is None or args["pre"] != "":
             return await embed_maker.command_error(ctx)
 
         punishment_id = args["id"].lower()
+        print(f'Punishment ID is {punishment_id}')
 
         if self._reprimand_module.is_punishment_id(punishment_id):
             return await embed_maker.message(
@@ -1276,7 +1281,8 @@ class Mod(Cog):
 
         punishments = self._reprimand_module.get_punishments()
 
-        for punishment in punishments:
+        for punishment_id in punishments:
+            punishment = punishments[punishment_id]
             if punishment is not None:
                 if (
                     punishment["duration"] == format_time.parse(args["duration"])
@@ -1289,7 +1295,41 @@ class Mod(Cog):
                         send=True,
                     )
 
-        print(args)
+
+            if punishment['name'].lower() == args['name'].lower():
+                return await embed_maker.message(
+                        ctx,
+                        description=f"{args['name']} already used.",
+                        title="Name already taken.",
+                        send=True
+                        )
+
+            if punishment["emoji"] == args["emoji"]:
+                return await embed_maker.message(
+                    ctx,
+                    description=f"Emoji {args['emoji']} already used for another punishment.",
+                    title="Emoji already used.",
+                    send=True,
+                )
+
+            if args["type"].upper() not in PunishmentType.list():
+                return await embed_maker.message(
+                    ctx,
+                    description=f"Type {args['type'].upper()} doesn't exist in punishment types. Types: {', '.join(PunishmentType.list())}",
+                    title="Type not recognised.",
+                    send=True,
+                )
+
+        short_description = args['shortdescription']
+        self._reprimand_module.add_punishment(
+                args['id'].lower(),
+                PunishmentType.type(args['type']),
+                args['duration'],
+                args['name'],
+                short_description,
+                args['emoji'])
+
+        await embed_maker.message(ctx, description=f"Created punishment {args['id'].lower()}.", title="Created.", send=True)
 
     @config_punishments.command(
         help="Remove a punishment from reprimand",
@@ -1298,7 +1338,17 @@ class Mod(Cog):
         cls=commands.Command,
     )
     async def punishment_remove(self, ctx: Context, punishment_id: str = ""):
-        pass
+        if self._reprimand_module.is_punishment_id(punishment_id) is False:
+            return await embed_maker.message(
+                ctx,
+                description=f"No punishment under id {punishment_id}.",
+                title="No Punishment Found.",
+                send=True,
+            )
+        self._reprimand_module.remove_punishment(punishment_id)
+        return await embed_maker.message(
+            ctx, description="Punishment removed.", title="Removed.", send=True
+        )
 
     @command(
         help="A command used within a reprimand thread to check the time left on the polls within said thread.",
@@ -1384,7 +1434,7 @@ class Mod(Cog):
             if args["value"] is None:
                 return await embed_maker.command_error(ctx, "value")
 
-        await self.bot.reprimand.set_setting(
+        self._reprimand_module.set_setting(
             args["path"],
             args["value"] if args["value"].isnumeric() is False else int(args["value"]),
         )
