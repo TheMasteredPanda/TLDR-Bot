@@ -483,7 +483,7 @@ class Reprimand:
             self._polls.append(p_poll)
             cg_id = kwargs["cg_ids"][0]
             await p_poll.load(
-                cg_id=kwargs["cg_ids"][0],
+                cg_id=cg_id,
                 duration=s_pun_poll_duration,
                 is_new=kwargs["is_new"] if "is_new" in kwargs.keys() else False,
             )
