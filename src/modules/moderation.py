@@ -214,20 +214,109 @@ class GCPoll(Poll):
 
         However, if only one ID has been provided, this will provide only the description of the GC and leave the voting to the Punishm-
         entPoll class, which will provide only the various punishment options to the members of the qorum.
+
+
+        Parameters
+        -----------
+        reprimand: :class:`Reprimand`
+            The reprimand object.
+        cg_id: :class:`str`
+            The id of the CG dedicated for this poll.
+        message_id: :class:`int`
+            The id of a preexisting embed that is maintained by a GCPoll. If none if provided, it is assumed this is a new poll.
+
         """
         self._reprimand = reprimand
         self._cg_id = cg_id
-
-        if 'embed_id' in kwargs.keys():
-            self._embed = None
-
+        self._message: discord.Message = None
+        self._countdown: int = 0
 
 
-    def load_embed(self):
-        pass
+
+    async def load(self, **kwargs):
+        if 'message_id' in kwargs.keys():
+            self._message = self._reprimand.get_polling_thread().fetch_message(kwargs['message_id'])
+
+        if 'countdown' in kwargs.keys():
+            self._countdown = kwargs['countdown']
+        else:
+            self._countdown = self._reprimand._module.get_settings()['duration']['cg_poll']
+
+        if self._message is not None:
+            return
+
+        #Assuming no message is found it will create the embed, starting here.
+        cg_poll_embed = self._reprimand._module.get_settings()["messages"]["cg_poll_embed"]
+        accused: discord.Member = self._reprimand.get_accused()
+        parsed_cgs = self._reprimand._get_bot().moderation.get_parsed_cgs()
+        selected_cgs = {}
+        for key in parsed_cgs.keys():
+            if self._cg_id.startswith(key):
+                selected_cgs[key] = parsed_cgs[key]
+
+        desc = ""
+
+        for key, value in selected_cgs.items():
+            desc = desc + f"`{key}` {value}"
+
+        accused: discord.Member = self._reprimand.get_accused()
+        embed = discord.Embed(
+            colour=config.EMBED_COLOUR,
+            description=cg_poll_embed["body"]
+            .replace("{cg_description}", desc)
+            .replace("{duration}", format_time.seconds(self._countdown)),
+            title=cg_poll_embed["title"]
+            .replace("{cg_id}", self._cg_id)
+            .replace("{user}", f"{accused.name}#{accused.discriminator}"),
+        )
+        self._message: Message = await self._reprimand._get_thread().send(embed=embed)
+        await self._message.add_reaction("👍")
+        await self._message.add_reaction("👎")
+
+
+        #Add saving functions here.
+    def tick(self, reprimand):
+        if self._countdown > 0:
+            new_countdown = self._countdown - 1
+            self._countdown = new_countdown
+
+        if self._countdown % 60 == 0:
+            self.save()
+
+    # print(f"GCPoll (CG: {self._cg_id}): {self._countdown})")
+
+    def _has_countdown_elapsed(self):
+        return self._countdown <= 0
+
+    def get_message(self):
+        return self._message
 
     def get_cg_id(self):
         return self._cg_id
+
+    def get_ayes(self) -> int:
+        reactions = self._message.reactions
+
+        for reaction in reactions:
+            if reaction.emoji == "👍":
+                return reaction.count  # Accounting for the bot emoji.
+        return 0
+
+    def get_noes(self) -> int:
+        reactions = self._message.reactions
+
+        for reaction in reactions:
+
+            if reaction.emoji == "👎":
+                return reaction.count - 1  # Accounting for the bot emoji.
+        return 0
+
+    def get_type(self):
+        return PollType.GC_POLL
+
+    def get_seconds_remaining(self):
+        return self._countdown
+
 
 class PunishmentPoll(Poll):
     def __init__(self, reprimand: Reprimand, accused_member: Member, countdown: int):
@@ -252,6 +341,15 @@ class PunishmentPoll(Poll):
     async def load(self, **kwargs):
         """
         Loads the punishment poll.
+
+        Parameters
+        -----------
+        message_id: :class:`int`
+            The saved mesasge id of a punishment poll embed. This is provided if this class is loading a preexisting embed.
+            If this isn't supplied it is assumed that this is a new punishment poll, and an embed will be created.
+        countdown: :class:`int`
+            The amount of seconds left until this poll concludes. If no countdown is provided, it is assumed that this is a
+            new puishment poll.
         """
 
         if 'message_id' in kwargs.keys():
@@ -286,9 +384,10 @@ class PunishmentPoll(Poll):
             )
 
 
-        embed = discord.Embed(colour=config.EMBED_COLOUR, title='Title Placeholder', description=punishment_poll_description_format.replace("{punishment_entries}", punishment_entries).replace('{duration}', format_time.seconds(self._countdown)))
+        embed = discord.Embed(colour=config.EMBED_COLOUR, title='Punishment Poll', description=punishment_poll_description_format.replace("{punishment_entries}", punishment_entries).replace('{duration}', format_time.seconds(self._countdown)))
         self._message = await self._reprimand.get_polling_thread().send(embed=embed)
 
+        #Adds the emojis associated to each option.
         for entry in punishments.values():
             await self._message.add_reaction(entry['emoji'])
 
@@ -321,8 +420,9 @@ class PunishmentPoll(Poll):
 
 
     def get_type(self) -> PollType:
-        return PunishmentType.PUNISHMENT_POLL
+        return PollType.PUNISHMENT_POLL
 
+    #A function called per tick, where a tick is a second elapsed.
     def tick(self, reprimand):
         self._countdown = self._countdown - 1️⃣
 
