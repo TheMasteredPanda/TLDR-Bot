@@ -1041,8 +1041,15 @@ class Mod(Cog):
 
         settings = self.bot.reprimand.get_settings()
 
-        if settings["reprimand_channel"] == "":
-            return await embed_maker.error(ctx, "Reprimand channel not set.")
+        if self._reprimand_module.get_discussion_channel() is None:
+            return await embed_maker.error(ctx, "Discussion channel not set.")
+
+        if self._reprimand_module.get_polling_channel() is None:
+            return await embed_maker.error(ctx, "Polling channel not set.")
+
+        if self._reprimand_module.get_gc_approval_channel() is None:
+            return await embed_maker.error(ctx, "GC Approval channel not set.")
+
 
         split_args = args["pre"].split(" ")
         result = await get_member_from_string(ctx, split_args[0])
@@ -1074,7 +1081,7 @@ class Mod(Cog):
 
         print(result[0])
         print(cg_ids)
-        reprimand = await self._reprimand_module.create_reprimand(result[0], cg_ids)
+        reprimand = await self._reprimand_module.get_reprimand_manager().create_reprimand(result[0], cg_ids)
 
     @reprimand.group(
         help="Reprimand Configuration Command. Used to configure the Reprimand module. Executing this command only will return the modules config.",
