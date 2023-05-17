@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import os
 import random
@@ -267,7 +268,7 @@ class GCPoll(Poll):
         #Assuming no message is found it will create the embed, starting here.
         cg_poll_embed = self._reprimand._module.get_settings()["messages"]["cg_poll_embed"]
         accused: discord.Member = self._reprimand.get_accused()
-        parsed_cgs = self._reprimand._get_bot().moderation.get_parsed_cgs()
+        parsed_cgs = self._reprimand._module._get_bot().moderation.get_parsed_cgs()
         selected_cgs = {}
         for key in parsed_cgs.keys():
             if self._cg_id.startswith(key):
@@ -279,19 +280,28 @@ class GCPoll(Poll):
             desc = desc + f"`{key}` {value}"
 
         accused: discord.Member = self._reprimand.get_accused()
+        body_embed = cg_poll_embed['body']
+
+
+        if 'singular' not in kwargs.keys() or ('singular' in kwargs.keys() and kwargs['singular'] is False):
+            body_embed = body_embed.replace('{options}', cg_poll_embed['options'])
+        else:
+            body_embed = body_embed.replace('{options}', '')
+
         embed = discord.Embed(
             colour=config.EMBED_COLOUR,
-            description=cg_poll_embed["body"]
+            description=body_embed
             .replace("{cg_description}", desc)
             .replace("{duration}", format_time.seconds(self._countdown)),
             title=cg_poll_embed["title"]
             .replace("{cg_id}", self._cg_id)
-            .replace("{user}", f"{accused.name}#{accused.discriminator}"),
-        )
-        self._message: Message = await self._reprimand._get_thread().send(embed=embed)
+            .replace("{user}", f"{accused.name}#{accused.discriminator}")
+            .replace('{options}', ""))
+
+        self._message: Message = await self._reprimand.get_polling_thread().send(embed=embed)
         #Will only add these if the parameter 'singular' is not present.
 
-        if 'singular' in kwargs.keys() or ('singular' in kwargs.keys() and kwargs['singular'] is True):
+        if 'singular' not in kwargs.keys() or ('singular' in kwargs.keys() and kwargs['singular'] is False):
             await self._message.add_reaction("👍")
             await self._message.add_reaction("👎")
 
@@ -379,6 +389,8 @@ class PunishmentPoll(Poll):
 
         if 'countdown' in kwargs.keys():
             self._countdown = kwargs['countdown']
+        else:
+            self._countdown = self._reprimand._module.get_settings()['duration']['pun_poll']
 
         if self._message is not None:
             return
@@ -494,16 +506,17 @@ class Reprimand:
 
 
     async def load(self, discussion_thread_id: int = 0, polling_thread_id: int = 0):
-        guild: discord.Guild = self._module.get_main_guild()
+        guild: discord.Guild = self._module._get_main_guild()
 
         #Creates a thread for both discussion and polling if none currently exists.
+        string_date = datetime.now().strftime("%m%d%Y")
         if discussion_thread_id == 0:
-            self._discussion_thread = await self._module.get_discussion_channel().create_thread(name=f"{self._accused_member.name}/discussion", type=ChannelType.public_thread)
+            self._discussion_thread = await self._module.get_discussion_channel().create_thread(name=f"{string_date}/{self._accused_member.name.lower()}/discussion", type=ChannelType.public_thread)
         else:
             self._discussion_thread = guild.get_thread(discussion_thread_id)
 
         if polling_thread_id == 0:
-            self._polling_thread = await self._module.get_polling_channel().create_thread(name=f"{self._accused_member.name}/poll", type=ChannelType.public_thread)
+            self._polling_thread = await self._module.get_polling_channel().create_thread(name=f"{string_date}/{self._accused_member.name.lower()}/poll", type=ChannelType.public_thread)
         else:
             self._polling_thread = guild.get_thread(polling_thread_id)
 
@@ -527,12 +540,12 @@ class Reprimand:
     def stop(self):
         pass
 
-    def  get_accused(self) -> int:
+    def  get_accused(self) -> discord.Member:
         """
         Returns the member id of the accused.
         """
 
-        return self._accused_id
+        return self._accused_member
 
     def get_polling_thread(self) -> Thread:
         return self._polling_thread
@@ -564,7 +577,7 @@ class ReprimandManager:
             The id of the member.
         """
         for reprimand in self._reprimands:
-            if reprimand.get_accused() == accused_id:
+            if reprimand.get_accused().id == accused_id:
                 return True
         return False
 
@@ -623,6 +636,7 @@ class ReprimandModule:
         self._discussion_channel = None
         self._polling_channel = None
         self._gc_approval_channel = None
+        self._guild = None
 
         self._settings = {
             "punishments": {
@@ -685,7 +699,8 @@ class ReprimandModule:
                 "cg_poll_embed": {
                     "title": "Has {user} breached {cg_id}?",
                     "footer": "",
-                    "body": "{cg_description}\n\nPoll Duration: {duration} (execute >time to see current time)\n\n**Options**\n👍 to vote in the affirmative\n👎 to vote in the negative",
+                    "body": "{cg_description}\n\nPoll Duration: {duration} (execute >time to see current time){options}",
+                    "options": "\n\n**Options**\n👍 to vote in the affirmative\n👎 to vote in the negative",
                 },
                 "punishment_poll_embed": {
                     "title": {
@@ -720,6 +735,12 @@ class ReprimandModule:
 
     def _get_bot(self):
         return self._bot
+
+    def _get_main_guild(self):
+        if self._guild is None:
+            self._guild = self._bot.get_guild(config.MAIN_SERVER)
+
+        return self._guild
 
     def get_data_manager(self) -> ReprimandDataManager:
         return self._data_manager
@@ -776,38 +797,43 @@ class ReprimandModule:
         channel = None
 
         if self._discussion_channel is None:
-            discussion_channel_id = self._settings['discussion_channel']
-            print(self._settings)
+            discussion_channel_id = self.get_settings()['discussion_channel']
             channel = self._bot.get_guild(config.MAIN_SERVER).get_channel(discussion_channel_id)
 
             if channel is None:
                 raise Exception(f"Couldn't find discussion channel id {discussion_channel_id}")
 
-        self._discussion_channel = channel
-        return channel
+            self._discussion_channel = channel
+
+        return self._discussion_channel
 
     def get_polling_channel(self):
         channel = None
 
         if self._polling_channel is None:
-            polling_channel_id = self._settings['polling_channel']
+            polling_channel_id = self.get_settings()['polling_channel']
             channel = self._bot.get_guild(config.MAIN_SERVER).get_channel(polling_channel_id)
 
-        if channel is None:
-            raise Exception(f"Couldn't find polling channel id {polling_channel_id}")
+            if channel is None:
+                raise Exception(f"Couldn't find polling channel id {polling_channel_id}")
 
-        self._polling_channel = channel
-        return channel
+            self._polling_channel = channel
+
+        return self._polling_channel
 
     def get_gc_approval_channel(self):
         channel = None
 
         if self._gc_approval_channel is None:
-            gc_approval_channel_id = self._settings['gc_approval_channel']
+            gc_approval_channel_id = self.get_settings()['gc_approval_channel']
             channel = self._bot.get_guild(config.MAIN_SERVER).get_channel(gc_approval_channel_id)
 
-        self._gc_approval_channel = channel
-        return channel
+            if channel is None:
+                raise Exception(f"Couldn't find gc approval channel id {gc_approval_channel_id}")
+
+            self._gc_approval_channel = channel
+
+        return self._gc_approval_channel
 
     def get_punishments(self):
         return self.get_settings()["punishments"]
