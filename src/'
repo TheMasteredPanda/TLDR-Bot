@@ -754,7 +754,6 @@ class ReprimandModule:
                 },
             },
             "voting_member_role": 0,
-            "quorum_minimum": 0,
             "polling_channel": 0,
             "discussion_channel": 0,
             "gc_approval_channel": 0,
@@ -762,12 +761,9 @@ class ReprimandModule:
                 "cg_poll": 500,
                 "pun_poll": 600
             },
-            "gc_notifications": {"500": "Notification Text"},
             "notifications": {"500": "Notification Text"},
             "messages": {
-                "punishment_approved": "Punishment agreed upon has been approved by {gc_name} and executed. Threads locked.",
-                "punishment_rejected": "Punishment agreed upon has been rejected. Threads locked.",
-                "punishment_vetoed": "Reprimand vetoed by {gc_name}. Threads locked.",
+                "case_log_messages": {},
                 "message_to_accused": {},
                 "rtime": {
                     "header": "Time Remaining",

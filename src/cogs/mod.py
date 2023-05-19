@@ -1372,10 +1372,10 @@ class Mod(Cog):
         if channel.type != discord.ChannelType.public_thread:
             return
 
-        if self._reprimand_module.is_reprimand_thread(channel.id) is False:
+        if self._reprimand_module.get_reprimand_manager().is_reprimand_thread(channel.id) is False:
             return
 
-        reprimand = self._reprimand_module.get_reprimand(channel.id)
+        reprimand = self._reprimand_module.get_reprimand_manager().get_reprimand(channel.id)
 
         if reprimand is None:
             raise Exception(
