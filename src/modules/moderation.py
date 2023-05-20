@@ -27,10 +27,9 @@ from pymongo.collection import Collection
 
 import modules.database as database
 import modules.format_time as format_time
-from modules import database
-from modules.timers import loop
+from modules import database, embed_maker
+from discord.ext.tasks import loop
 from modules.utils import SettingsHandler
-import embed_maker
 
 db = database.get_connection()
 
@@ -51,7 +50,7 @@ class Cases:
         self.bot = bot
 
     def get_cases(
-        self, guild_id: int, *, before: int = 0, after: int = 0, **kwargs
+            self, guild_id: int, *, before: int = 0, after: int = 0, **kwargs
     ) -> list[Case]:
         """
         Get cases based on given kwargs.
@@ -82,13 +81,13 @@ class Cases:
         return [Case(c) for c in db.cases.find(query).sort("created_at", -1)]
 
     def add_case(
-        self,
-        guild_id: int,
-        case_type: str,
-        reason: str,
-        member: discord.member,
-        moderator: discord.Member,
-        extra: dict = {},
+            self,
+            guild_id: int,
+            case_type: str,
+            reason: str,
+            member: discord.member,
+            moderator: discord.Member,
+            extra: dict = {},
     ) -> Case:
         """
         Adds a case to the database.
@@ -130,6 +129,7 @@ class Cases:
 
 class PollType(Enum):
     GC_POLL = 1
+    GC_POLL_2 = 4
     PUNISHMENT_POLL = 2
 
 
@@ -172,14 +172,17 @@ class ReprimandDataManager:
         poll_time = {}
         polls = reprimand.get_polls()
 
-        #Fetches poll embed message id and seconds remaining from countdown.
+        # Fetches poll embed message id and seconds remaining from countdown.
         for poll in polls:
             poll_time[poll.get_message().id] = poll.get_seconds_remaining()
 
-
-
-        self._reprimand_collection.update_one({"thread_id": reprimand.get_discussion_thread().id}, {'completed': reprimand.is_completed(), 'gc_approved': reprimand.has_gc_approved(), 'gc_voted': reprimand.has_gc_vetoed(), 'poll_countdown': poll_time, 'thread_ids': [reprimand.get_discussion_thread().id, reprimand.get_polling_thread().id], 'accused_id': reprimand.get_accused().id}, upsert=True)
-
+        self._reprimand_collection.update_one({"thread_id": reprimand.get_discussion_thread().id},
+                                              {'completed': reprimand.is_completed(),
+                                               'gc_approved': reprimand.has_gc_approved(),
+                                               'gc_voted': reprimand.has_gc_vetoed(), 'poll_countdown': poll_time,
+                                               'thread_ids': [reprimand.get_discussion_thread().id,
+                                                              reprimand.get_polling_thread().id],
+                                               'accused_id': reprimand.get_accused().id}, upsert=True)
 
 
 class Poll:
@@ -205,13 +208,17 @@ class Poll:
         pass
 
 
+    def get_message(self):
+        pass
+    def name(self):
+        pass
+
 
 class PunishmentType(Enum):
     INFORMAL = 0
     FORMAL = 1
     MUTE = 2
     BAN = 3
-
 
 
 class GCPoll(Poll):
@@ -239,8 +246,7 @@ class GCPoll(Poll):
         self._cg_id = cg_id
         self._message: discord.Message = None
         self._countdown: int = 0
-
-
+        self._name = None
 
     async def load(self, **kwargs):
         """
@@ -261,6 +267,8 @@ class GCPoll(Poll):
             value is singular, then this poll will be considered the only GCPoll in the process and will not
             add the reaction emojis. If this parameter is not provided (or false; default value) it will add
             these reaction emojis.
+        name: :class:`str`
+            For debugging purposes.
         """
         if 'message_id' in kwargs.keys():
             self._message = self._reprimand.get_polling_thread().fetch_message(kwargs['message_id'])
@@ -270,10 +278,13 @@ class GCPoll(Poll):
         else:
             self._countdown = self._reprimand._module.get_settings()['duration']['cg_poll']
 
+        if 'name' in kwargs.keys():
+            self._name = kwargs['name']
+
         if self._message is not None:
             return
 
-        #Assuming no message is found it will create the embed, starting here.
+        # Assuming no message is found it will create the embed, starting here.
         cg_poll_embed = self._reprimand._module.get_settings()["messages"]["cg_poll_embed"]
         accused: discord.Member = self._reprimand.get_accused()
         parsed_cgs = self._reprimand._module._get_bot().moderation.get_parsed_cgs()
@@ -289,7 +300,6 @@ class GCPoll(Poll):
 
         accused: discord.Member = self._reprimand.get_accused()
         body_embed = cg_poll_embed['body']
-
 
         if 'singular' not in kwargs.keys() or ('singular' in kwargs.keys() and kwargs['singular'] is False):
             body_embed = body_embed.replace('{options}', cg_poll_embed['options'])
@@ -307,20 +317,22 @@ class GCPoll(Poll):
             .replace('{options}', ""))
 
         self._message: Message = await self._reprimand.get_polling_thread().send(embed=embed)
-        #Will only add these if the parameter 'singular' is not present.
+        # Will only add these if the parameter 'singular' is not present.
 
         if 'singular' not in kwargs.keys() or ('singular' in kwargs.keys() and kwargs['singular'] is False):
             await self._message.add_reaction("👍")
             await self._message.add_reaction("👎")
 
+        # Add saving functions here.
 
-        #Add saving functions here.
+    def get_message(self):
+        return self._message
+
     def tick(self, reprimand):
         if self._countdown > 0:
-            new_countdown = self._countdown - 1
-            self._countdown = new_countdown
+            self._countdown = self._countdown - 1
 
-        if self._countdown % 60 == 0:
+            # if self._countdown % 60 == 0:
             self._reprimand.save()
 
     # print(f"GCPoll (CG: {self._cg_id}): {self._countdown})")
@@ -351,11 +363,16 @@ class GCPoll(Poll):
     def get_type(self):
         return PollType.GC_POLL
 
+    def name(self):
+        # For debugging purposes.
+        return self._name
+
     def get_seconds_remaining(self) -> int:
         return self._countdown
 
     def _has_countdown_elapsed(self) -> bool:
         return self._countdown <= 0
+
 
 class PunishmentPoll(Poll):
     def __init__(self, reprimand, accused_member: discord.Member):
@@ -376,6 +393,7 @@ class PunishmentPoll(Poll):
         self._countdown: int = 0
         self._settings = reprimand._module.get_settings()
         self._message: discord.Message = None
+        self._name = None
 
     async def load(self, **kwargs):
         """
@@ -389,10 +407,15 @@ class PunishmentPoll(Poll):
         countdown: :class:`int`
             The amount of seconds left until this poll concludes. If no countdown is provided, it is assumed that this is a
             new puishment poll.
+        name: :class:`str`
+            For debugging purposes.
         """
 
         if 'message_id' in kwargs.keys():
             self._message = await self._reprimand.get_polling_thread().fetch_message(kwargs['message_id'])
+
+        if 'name' in kwargs.keys():
+            self._name = kwargs['name']
 
         if 'countdown' in kwargs.keys():
             self._countdown = kwargs['countdown']
@@ -402,8 +425,8 @@ class PunishmentPoll(Poll):
         if self._message is not None:
             return
 
-        #Assuming that no embed is found or previously loaded, this is the stage where a new embed is
-        #created and posted in the polling thread associated with this reprimand process.
+        # Assuming that no embed is found or previously loaded, this is the stage where a new embed is
+        # created and posted in the polling thread associated with this reprimand process.
         punishment_embed_msgs = self._settings["messages"]["punishment_poll_embed"]
         punishment_entry = punishment_embed_msgs["punishment_entry"]
         punishments = self._settings["punishments"]
@@ -415,24 +438,32 @@ class PunishmentPoll(Poll):
 
         for p_id, entry in punishments.items():
             punishment_entries = (
-                punishment_entries
-                + punishment_entry.replace("{emoji}", entry["emoji"])
-                .replace("{name}", entry["name"].capitalize())
-                .replace("{short_description}", entry["short_description"])
-                .replace("{type}", entry["punishment_type"])
-                + "\n"
+                    punishment_entries
+                    + punishment_entry.replace("{emoji}", entry["emoji"])
+                    .replace("{name}", entry["name"].capitalize())
+                    .replace("{short_description}", entry["short_description"])
+                    .replace("{type}", entry["punishment_type"])
+                    + "\n"
             )
 
-
-        embed = discord.Embed(colour=config.EMBED_COLOUR, title='Punishment Poll', description=punishment_poll_description_format.replace("{punishment_entries}", punishment_entries).replace('{duration}', format_time.seconds(self._countdown)))
+        embed = discord.Embed(colour=config.EMBED_COLOUR, title='Punishment Poll',
+                              description=punishment_poll_description_format.replace("{punishment_entries}",
+                                                                                     punishment_entries).replace(
+                                  '{duration}', format_time.seconds(self._countdown)))
         self._message = await self._reprimand.get_polling_thread().send(embed=embed)
 
-        #Adds the emojis associated to each option.
+        # Adds the emojis associated to each option.
         for entry in punishments.values():
             await self._message.add_reaction(entry['emoji'])
 
         ##Here, add the functions for storing the poll, or do this in the reprimand object.
 
+    def get_message(self):
+        return self._message
+
+    def name(self):
+        # For debugging purposes.
+        return self._name
 
     def get_ayes(self) -> int:
         raise Exception('Not required.')
@@ -458,22 +489,21 @@ class PunishmentPoll(Poll):
                         count[p_id] = 1
         return count
 
-
     def get_type(self) -> PollType:
         return PollType.PUNISHMENT_POLL
 
-    #A function called per tick, where a tick is a second elapsed.
+    # A function called per tick, where a tick is a second elapsed.
     def tick(self, reprimand):
-        self._countdown = --self._countdown
+        print('Pun Tick.')
+        print(self._countdown)
+        if self._countdown > 0:
+            self._countdown = self._countdown - 1
 
     def get_seconds_remaining(self) -> int:
         return self._countdown
 
     def _has_countdown_elapsed(self) -> bool:
         return self._countdown <= 0
-
-
-
 
 
 class Reprimand:
@@ -513,24 +543,25 @@ class Reprimand:
         self._gc_approved = False
         self._gc_voted = False
 
-
     async def load(self, discussion_thread_id: int = 0, polling_thread_id: int = 0):
         guild: discord.Guild = self._module._get_main_guild()
 
-        #Creates a thread for both discussion and polling if none currently exists.
+        # Creates a thread for both discussion and polling if none currently exists.
         string_date = datetime.now().strftime("%m%d%Y")
         if polling_thread_id == 0:
-            self._polling_thread = await self._module.get_polling_channel().create_thread(name=f"{string_date}/{self._accused_member.name.lower()}/poll", type=ChannelType.public_thread)
+            self._polling_thread = await self._module.get_polling_channel().create_thread(
+                name=f"{string_date}/{self._accused_member.name.lower()}/poll", type=ChannelType.public_thread)
         else:
             self._polling_thread = guild.get_thread(polling_thread_id)
 
         if discussion_thread_id == 0:
-            self._discussion_thread = await self._module.get_discussion_channel().create_thread(name=f"{string_date}/{self._accused_member.name.lower()}/discussion", type=ChannelType.public_thread)
+            self._discussion_thread = await self._module.get_discussion_channel().create_thread(
+                name=f"{string_date}/{self._accused_member.name.lower()}/discussion", type=ChannelType.public_thread)
             await self._discussion_thread.send(f"Polling Thread: {self._polling_thread.mention}")
         else:
             self._discussion_thread = guild.get_thread(discussion_thread_id)
 
-        #Checks if all voting members are added to all threads for active reprimands.
+        # Checks if all voting members are added to all threads for active reprimands.
         voting_members = self._module.get_voting_members()
         discussion_members = self._discussion_thread.members
         polling_members = self._polling_thread.members
@@ -539,8 +570,8 @@ class Reprimand:
             is_dm = False
             is_pm = False
 
-            #This is really sloppy, research and see if you can't use lambda to make more efficent
-            #the execution of this process.
+            # This is really sloppy, research and see if you can't use lambda to make more efficent
+            # the execution of this process.
 
             for d_member in discussion_members:
                 if d_member.id == v_member.id:
@@ -556,48 +587,69 @@ class Reprimand:
             if is_pm is False:
                 await self._polling_thread.add_user(v_member)
 
-
-        #Creates the polls used to decide which GC is applied, and what punishment they will feel.
+        # Creates the polls used to decide which GC is applied, and what punishment they will feel.
 
         if len(self._cg_ids) == 1:
             gc_poll_singular = GCPoll(self, self._cg_ids[0])
-            await gc_poll_singular.load(singular=True)
+            await gc_poll_singular.load(singular=True, name="GCPoll")
             self._polls.append(gc_poll_singular)
         else:
+            iteration = 0
             for cg_id in self._cg_ids:
+                iteration = iteration + 1
                 gc_poll = GCPoll(self, cg_id)
-                await gc_poll.load()
+                await gc_poll.load(name=f"GCPoll {iteration}")
                 self._polls.append(gc_poll)
 
         p_poll = PunishmentPoll(self, self._accused_member)
-        await p_poll.load()
+        await p_poll.load(name="PunishmentPoll")
         self._polls.append(p_poll)
 
-        message_settings = self._module.get_settings()
-        discussion_reprimand_resumed = message_settings['discussion_reprimand_resumed']
+        message_settings = self._module.get_settings()['messages']
+        discussion_reprimand_resumed = message_settings['discussion_resumed']
         polls_resumed_embed = message_settings['polls_resumed_embed']
 
-        poll_entries = []
+        poll_entries: list[str] = []
 
         for poll in self._polls:
-            poll_entries.append(polls_resumed_embed['poll_entry'].replace('GC Poll' if poll.get_type() == PollType.GC_POLL else 'Punishment Poll').replace('{time_remaining}', format_time.seconds(poll.get_seconds_remaining())))
+            poll_entries.append(polls_resumed_embed['poll_entry'].replace('{type}',
+                                                                          'GC Poll' if poll.get_type() == PollType.GC_POLL else 'Punishment Poll').replace(
+                '{time_remaining}', format_time.seconds(poll.get_seconds_remaining())))
 
-        if discussion_thread_id == 0 and polling_thread_id == 0:
-            self.save()
+        embed: discord.Embed = discord.Embed(colour=config.EMBED_COLOUR,
+                                             description=polls_resumed_embed['description'].replace('{poll_entries}',
+                                                                                                    '\n'.join(
+                                                                                                        poll_entries)),
+                                             title=polls_resumed_embed['title'])
 
+        await self._polling_thread.send(embed=embed)
+        await self._discussion_thread.send(
+            discussion_reprimand_resumed.replace('{poll_thread}', self._polling_thread.mention))
+
+        for poll in self._polls:
+            print(poll.name())
+        print('Starting ticker.')
+        self.ticker.start()
 
     def save(self):
         """
         Saves data values of the reprimand and associated objects to the collection.
         """
-        self._module.get_data_manager().save_reprimand(self)
+        pass
+        #self._module.get_data_manager().save_reprimand(self)
 
-    def  get_accused(self) -> discord.Member:
+    def get_accused(self) -> discord.Member:
         """
         Returns the member id of the accused.
         """
 
         return self._accused_member
+
+    @loop(seconds=1)
+    async def ticker(self):
+        for poll in self._polls:
+            print(poll.name())
+            poll.tick(self)
 
     def get_polling_thread(self) -> Thread:
         return self._polling_thread
@@ -608,6 +660,7 @@ class Reprimand:
     def get_polls(self) -> list[Poll]:
         return self._polls
 
+
 class ReprimandManager:
     def __init__(self, module, bot):
         """
@@ -617,7 +670,6 @@ class ReprimandManager:
         self._bot = bot
         self._module = module
         self._reprimands: list[Reprimand] = []
-
 
     def is_already_accused(self, accused_id: int):
         """
@@ -638,7 +690,6 @@ class ReprimandManager:
         await reprimand.load()
         self._reprimands.append(reprimand)
         return reprimand
-
 
     def get_reprimand(self, thread_id: int) -> Union[Reprimand, None]:
         """
@@ -669,8 +720,7 @@ class ReprimandManager:
 
         pass
 
-
-    async def is_reprimand_thread(self, thread_id: int) -> bool:
+    def is_reprimand_thread(self, thread_id: int) -> bool:
         """
         Checks if a thread is a thread attached to a live reprimand object.
 
@@ -691,8 +741,7 @@ class ReprimandManager:
         """Loads saved reprimands from MongoDB Collections into memory.
 
         """
-        self.tick.start()
-
+        pass
 
     def get_reprimand_from_thread_id(self, thread_id: int) -> Union[Thread, None]:
         """
@@ -711,13 +760,6 @@ class ReprimandManager:
             if reprimand.get_discussion_thread().id == thread_id:
                 return reprimand
         return None
-
-    @loop(seconds=1)
-    def tick(self):
-        if len(self._reprimands) > 0:
-            for reprimand in self._reprimands:
-                for poll in reprimand.get_polls():
-                    poll.tick(reprimand)
 
 
 class ReprimandModule:
@@ -850,7 +892,6 @@ class ReprimandModule:
 
         return self._guild
 
-
     def get_voting_members(self) -> list[discord.Member]:
         """
         Returns a list of members that can vote in a qorum.
@@ -910,7 +951,7 @@ class ReprimandModule:
                 walk(split_path, split_path[0], settings)
 
     async def on_ready(self):
-        #Here, load up reprimands from MongoDB collection and start the ticker.
+        # Here, load up reprimands from MongoDB collection and start the ticker.
         await self._reprimand_manager.load()
 
     def get_discussion_channel(self):
@@ -965,13 +1006,13 @@ class ReprimandModule:
         return self.get_punishments()[punishment_id]
 
     def add_punishment(
-        self,
-        punishment_id: str,
-        punishment_type: PunishmentType,
-        duration: str,
-        name: str,
-        short_description: str,
-        emoji: Emoji,
+            self,
+            punishment_id: str,
+            punishment_type: PunishmentType,
+            duration: str,
+            name: str,
+            short_description: str,
+            emoji: Emoji,
     ):
         """
         Add a punishment to the reprimand config file.
@@ -1025,11 +1066,11 @@ class ReprimandModule:
             "reprimand"
         ]
 
-
     def get_main_guild(self):
         if self._guild == None:
             self._guild = self._bot.get_guild(config.MAIN_SERVER)
         return self._guild
+
 
 class ModerationSystem:
     def __init__(self, bot):
@@ -1048,7 +1089,7 @@ class ModerationSystem:
         else:
             aiohttp_session = getattr(self.bot.http, "_HTTPClient__session")
             async with aiohttp_session.get(
-                "https://tldrnews.co.uk/discord-community-guidelines/"
+                    "https://tldrnews.co.uk/discord-community-guidelines/"
             ) as response:
                 html = await response.text()
                 soup = bs4.BeautifulSoup(html, "html.parser")
@@ -1070,7 +1111,7 @@ class ModerationSystem:
                         step_str = f"{step_str}.{cg_id}"
 
                         for i, cg_c in enumerate(
-                            filter(lambda cg_c: type(cg_c) == Tag, contents[1])
+                                filter(lambda cg_c: type(cg_c) == Tag, contents[1])
                         ):
                             result[step_str] = contents[0]
                             result = result | walk(step_str, i + 1, branch, cg_c)
@@ -1091,7 +1132,7 @@ class ModerationSystem:
                         cg_c: Tag
                         j: int
                         for j, cg_c in enumerate(
-                            filter(lambda cg_c: type(cg_c) == Tag, contents[1])
+                                filter(lambda cg_c: type(cg_c) == Tag, contents[1])
                         ):
                             parsed_cg = parsed_cg | walk(str_cg_id, j + 1, cg, cg_c)
 
