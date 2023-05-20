@@ -289,7 +289,7 @@ class Connection:
                 'thread_id': :class:`int`
                 'renamedpoll': :class:`bool`
             }
-    reprimand_cases: :class:`pymongo.collection.Collection` **NOT YET IMPLEMENTED**
+    (NOT ADDED) reprimand_cases: :class:`pymongo.collection.Collection` **NOT YET IMPLEMENTED**
         The collection that holds data reguarding ongoing reprimands for the reprimand module.
             {
                 'reprimand_id': :class:`int`
@@ -310,13 +310,22 @@ class Connection:
                 'punishment_poll': :class:`str`
                 ]
             }
-    reprimand_polls: :class:`pymongo.collection.Collection`
+    reprimands: :class:`pymongo.collection.Collection`
         The collection that holds data regarding reprimand polls, specifically temporal data for
         the reprimand module.
             {
-                'thread_id': :class:`int`
-                'message_id': :class:`int`
-                'remaining_seconds': :class:`int`
+                '_id': :class:`int`
+                'accused_id': :class:`int`
+                'thread_ids': [
+                    value: :class:`str`
+                 ],
+                'poll_countdowns': {
+                    key: :class:`str`
+                    value: :class:`int`
+                 },
+                 gc_approved: :class:`bool`
+                 gc_vetod: :class:`bool`
+                 complete: :class:`bool`
             }
     """
 
@@ -353,8 +362,7 @@ class Connection:
         self.insta_listeners = self.db["insta_listeners"]
         self.threading_profiles = self.db["threading_profiles"]
         self.threading_threads = self.db["threading_threads"]
-        self.reprimand_polls = self.db["reprimand_polls"]
-        self.reprimand_cases = self.db["reprimand_cases"]
+        self.reprimands = self.db['reprimands']
 
     def clear_bills_tracker_collection(self):
         self.bills_tracker.delete_many({})

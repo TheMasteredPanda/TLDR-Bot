@@ -30,6 +30,7 @@ import modules.format_time as format_time
 from modules import database
 from modules.timers import loop
 from modules.utils import SettingsHandler
+import embed_maker
 
 db = database.get_connection()
 
@@ -139,39 +140,46 @@ class ReprimandDataManager:
 
     def __init__(self):
         self._db = database.get_connection()
-        self._reprimand_polls: Collection = self._db.reprimand_polls
-        self._reprimand_cases: Collection = self._db.reprimand_cases
+        self._reprimand_collection: Collection = self._db.reprimands
 
-    def add_poll(self, thread_id: int, message_id: int, remaining_seconds: int):
-        self._reprimand_polls.insert_one(
-            {
-                "thread_id": thread_id,
-                "message_id": message_id,
-                "remaining_seconds": remaining_seconds,
-            }
-        )
+    def get_reprimand(self, thread_id: int):
+        """
+        Fetch a saved reprimand via an associated thread's id (polling or discussion)
 
-    def rm_poll(self, thread_id: int, message_id: int):
-        self._reprimand_polls.delete_one(
-            {"thread_id": thread_id, "message_id": message_id}
-        )
+        Parameters
+        ----------
+        thread_id: :class:`int`
+            The id othe thread the reprimand is associated with.
+        """
+        return self._reprimand_collection.find_one({'thread_ids': thread_id})
 
-    def rm_polls(self, thread_id: int):
-        self._reprimand_polls.delete_many({"thread_id": thread_id})
+    def get_reprimands(self):
+        """
+        Fetches all live reprimands from the database.
+        """
+        return self._reprimand_collection.find({'$not': {'complete': True}})
 
-    def update_poll(self, thread_id: int, message_id: int, remaining_seconds: int):
-        self._reprimand_polls.update_one(
-            {"thread_id": thread_id, "message_id": message_id},
-            {"$set": {"remaining_seconds": remaining_seconds}},
-        )
+    def save_reprimand(self, reprimand):
+        """
+        Updates or inserts a reprimand into the database.
 
-    def get_polls(self):
-        return self._reprimand_polls.find()
+        Parameters
+        ----------
+        document: :class:`object`
+            Mongodb document.
+        """
 
-    def get_poll(self, thread_id: int, message_id: int):
-        return self._reprimand_polls.find_one(
-            {"thread_id": thread_id, "message_id": message_id}
-        )
+        poll_time = {}
+        polls = reprimand.get_polls()
+
+        #Fetches poll embed message id and seconds remaining from countdown.
+        for poll in polls:
+            poll_time[poll.get_message().id] = poll.get_seconds_remaining()
+
+
+
+        self._reprimand_collection.update_one({"thread_id": reprimand.get_discussion_thread().id}, {'completed': reprimand.is_completed(), 'gc_approved': reprimand.has_gc_approved(), 'gc_voted': reprimand.has_gc_vetoed(), 'poll_countdown': poll_time, 'thread_ids': [reprimand.get_discussion_thread().id, reprimand.get_polling_thread().id], 'accused_id': reprimand.get_accused().id}, upsert=True)
+
 
 
 class Poll:
@@ -313,12 +321,9 @@ class GCPoll(Poll):
             self._countdown = new_countdown
 
         if self._countdown % 60 == 0:
-            self.save()
+            self._reprimand.save()
 
     # print(f"GCPoll (CG: {self._cg_id}): {self._countdown})")
-
-    def _has_countdown_elapsed(self):
-        return self._countdown <= 0
 
     def get_message(self):
         return self._message
@@ -346,9 +351,11 @@ class GCPoll(Poll):
     def get_type(self):
         return PollType.GC_POLL
 
-    def get_seconds_remaining(self):
+    def get_seconds_remaining(self) -> int:
         return self._countdown
 
+    def _has_countdown_elapsed(self) -> bool:
+        return self._countdown <= 0
 
 class PunishmentPoll(Poll):
     def __init__(self, reprimand, accused_member: discord.Member):
@@ -496,13 +503,15 @@ class Reprimand:
         self._manager = manager
         self._bot = manager._bot
         self._module: ReprimandModule = manager._module
-        self._countdown: int = 0
         self._paused: bool = False
-        self._accused_member: Member = accused
+        self._accused_member: discord.Member = accused
         self._polls: list[Poll] = []
         self._discussion_thread: Thread = None
         self._polling_thread: Thread = None
         self._cg_ids = cg_ids
+        self._completed = False
+        self._gc_approved = False
+        self._gc_voted = False
 
 
     async def load(self, discussion_thread_id: int = 0, polling_thread_id: int = 0):
@@ -564,12 +573,24 @@ class Reprimand:
         await p_poll.load()
         self._polls.append(p_poll)
 
+        message_settings = self._module.get_settings()
+        discussion_reprimand_resumed = message_settings['discussion_reprimand_resumed']
+        polls_resumed_embed = message_settings['polls_resumed_embed']
 
-    def start(self):
-        pass
+        poll_entries = []
 
-    def stop(self):
-        pass
+        for poll in self._polls:
+            poll_entries.append(polls_resumed_embed['poll_entry'].replace('GC Poll' if poll.get_type() == PollType.GC_POLL else 'Punishment Poll').replace('{time_remaining}', format_time.seconds(poll.get_seconds_remaining())))
+
+        if discussion_thread_id == 0 and polling_thread_id == 0:
+            self.save()
+
+
+    def save(self):
+        """
+        Saves data values of the reprimand and associated objects to the collection.
+        """
+        self._module.get_data_manager().save_reprimand(self)
 
     def  get_accused(self) -> discord.Member:
         """
@@ -768,6 +789,13 @@ class ReprimandModule:
                 "punishment_approved": "Punishment agreed upon has been approved by {gc_name} and executed. Threads locked.",
                 "punishment_rejected": "Punishment agreed upon has been rejected. Threads locked.",
                 "punishment_vetoed": "Reprimand vetoed by {gc_name}. Threads locked.",
+                "awaiting_approval": "Polling complete, awaiting GC approval.",
+                "polls_resumed_embed": {
+                    "title": "Reprimand Polls Resumed.",
+                    "poll_entry": "{type} Poll has resumed with {time_remaining} left.",
+                    "description": "{poll_entries}"
+                },
+                "discussion_resumed": "Reprimand resumed, see {poll_thread} for remaining active polls.",
                 "message_to_accused": {},
                 "rtime": {
                     "header": "Time Remaining",
