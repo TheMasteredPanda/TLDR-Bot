@@ -412,13 +412,13 @@ class GCApprovalView(discord.ui.View):
 
 
 
-    @button(label="Approved", style=discord.ButtonStyle.green, emoji="👍")
+    @button(label="Approved", style=discord.ButtonStyle.green, emoji="👍", custom_id="approval_button")
     async def approved_callback(self, button, interaction):
         reprimand = self.checks(interaction)
         if reprimand:
             reprimand.approve()
 
-    @button(label="Rejected", style=discord.ButtonStyle.red, emoji="👎")
+    @button(label="Rejected", style=discord.ButtonStyle.red, emoji="👎", custom_id="rejection_button")
     async def rejected_callback(self, button, interaction):
         reprimand = self.checks(interaction)
         if reprimand:
@@ -990,6 +990,7 @@ class ReprimandModule:
             },
             "voting_member_role": 0,
             "gc_member_role": 0,
+            "mute_role": 0,
             "quorum_minimum": 0,
             "polling_channel": 0,
             "discussion_channel": 0,
@@ -1012,7 +1013,6 @@ class ReprimandModule:
                     "description": "{poll_entries}"
                 },
                 "discussion_resumed": "Reprimand resumed, see {poll_thread} for remaining active polls.",
-                "message_to_accused": {},
                 "rtime": {
                     "header": "Time Remaining",
                     "entry": {
@@ -1023,7 +1023,7 @@ class ReprimandModule:
                 "cg_poll_embed": {
                     "title": "Has {user} breached {cg_id}?",
                     "footer": "",
-                    "body": "{cg_description}\n\nPoll Duration: {duration} (execute >time to see current time){options}",
+                    "body": "{cg_description}\n\nPoll Duration: {duration} (execute >rtime to see current time){options}",
                     "options": "\n\n**Options**\n👍 to vote in the affirmative\n👎 to vote in the negative",
                 },
                 "gc_approval_embed": {
