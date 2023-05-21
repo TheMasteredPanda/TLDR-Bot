@@ -743,7 +743,19 @@ class Reprimand:
             else:
                 message = message.replace('{temporal_entry}', '')
 
-            await self._accused_member.send(message)
+
+            parsed_cgs = self._module._bot.moderation.get_parsed_cgs()
+            selected_cgs = {}
+            for key in parsed_cgs.keys():
+                if key in self._cg_ids:
+                    selected_cgs[key] = parsed_cgs[key]
+
+            desc = ""
+
+            for key, value in selected_cgs.items():
+                desc = desc + f"`{key}` {value}"
+
+            await self._accused_member.send(message.replace("{cgs_violated}", desc))
 
         duration = 0
 
