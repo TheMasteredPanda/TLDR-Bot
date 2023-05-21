@@ -732,6 +732,8 @@ class Reprimand:
         punishments = self._module.get_punishments()
         chosen_punishment = punishments[self._chosen_punishment_id]
         ppn_message = self._module.get_settings()['messages']['punished_player_notification_message']
+        pa_message = self._module.get_settings()['messages']['punishment_approved']
+
         if self._accused_member.can_send():
             message = ppn_message['message']
 
@@ -757,17 +759,36 @@ class Reprimand:
         if chosen_punishment['punishment_type'] == 'BAN':
             await self._accused_member.ban()
 
+        await self._discussion_thread.send(pa_message)
+        await self._polling_thread.send(pa_message)
         await self._discussion_thread.edit(locked=True)
         await self._polling_thread.edit(locked=True)
+        self._module.get_reprimand_manager().delete_reprimand(self)
 
 
-
-    def reject(self):
+    async def reject(self):
         """
         Executed when the rejection callback in GCApprovalView is executed successfully. This executes the rejection phase of the
         reprimand. Locking the thread and waiting for the thread to automatically archive.
         """
-        pass
+        pr_message = self._module.get_settings()['messages']['punishment_rejcted']
+        await self._discussion_thread.send(pr_message)
+        await self._polling_thread.send(pr_message)
+        await self._discussion_thread.edit(locked=True)
+        await self._polling_thread.edit(locked=True)
+        self._module.get_reprimand_manager().delete_reprimand(self)
+
+    async def veto(self, vetod_by: discord.Member):
+        """
+        Executed when a GC has chosen to veto a reprimand. Veto will end and lock the reprimand.
+        """
+        vetoed_message = self._module.get_settings()['mesasge']['punishment_vetoed'].replace("{gc_name}", vetod_by.name)
+        await self._polling_thread.send(vetoed_message)
+        await self._discussion_thread.send(vetoed_message)
+        await self._polling_thread.edit(locked=True)
+        await self._discussion_thread.edit(locked=True)
+        self._module.get_reprimand_manager().delete_reprimand(self)
+
 
     def get_polling_thread(self) -> Thread:
         return self._polling_thread
@@ -999,9 +1020,8 @@ class ReprimandModule:
                     "body": "Do you approve of {punishment_name} on this Reprimand?"
                 },
                 "punished_player_notification_message": {
-                    "title": "Punishment Notification",
                     "temporal_entry": "for {time} ",
-                    "body": "You have been {punishment_type} {temporal_entry}for violating the following CGs:\n{cg_violated}",
+                    "message": "You have been {punishment_type} {temporal_entry}for violating the following CGs:\n{cg_violated}",
                 },
                 "punishment_poll_embed": {
                     "title": {
@@ -1112,6 +1132,7 @@ class ReprimandModule:
         # Here, load up reprimands from MongoDB collection and start the ticker.
         self._bot.logger.info("Reprimand loaded.")
         await self._reprimand_manager.load()
+        self._bot.add_view(GCApprovalView(self))
 
     def get_discussion_channel(self):
         channel = None
