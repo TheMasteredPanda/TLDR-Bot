@@ -558,7 +558,7 @@ class PunishmentPoll(Poll):
         if self._countdown > 0:
             self._countdown = self._countdown - 1
 
-        if self._countdown == 0:
+        if self._countdown == 0 and reprimand.is_awaiting_approval() is False:
             #Contains code executed for the end of the reprimand, setting up the gc approval process.
             #This assumines that the GCPolls have too been completed, and the PunishmentPoll be the last
             #poll to complete.
@@ -567,15 +567,16 @@ class PunishmentPoll(Poll):
             gc_approval_embed = messages_settings['gc_approval_embed']
 
             counts = await self.get_reaction_counts()
-            print(counts)
-            if max(counts.keys()) >= m_settings['qourum_minimum']:
+            if max(counts.values()) >= m_settings['quorum_minimum']:
                 await self._reprimand.get_polling_thread().send(messages_settings['qourum_met'])
                 embed = discord.Embed(colour=config.EMBED_COLOUR, description=gc_approval_embed['body'], title=gc_approval_embed['title'])
                 await self._reprimand.get_polling_thread().send(embed=embed, view=GCApprovalView(self._reprimand))
+                reprimand._gc_awaiting_approval = True
             else:
                 await self._reprimand.get_polling_thread().send(messages_settings['qourum_not_met'])
                 await self._reprimand.get_polling_thread().edit(locked=True)
                 await self._reprimand.get_discussion_thread().edit(locked=True)
+                reprimand.module.get_reprimand_manager().delete_reprimand(reprimand)
 
 
 
