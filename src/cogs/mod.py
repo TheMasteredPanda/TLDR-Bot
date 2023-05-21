@@ -25,6 +25,7 @@ db = database.get_connection()
 class Mod(Cog):
     def __init__(self, bot: TLDR):
         self.bot = bot
+        self._reprimand_module = None
 
     @Cog.listener()
     async def on_ready(self):
