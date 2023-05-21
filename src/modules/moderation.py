@@ -719,13 +719,48 @@ class Reprimand:
     def is_awaiting_approval(self) -> bool:
         return self._gc_awaiting_approval
 
-    def approve(self):
+    async def approve(self):
         """
         Executed when the approval calledback in GCApprovalView is executed successfully. This executes the punishment phase
         of the reprimand. Executing the agreed upon punishment and deleting the reprimand from the collection. This also archives
         both polling and discussion threads.
         """
-        pass
+
+        if self._module.is_punishment_id(self._chosen_punishment_id) is False:
+            raise Exception(f"Assumed punishment id {self._chosen_punishment_id} is no longer a punishment id.")
+
+        punishments = self._module.get_punishments()
+        chosen_punishment = punishments[self._chosen_punishment_id]
+        ppn_message = self._module.get_settings()['messages']['punished_player_notification_message']
+        if self._accused_member.can_send():
+            message = ppn_message['message']
+
+            if 'duration' in chosen_punishment.keys():
+                duration = chosen_punishment['punishment_duration']
+                message = message.replace('{temporal_entry}', ppn_message['temporal_entry'].replace('{time}', format_time.seconds(duration)))
+            else:
+                message = message.replace('{temporal_entry}', '')
+
+            await self._accused_member.send(message)
+
+        duration = 0
+
+        if chosen_punishment['punishment_type'] == 'MUTE':
+            mute_role = self._module._guild.get_role(self._module.get_settings()['mute_role'])
+
+            if mute_role is None:
+                raise Exception("Mute role is not set.")
+
+            await self._accused_member.add_roles(mute_role)
+
+
+        if chosen_punishment['punishment_type'] == 'BAN':
+            await self._accused_member.ban()
+
+        await self._discussion_thread.edit(locked=True)
+        await self._polling_thread.edit(locked=True)
+
+
 
     def reject(self):
         """
@@ -962,6 +997,11 @@ class ReprimandModule:
                     "title": "Approve Agreed Punishment.",
                     "footer": "",
                     "body": "Do you approve of {punishment_name} on this Reprimand?"
+                },
+                "punished_player_notification_message": {
+                    "title": "Punishment Notification",
+                    "temporal_entry": "for {time} ",
+                    "body": "You have been {punishment_type} {temporal_entry}for violating the following CGs:\n{cg_violated}",
                 },
                 "punishment_poll_embed": {
                     "title": {
