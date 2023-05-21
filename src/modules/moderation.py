@@ -921,6 +921,7 @@ class ReprimandModule:
                 },
             },
             "voting_member_role": 0,
+            "gc_member_role": 0,
             "quorum_minimum": 0,
             "polling_channel": 0,
             "discussion_channel": 0,
