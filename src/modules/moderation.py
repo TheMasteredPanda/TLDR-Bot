@@ -1001,7 +1001,7 @@ class ReprimandModule:
             "gc_notification": {"interval": "5m", "message": "{reprimand_polling_channel_mention} awaiting approval. {gc_role_mention}."},
             "notifications": {"5m": "{type} will close in 5 minutes. {voting_role_mention}."},
             "messages": {
-                "punishment_approved": "Punishment agreed upon has been approved by {gc_name} and executed. Threads locked.",
+                "punishment_approved": "Punishment agreed upon has been approved and executed. Threads locked.",
                 "punishment_rejected": "Punishment agreed upon has been rejected. Threads locked.",
                 "punishment_vetoed": "Reprimand vetoed by {gc_name}. Threads locked.",
                 "qourum_met": "Qourum met on option {option_name}. Awaiting GC approval before execution.",
