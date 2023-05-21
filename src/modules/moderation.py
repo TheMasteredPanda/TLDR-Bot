@@ -562,8 +562,8 @@ class PunishmentPoll(Poll):
                 await self._reprimand.get_polling_thread().send(embed=embed, view=GCApprovalView(self._reprimand))
             else:
                 await self._reprimand.get_polling_thread().send(messages_settings['qourum_not_met'])
-                self._reprimand.get_polling_thread().edit(locked=True)
-                self._reprimand.get_discussion_thread().edit(locked=True)
+                await self._reprimand.get_polling_thread().edit(locked=True)
+                await self._reprimand.get_discussion_thread().edit(locked=True)
 
 
 
