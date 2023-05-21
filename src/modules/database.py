@@ -323,9 +323,8 @@ class Connection:
                     key: :class:`str`
                     value: :class:`int`
                  },
-                 gc_approved: :class:`bool`
-                 gc_vetod: :class:`bool`
-                 complete: :class:`bool`
+                 gc_awaiting_approval: :class:`bool`
+                 chosen_punishment_id: :class:`str`
             }
     """
 

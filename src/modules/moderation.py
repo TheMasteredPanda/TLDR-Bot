@@ -8,7 +8,9 @@ from typing import Union
 
 import bs4
 from discord.guild import Guild
+from discord.role import Role
 from discord.types.channel import ThreadChannel
+from discord.ui.button import button
 from pytz import NonExistentTimeError
 import config
 import discord
@@ -129,7 +131,6 @@ class Cases:
 
 class PollType(Enum):
     GC_POLL = 1
-    GC_POLL_2 = 4
     PUNISHMENT_POLL = 2
 
 
@@ -325,9 +326,6 @@ class GCPoll(Poll):
 
         # Add saving functions here.
 
-    def get_message(self):
-        return self._message
-
     def tick(self, reprimand):
         if self._countdown > 0:
             self._countdown = self._countdown - 1
@@ -373,6 +371,58 @@ class GCPoll(Poll):
     def _has_countdown_elapsed(self) -> bool:
         return self._countdown <= 0
 
+class GCApprovalView(discord.ui.View):
+    def __init__(self, module):
+        super().__init__(timeout=None)
+        """
+        A button view used for the GC Approval process. This view is persistent, but will be used thoroughout the polling threads
+        as the sole method of approving or rejecting the conclusion of an agreed quorum.
+
+        """
+        self._module = module
+
+
+    def checks(self, interaction):
+        channel: discord.PartialMessageable = interaction.channel
+
+        if channel.type != ChannelType.public_thread:
+            return
+
+        channel_id = channel.id
+        if self._module.is_reprimand_thread(channel_id) is False:
+            return
+
+        reprimand = self._module.get_reprimand_from_thread_id(channel_id)
+        if reprimand is None:
+            raise Exception(f"Attempted to fetch reprimand using channel/thread id {channel_id}, returned no reprimand object.")
+
+        interactor = interaction.user
+        if type(interactor) is not discord.Member:
+            raise Exception(f"Interactor to GCApprovalView in channel/thread id {channel_id} is not canonical Member type.")
+        interactor_roles: list[discord.Role] = interactor.roles
+
+        m_settings = self._module.get_settings()
+        gc_role_id = m_settings['gc_member_role']
+
+
+        for role in interactor_roles:
+            if role.id == gc_role_id:
+                return reprimand
+        return None
+
+
+
+    @button(label="Approved", style=discord.ButtonStyle.green, emoji="👍")
+    async def approved_callback(self, button, interaction):
+        reprimand = self.checks(interaction)
+        if reprimand:
+            reprimand.approve()
+
+    @button(label="Rejected", style=discord.ButtonStyle.red, emoji="👎")
+    async def rejected_callback(self, button, interaction):
+        reprimand = self.checks(interaction)
+        if reprimand:
+            reprimand.reject()
 
 class PunishmentPoll(Poll):
     def __init__(self, reprimand, accused_member: discord.Member):
@@ -493,11 +543,29 @@ class PunishmentPoll(Poll):
         return PollType.PUNISHMENT_POLL
 
     # A function called per tick, where a tick is a second elapsed.
-    def tick(self, reprimand):
-        print('Pun Tick.')
-        print(self._countdown)
+    async def tick(self, reprimand):
         if self._countdown > 0:
             self._countdown = self._countdown - 1
+
+        if self._countdown == 0:
+            #Contains code executed for the end of the reprimand, setting up the gc approval process.
+            #This assumines that the GCPolls have too been completed, and the PunishmentPoll be the last
+            #poll to complete.
+            m_settings = self._reprimand._module.get_settings()
+            messages_settings = m_settings.get_settings()['messages']
+            gc_approval_embed = messages_settings['gc_approval_embed']
+
+            counts = self.get_reaction_counts()
+            if max(counts.keys()) >= m_settings['qourum_minimum']:
+                await self._reprimand.get_polling_thread().send(messages_settings['qourum_met'])
+                embed = discord.Embed(colour=config.EMBED_COLOUR, description=gc_approval_embed['body'], title=gc_approval_embed['title'])
+                await self._reprimand.get_polling_thread().send(embed=embed, view=None)
+            else:
+                await self._reprimand.get_polling_thread().send(messages_settings['qourum_not_met'])
+                self._reprimand.get_polling_thread().edit(locked=True)
+                self._reprimand.get_discussion_thread().edit(locked=True)
+
+
 
     def get_seconds_remaining(self) -> int:
         return self._countdown
@@ -533,17 +601,16 @@ class Reprimand:
         self._manager = manager
         self._bot = manager._bot
         self._module: ReprimandModule = manager._module
-        self._paused: bool = False
         self._accused_member: discord.Member = accused
         self._polls: list[Poll] = []
         self._discussion_thread: Thread = None
         self._polling_thread: Thread = None
         self._cg_ids = cg_ids
-        self._completed = False
         self._gc_approved = False
-        self._gc_voted = False
+        self._gc_awaiting_approval = True
+        self._chosen_punishment_id = None
 
-    async def load(self, discussion_thread_id: int = 0, polling_thread_id: int = 0):
+    async def load(self, discussion_thread_id: int = 0, polling_thread_id: int = 0, **kwargs):
         guild: discord.Guild = self._module._get_main_guild()
 
         # Creates a thread for both discussion and polling if none currently exists.
@@ -560,6 +627,14 @@ class Reprimand:
             await self._discussion_thread.send(f"Polling Thread: {self._polling_thread.mention}")
         else:
             self._discussion_thread = guild.get_thread(discussion_thread_id)
+
+
+        if 'gc_awaiting_approval' in kwargs.keys():
+            self._gc_awaiting_approval = kwargs['gc_awaiting_approval']
+
+        if 'chosen_punishment_id' in kwargs.keys():
+            self._chosen_punishment_id = 'chosen_punishment_id'
+
 
         # Checks if all voting members are added to all threads for active reprimands.
         voting_members = self._module.get_voting_members()
@@ -609,6 +684,7 @@ class Reprimand:
         discussion_reprimand_resumed = message_settings['discussion_resumed']
         polls_resumed_embed = message_settings['polls_resumed_embed']
 
+
         poll_entries: list[str] = []
 
         for poll in self._polls:
@@ -626,11 +702,6 @@ class Reprimand:
         await self._discussion_thread.send(
             discussion_reprimand_resumed.replace('{poll_thread}', self._polling_thread.mention))
 
-        for poll in self._polls:
-            print(poll.name())
-        print('Starting ticker.')
-        self.ticker.start()
-
     def save(self):
         """
         Saves data values of the reprimand and associated objects to the collection.
@@ -645,11 +716,23 @@ class Reprimand:
 
         return self._accused_member
 
-    @loop(seconds=1)
-    async def ticker(self):
-        for poll in self._polls:
-            print(poll.name())
-            poll.tick(self)
+    def is_awaiting_approval(self) -> bool:
+        return self._gc_awaiting_approval
+
+    def approve(self):
+        """
+        Executed when the approval calledback in GCApprovalView is executed successfully. This executes the punishment phase
+        of the reprimand. Executing the agreed upon punishment and deleting the reprimand from the collection. This also archives
+        both polling and discussion threads.
+        """
+        pass
+
+    def reject(self):
+        """
+        Executed when the rejection callback in GCApprovalView is executed successfully. This executes the rejection phase of the
+        reprimand. Locking the thread and waiting for the thread to automatically archive.
+        """
+        pass
 
     def get_polling_thread(self) -> Thread:
         return self._polling_thread
@@ -741,7 +824,28 @@ class ReprimandManager:
         """Loads saved reprimands from MongoDB Collections into memory.
 
         """
-        pass
+        self.ticker.start()
+
+
+    @loop(seconds=1)
+    async def ticker(self):
+        """
+        A one second interval loop that executes the function respondibile for reducing
+        the countdown. Aka, a ticker.
+        """
+        for reprimand in self._reprimands:
+            for poll in reprimand.get_polls():
+                poll.tick(reprimand)
+
+                poll_countdown = poll.get_seconds_remaining()
+                poll_notifications = self._module.get_settings()['notifications']
+
+                for notification_key in poll_notifications.keys():
+                    parsed_key = format_time.parse(notification_key, False)
+
+                    if poll_countdown == parsed_key:
+                        await reprimand.get_polling_thread().send(poll_notifications[notification_key].replace('{voting_role_mention}', self._module.get_voting_role().mention).replace("{type}", "GC Poll" if poll.get_type() == PollType.GC_POLL else 'Punishment Poll'))
+
 
     def get_reprimand_from_thread_id(self, thread_id: int) -> Union[Thread, None]:
         """
@@ -825,13 +929,14 @@ class ReprimandModule:
                 "cg_poll": 500,
                 "pun_poll": 600
             },
-            "gc_notifications": {"500": "Notification Text"},
-            "notifications": {"500": "Notification Text"},
+            "gc_notification": {"interval": "5m", "message": "{reprimand_polling_channel_mention} awaiting approval. {gc_role_mention}."},
+            "notifications": {"5m": "{type} will close in 5 minutes. {voting_role_mention}."},
             "messages": {
                 "punishment_approved": "Punishment agreed upon has been approved by {gc_name} and executed. Threads locked.",
                 "punishment_rejected": "Punishment agreed upon has been rejected. Threads locked.",
                 "punishment_vetoed": "Reprimand vetoed by {gc_name}. Threads locked.",
-                "awaiting_approval": "Polling complete, awaiting GC approval.",
+                "qourum_met": "Qourum met on option {option_name}. Awaiting GC approval before execution.",
+                "qourum_not_met": "Quorum not met. Locking threads.",
                 "polls_resumed_embed": {
                     "title": "Reprimand Polls Resumed.",
                     "poll_entry": "{type} Poll has resumed with {time_remaining} left.",
@@ -851,6 +956,11 @@ class ReprimandModule:
                     "footer": "",
                     "body": "{cg_description}\n\nPoll Duration: {duration} (execute >time to see current time){options}",
                     "options": "\n\n**Options**\n👍 to vote in the affirmative\n👎 to vote in the negative",
+                },
+                "gc_approval_embed": {
+                    "title": "Approve Agreed Punishment.",
+                    "footer": "",
+                    "body": "Do you approve of {punishment_name} on this Reprimand?"
                 },
                 "punishment_poll_embed": {
                     "title": {
@@ -891,6 +1001,13 @@ class ReprimandModule:
             self._guild = self._bot.get_guild(config.MAIN_SERVER)
 
         return self._guild
+
+    def get_voting_role(self) -> Union[Role, None]:
+        voting_member_role = self.get_settings()['voting_member_role']
+        guild = self._guild
+
+        return guild.get_role(voting_member_role)
+
 
     def get_voting_members(self) -> list[discord.Member]:
         """
@@ -952,6 +1069,7 @@ class ReprimandModule:
 
     async def on_ready(self):
         # Here, load up reprimands from MongoDB collection and start the ticker.
+        self._bot.logger.info("Reprimand loaded.")
         await self._reprimand_manager.load()
 
     def get_discussion_channel(self):
