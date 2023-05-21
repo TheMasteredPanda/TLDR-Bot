@@ -1033,7 +1033,7 @@ class ReprimandModule:
                 },
                 "punished_player_notification_message": {
                     "temporal_entry": "for {time} ",
-                    "message": "You have been {punishment_type} {temporal_entry}for violating the following CGs:\n{cg_violated}",
+                    "message": "You have been {punishment_type} {temporal_entry}for violating the following CGs:\n{cgs_violated}",
                 },
                 "punishment_poll_embed": {
                     "title": {
