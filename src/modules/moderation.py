@@ -333,7 +333,6 @@ class GCPoll(Poll):
             # if self._countdown % 60 == 0:
             self._reprimand.save()
 
-    # print(f"GCPoll (CG: {self._cg_id}): {self._countdown})")
 
     def get_message(self):
         return self._message
@@ -412,13 +411,13 @@ class GCApprovalView(discord.ui.View):
 
 
 
-    @button(label="Approved", style=discord.ButtonStyle.green, emoji="👍", custom_id="approval_button")
+    @button(label="Approve", style=discord.ButtonStyle.green, emoji="👍", custom_id="approval_button")
     async def approved_callback(self, button, interaction):
         reprimand = self.checks(interaction)
         if reprimand:
             reprimand.approve()
 
-    @button(label="Rejected", style=discord.ButtonStyle.red, emoji="👎", custom_id="rejection_button")
+    @button(label="Reject", style=discord.ButtonStyle.red, emoji="👎", custom_id="rejection_button")
     async def rejected_callback(self, button, interaction):
         reprimand = self.checks(interaction)
         if reprimand:
@@ -535,15 +534,8 @@ class PunishmentPoll(Poll):
         for p_id, entry in punishments.items():
 
             emoji = entry['emoji']
-            print(emoji)
-            print('------')
-            message_reactions = message.reactions
-            print(f'Reactions: {message_reactions}')
-            print(f'Message ID: {message.id}')
             for reaction in message.reactions:
-                print(reaction.emoji)
                 if reaction.emoji == emoji:
-                    print('Reaction is emoji')
                     if p_id in count.keys():
                         count[p_id] = count[p_id] + 1
                     else:
@@ -568,8 +560,17 @@ class PunishmentPoll(Poll):
 
             counts = await self.get_reaction_counts()
             if max(counts.values()) >= m_settings['quorum_minimum']:
-                await self._reprimand.get_polling_thread().send(messages_settings['qourum_met'])
-                embed = discord.Embed(colour=config.EMBED_COLOUR, description=gc_approval_embed['body'], title=gc_approval_embed['title'])
+                max_key = max(counts.keys(), key=lambda k: counts[k])
+                self._reprimand._chosen_punishment_id = max_key
+
+                chosen_punishment = self._reprimand.get_chosen_punishment()
+
+                if chosen_punishment is None:
+                    raise Exception("Chosen punishment is none for for reprimand under thread {thread_id}/{thread_name}.")
+
+                chosen_punishment_name = chosen_punishment['name']
+                await self._reprimand.get_polling_thread().send(messages_settings['qourum_met'].replace("{option_name}", chosen_punishment_name))
+                embed = discord.Embed(colour=config.EMBED_COLOUR, description=gc_approval_embed['body'].replace("{punishment_name}", chosen_punishment_name), title=gc_approval_embed['title'])
                 await self._reprimand.get_polling_thread().send(embed=embed, view=GCApprovalView(self._reprimand))
                 reprimand._gc_awaiting_approval = True
             else:
@@ -620,8 +621,9 @@ class Reprimand:
         self._polling_thread: Thread = None
         self._cg_ids = cg_ids
         self._gc_approved = False
-        self._gc_awaiting_approval = True
+        self._gc_awaiting_approval = False
         self._chosen_punishment_id = None
+        self._gc_notification_countdown = 0
 
     async def load(self, discussion_thread_id: int = 0, polling_thread_id: int = 0, **kwargs):
         guild: discord.Guild = self._module._get_main_guild()
@@ -733,6 +735,16 @@ class Reprimand:
 
     def is_awaiting_approval(self) -> bool:
         return self._gc_awaiting_approval
+
+
+    def get_chosen_punishment(self):
+        punishments = self._module.get_punishments()
+
+        for key, punishment in punishments.items():
+            if key == self._chosen_punishment_id:
+                return punishment
+
+        return None
 
     async def approve(self):
         """
@@ -917,6 +929,25 @@ class ReprimandManager:
         the countdown. Aka, a ticker.
         """
         for reprimand in self._reprimands:
+            if reprimand.is_awaiting_approval():
+                gc_countdown = reprimand._gc_notification_countdown
+                gc_notification = self._module.get_settings()['gc_notification']
+
+                #Regardless of interval, if it's divisable by the current loop count it should trigger the notifications.
+                parsed_interval = format_time.parse(gc_notification['interval'], False)
+
+                if type(parsed_interval) is not int:
+                    raise Exception(f"Parsed interval {parsed_interval} is not int type.")
+
+                gc_role = self._module.get_gc_role()
+
+                if gc_role is None:
+                    raise Exception(f"GC Role is none")
+
+                if gc_countdown % parsed_interval == 0:
+                    await self._module.get_gc_approval_channel().send(gc_notification['message'].replace("{polling_thread_mention}", reprimand.get_polling_thread().mention).replace("{gc_role_mention}", gc_role.mention))
+                reprimand._gc_notification_countdown = gc_countdown + 1
+
             for poll in reprimand.get_polls():
                 await poll.tick(reprimand)
 
@@ -1014,7 +1045,7 @@ class ReprimandModule:
                 "cg_poll": 500,
                 "pun_poll": 600
             },
-            "gc_notification": {"interval": "5m", "message": "{reprimand_polling_channel_mention} awaiting approval. {gc_role_mention}."},
+            "gc_notification": {"interval": "5m", "message": "{polling_thread_mention} awaiting approval. {gc_role_mention}."},
             "notifications": {"5m": "{type} will close in 5 minutes. {voting_role_mention}."},
             "messages": {
                 "punishment_approved": "Punishment agreed upon has been approved and executed. Threads locked.",
@@ -1096,6 +1127,10 @@ class ReprimandModule:
 
         return guild.get_role(voting_member_role)
 
+
+    def get_gc_role(self) -> Union[Role, None]:
+        gc_member_role = self.get_settings()['gc_member_role']
+        return self._guild.get_role(gc_member_role)
 
     def get_voting_members(self) -> list[discord.Member]:
         """
