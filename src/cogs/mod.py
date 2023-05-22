@@ -1394,6 +1394,8 @@ class Mod(Cog):
             p_type = poll.get_type()
 
             if p_type == PollType.GC_POLL:
+                if poll.is_singular():
+                    continue
                 cg_id = poll.get_cg_id()
                 embed_description = (
                     embed_description
