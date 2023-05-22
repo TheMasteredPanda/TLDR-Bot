@@ -178,7 +178,7 @@ class ReprimandDataManager:
             poll_time[poll.get_message().id] = poll.get_seconds_remaining()
 
         self._reprimand_collection.update_one({"thread_id": reprimand.get_discussion_thread().id},
-                                              {'completed': reprimand.is_completed(),
+                                              {"gc_awaiting_approval": reprimand.is_awaiting_approval(),
                                                'gc_approved': reprimand.has_gc_approved(),
                                                'gc_voted': reprimand.has_gc_vetoed(), 'poll_countdown': poll_time,
                                                'thread_ids': [reprimand.get_discussion_thread().id,
@@ -695,7 +695,6 @@ class Reprimand:
         await p_poll.load(name="PunishmentPoll")
         self._polls.append(p_poll)
 
-
         if len(kwargs.keys()) > 0:
             message_settings = self._module.get_settings()['messages']
             discussion_reprimand_resumed = message_settings['discussion_resumed']
@@ -718,13 +717,15 @@ class Reprimand:
             await self._polling_thread.send(embed=embed)
             await self._discussion_thread.send(
                 discussion_reprimand_resumed.replace('{poll_thread}', self._polling_thread.mention))
+        else:
+            self.save()
+
 
     def save(self):
         """
         Saves data values of the reprimand and associated objects to the collection.
         """
-        pass
-        #self._module.get_data_manager().save_reprimand(self)
+        self._module.get_data_manager().save_reprimand(self)
 
     def get_accused(self) -> discord.Member:
         """
