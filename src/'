@@ -250,6 +250,9 @@ class GCPoll(Poll):
             The reprimand object.
         cg_id: :class:`str`
             The id of the CG dedicated for this poll.
+        message_id: :class:`int`
+            The id of a preexisting embed that is maintained by a GCPoll. If none if provided, it is assumed this is a new poll.
+
         """
         self._reprimand = reprimand
         self._cg_id = cg_id
@@ -453,6 +456,8 @@ class PunishmentPoll(Poll):
             The reprimand object
         accused_member: :class:`Member`
             The member object of the accused.
+        countdown: :class:`int`
+            The amount of seconds until this poll ends.
         """
         self._reprimand: Reprimand = reprimand
         self._accused_member = accused_member
@@ -723,10 +728,9 @@ class Reprimand:
 
             poll_entries: list[str] = []
 
-            for message_id, p_countdown in kwargs['poll_countdowns'].items():
-                poll = GCPoll(self, p_countdown['cg_id']) if p_countdown['type'] == 'GCPOLL' else PunishmentPoll(self, self._accused_member)
-                await poll.load(message_id=message_id, countdown=p_countdown['countdown'])
-                #TODO: Test this all tomorrow.
+            for p_countdown in self._poll_countdowns:
+                poll = GCPoll()
+
 
                 poll_entries.append(polls_resumed_embed['poll_entry'].replace('{type}',
                                                                               'GC Poll' if poll.get_type() == PollType.GC_POLL else 'Punishment Poll').replace(
@@ -738,7 +742,6 @@ class Reprimand:
                                                                                                             poll_entries)),
                                                  title=polls_resumed_embed['title'])
 
-            self._polls.append(poll
             await self._polling_thread.send(embed=embed)
             await self._discussion_thread.send(
                 discussion_reprimand_resumed.replace('{poll_thread}', self._polling_thread.mention))
@@ -964,9 +967,8 @@ class ReprimandManager:
 
             reprimand = Reprimand(self, accused_member, c_reprimand['cg_ids'])
             await reprimand.load(discussion_thread_id=c_reprimand['thread_ids.discussion'], polling_thread_id=c_reprimand['thread_ids.polling'], gc_awaiting_approval=c_reprimand['gc_awaiting_approval'], poll_countdowns=c_reprimand['poll_countdowns'])
-            self._reprimands.append(reprimand)
 
-        self._bot.logger.info(f"Loaded {len(self._reprimands)} reprimands from MongoDB.")
+
         self.ticker.start()
 
 
