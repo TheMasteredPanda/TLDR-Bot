@@ -195,7 +195,10 @@ class ReprimandDataManager:
             poll_time[str(poll.get_message_id())] = {
                 "seconds": poll.get_seconds_remaining(),
                 "type": poll.get_type().name,
-                "cg_id": poll.get_cg_id(),
+                "singular": poll.is_singular(),
+                "cg_id": poll.get_cg_id()
+                if poll.get_type() == PollType.GC_POLL
+                else -1,
             }
 
         self._reprimand_collection.update_one(
@@ -203,9 +206,9 @@ class ReprimandDataManager:
             {
                 "$set": {
                     "gc_awaiting_approval": reprimand.is_awaiting_approval(),
-                    "poll_countdown": poll_time,
+                    "poll_countdowns": poll_time,
                     "thread_ids": {
-                        "dicussion": reprimand.get_discussion_thread().id,
+                        "discussion": reprimand.get_discussion_thread().id,
                         "polling": reprimand.get_polling_thread().id,
                     },
                     "accused_id": reprimand.get_accused().id,
@@ -306,6 +309,8 @@ class GCPoll(Poll):
         """
         if "message_id" in kwargs.keys():
             self._message_id = kwargs["message_id"]
+            print(kwargs)
+            print(f"Message ID: {kwargs['message_id']}")
 
         if "countdown" in kwargs.keys():
             self._countdown = kwargs["countdown"]
@@ -320,7 +325,7 @@ class GCPoll(Poll):
         if self._message_id != 0:
             return
 
-        # Assuming no message is found it will create the embed, starting here.
+            # Assuming no message is found it will create the embed, starting here.
         cg_poll_embed = self._reprimand._module.get_settings()["messages"][
             "cg_poll_embed"
         ]
@@ -528,6 +533,8 @@ class PunishmentPoll(Poll):
 
         if "message_id" in kwargs.keys():
             self._message_id = kwargs["message_id"]
+            print(kwargs)
+            print(f"Message ID: {kwargs['message_id']}")
             # self._message = await self._reprimand.get_polling_thread().fetch_message(kwargs['message_id'])
 
         if "name" in kwargs.keys():
@@ -543,7 +550,7 @@ class PunishmentPoll(Poll):
         if self._message_id != 0:
             return
 
-        # Assuming that no embed is found or previously loaded, this is the stage where a new embed is
+            # Assuming that no embed is found or previously loaded, this is the stage where a new embed is
         # created and posted in the polling thread associated with this reprimand process.
         punishment_embed_msgs = self._settings["messages"]["punishment_poll_embed"]
         punishment_entry = punishment_embed_msgs["punishment_entry"]
@@ -609,7 +616,7 @@ class PunishmentPoll(Poll):
             emoji = entry["emoji"]
             for reaction in message.reactions:
                 if reaction.emoji == emoji:
-                    count[p_id] = reaction.count
+                    count[p_id] = reaction.count - 1
         return count
 
     def get_type(self) -> PollType:
@@ -718,7 +725,7 @@ class Reprimand:
     async def load(
         self, discussion_thread_id: int = 0, polling_thread_id: int = 0, **kwargs
     ):
-        guild: discord.Guild = self._module._get_main_guild()
+        guild: discord.Guild = self._module.get_main_guild()
 
         # Creates a thread for both discussion and polling if none currently exists.
         string_date = datetime.now().strftime("%m%d%Y")
@@ -777,21 +784,20 @@ class Reprimand:
 
         # Creates the polls used to decide which GC is applied, and what punishment they will feel.
 
-        if len(self._cg_ids) == 1:
-            gc_poll_singular = GCPoll(self, self._cg_ids[0])
-            await gc_poll_singular.load(singular=True, name="GCPoll")
-            self._polls.append(gc_poll_singular)
-        else:
-            iteration = 0
-            for cg_id in self._cg_ids:
-                iteration = iteration + 1
-                gc_poll = GCPoll(self, cg_id)
-                await gc_poll.load(name=f"GCPoll {iteration}")
-                self._polls.append(gc_poll)
+        if len(kwargs.keys()) == 0:
+            if len(self._cg_ids) == 1:
+                gc_poll_singular = GCPoll(self, self._cg_ids[0])
+                await gc_poll_singular.load(singular=True, name="GCPoll")
+                self._polls.append(gc_poll_singular)
+            else:
+                for cg_id in self._cg_ids:
+                    gc_poll = GCPoll(self, cg_id)
+                    await gc_poll.load()
+                    self._polls.append(gc_poll)
 
-        p_poll = PunishmentPoll(self, self._accused_member)
-        await p_poll.load(name="PunishmentPoll")
-        self._polls.append(p_poll)
+            p_poll = PunishmentPoll(self, self._accused_member)
+            await p_poll.load(name="PunishmentPoll")
+            self._polls.append(p_poll)
 
         if len(kwargs.keys()) > 0:
             message_settings = self._module.get_settings()["messages"]
@@ -803,28 +809,41 @@ class Reprimand:
             for message_id, p_countdown in kwargs["poll_countdowns"].items():
                 poll = (
                     GCPoll(self, p_countdown["cg_id"])
-                    if p_countdown["type"] == "GCPOLL"
+                    if p_countdown["type"] == "GC_POLL"
                     else PunishmentPoll(self, self._accused_member)
                 )
                 await poll.load(
-                    message_id=int(message_id), countdown=p_countdown["countdown"]
+                    message_id=int(message_id),
+                    countdown=p_countdown["seconds"],
+                    singular=p_countdown["singular"]
+                    if p_countdown["type"] == "GC_POLL"
+                    else False,
                 )
                 # TODO: Test this all tomorrow.
 
-                if poll.is_singular() is False:
+                if (
+                    p_countdown["singular"] is False
+                    and self._gc_awaiting_approval is False
+                ):
                     poll_entries.append(
                         polls_resumed_embed["poll_entry"]
                         .replace(
                             "{type}",
-                            "GC Poll"
+                            "GC"
                             if poll.get_type() == PollType.GC_POLL
-                            else "Punishment Poll",
+                            else "Punishment",
                         )
                         .replace(
                             "{time_remaining}",
                             format_time.seconds(poll.get_seconds_remaining()),
                         )
                     )
+
+            if self._gc_awaiting_approval:
+                resumed_awaiting_approval = message_settings[
+                    "resumed_awaiting_approval"
+                ]
+                # TODO: This
 
             embed: discord.Embed = discord.Embed(
                 colour=config.EMBED_COLOUR,
@@ -1069,7 +1088,9 @@ class ReprimandManager:
         collection_reprimands = self._module.get_data_manager().get_reprimands()
 
         for c_reprimand in collection_reprimands:
-            accused_member = self._module._guild.get_member(c_reprimand["accused_id"])
+            accused_member = self._module.get_main_guild().get_member(
+                c_reprimand["accused_id"]
+            )
 
             if accused_member is None:
                 # Handle member not found, possibly left here.
@@ -1078,10 +1099,15 @@ class ReprimandManager:
                 )
                 return
 
-            reprimand = Reprimand(self, accused_member, c_reprimand["cg_ids"])
+            cg_ids = list(
+                map(lambda item: item["cg_id"], c_reprimand["poll_countdowns"].values())
+            )
+            cg_ids.remove(-1)
+
+            reprimand = Reprimand(self, accused_member, cg_ids)
             await reprimand.load(
-                discussion_thread_id=c_reprimand["thread_ids.discussion"],
-                polling_thread_id=c_reprimand["thread_ids.polling"],
+                discussion_thread_id=c_reprimand["thread_ids"]["discussion"],
+                polling_thread_id=c_reprimand["thread_ids"]["polling"],
                 gc_awaiting_approval=c_reprimand["gc_awaiting_approval"],
                 poll_countdowns=c_reprimand["poll_countdowns"],
             )
@@ -1307,12 +1333,6 @@ class ReprimandModule:
 
     def _get_bot(self):
         return self._bot
-
-    def _get_main_guild(self):
-        if self._guild is None:
-            self._guild = self._bot.get_guild(config.MAIN_SERVER)
-
-        return self._guild
 
     def get_voting_role(self) -> Union[Role, None]:
         voting_member_role = self.get_settings()["voting_member_role"]
