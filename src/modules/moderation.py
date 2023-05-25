@@ -12,6 +12,7 @@ from discord.role import Role
 from discord.types.channel import ThreadChannel
 from discord.ui.button import button
 from pytz import NonExistentTimeError
+from ukparliament.utils import BetterEnum
 import config
 import discord
 import pymongo
@@ -225,6 +226,9 @@ class Poll:
     async def load(self):
         pass
 
+    def get_cg_id(self) -> int:
+        pass
+
     def get_ayes(self) -> int:
         pass
 
@@ -256,7 +260,19 @@ class Poll:
         pass
 
 
-class PunishmentType(Enum):
+class ExtendedEnum(Enum):
+    @classmethod
+    def list(cls):
+        return list(map(lambda c: c.name, cls))
+
+    @classmethod
+    def from_name(cls, name):
+        for option in cls:
+            if option.name.upper() == name.upper():
+                return option
+
+
+class PunishmentType(ExtendedEnum):
     INFORMAL = 0
     FORMAL = 1
     MUTE = 2
@@ -816,7 +832,7 @@ class Reprimand:
                     if p_countdown["type"] == "GC_POLL"
                     else False,
                 )
-                # TODO: Test this all tomorrow.
+                self._polls.append(poll)
 
                 if (
                     p_countdown["singular"] is False
@@ -857,7 +873,6 @@ class Reprimand:
                         "{poll_thread}", self._polling_thread.mention
                     )
                 )
-            self._polls.append(poll)
         await self.save()
 
     async def save(self):
@@ -919,18 +934,52 @@ class Reprimand:
             else:
                 message = message.replace("{temporal_entry}", "")
 
-            parsed_cgs = self._module._bot.moderation.get_parsed_cgs()
+            parsed_cgs = self._module._get_bot().moderation.get_parsed_cgs()
             selected_cgs = {}
+            cg_ids_approved = []
+
+            if len(self._polls) > 2:
+                for poll in self._polls:
+                    if poll.get_type() == PollType.GC_POLL:
+                        if (
+                            poll.get_ayes()
+                            >= self._module.get_settings()["qourum_minimum"]
+                        ):
+                            cg_ids_approved.append(poll.get_cg_id())
+            else:
+                for poll in self._polls:
+                    if poll.get_type() == PollType.GC_POLL:
+                        cg_ids_approved.append(poll.get_cg_id())
+
+            if len(cg_ids_approved) == 0:
+                no_cgs_approved = self._module.get_settings()["messages"][
+                    "no_cgs_approved"
+                ]
+                await self._discussion_thread.send(no_cgs_approved)
+                await self._polling_thread.send(no_cgs_approved)
+                await self._discussion_thread.edit(locked=True)
+                await self._polling_thread.edit(locked=True)
+                await self._module.get_reprimand_manager().delete_reprimand(
+                    self._polling_thread.id
+                )
+                return
+
             for key in parsed_cgs.keys():
-                if key in self._cg_ids:
-                    selected_cgs[key] = parsed_cgs[key]
+                for cg_id in cg_ids_approved:
+                    if cg_id.startswith(key):
+                        selected_cgs[key] = parsed_cgs[key]
 
             desc = ""
 
             for key, value in selected_cgs.items():
                 desc = desc + f"`{key}` {value}"
 
-            await self._accused_member.send(message.replace("{cgs_violated}", desc))
+            await self._accused_member.send(
+                message.replace("{cgs_violated}", desc).replace(
+                    "{punishment_type}",
+                    chosen_punishment["punishment_type"].capitalize(),
+                )
+            )
 
         duration = 0
 
@@ -1265,6 +1314,7 @@ class ReprimandModule:
                 "5m": "{type} will close in 5 minutes. {voting_role_mention}."
             },
             "messages": {
+                "no_cgs_approved": "No CGs have been approved, therefore no CGs by the accused were broken. No action taken, Threads locked.",
                 "punishment_approved": "Punishment agreed upon has been approved and executed. Threads locked.",
                 "punishment_rejected": "Punishment agreed upon has been rejected. Threads locked.",
                 "punishment_vetoed": "Reprimand vetoed by {gc_name}. Threads locked.",
@@ -1502,13 +1552,15 @@ class ReprimandModule:
 
         punishment_settings[punishment_id] = {
             "short_description": short_description,
-            "type": punishment_type,
-            "duration": format_time.parse(duration),
+            "punishment_type": punishment_type.name,
+            "duration": duration,
             "emoji": str(emoji),
             "name": name,
         }
 
-        self.set_setting("punishments", punishment_settings)
+        settings = self._settings_handler.get_settings(config.MAIN_SERVER)
+        settings["modules"]["reprimand"]["punishments"] = punishment_settings
+        self._settings_handler.save(settings)
 
     def remove_punishment(self, punishment_id: str):
         """
@@ -1524,7 +1576,9 @@ class ReprimandModule:
 
         if punishment_id in p_ids:
             del punishment_settings[punishment_id]
-            self.set_setting("punishments", punishment_settings)
+            settings = self._settings_handler.get_settings(config.MAIN_SERVER)
+            settings["modules"]["reprimand"]["punishments"] = punishment_settings
+            self._settings_handler.save(settings)
 
     def get_settings(self):
         return self._settings_handler.get_settings(config.MAIN_SERVER)["modules"][

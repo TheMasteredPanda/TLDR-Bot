@@ -1244,14 +1244,12 @@ class Mod(Cog):
         punishments_config_copy = copy.deepcopy(
             self.bot.reprimand.get_settings()["punishments"]
         )
-
-        for key, punishment in punishments_config_copy.items():
-            await embed_maker.message(
-                ctx,
-                description=f"```{json_util.dumps(punishment, indent=4)}```",
-                title=f"Punishment: {key}",
-                send=True,
-            )
+        return await embed_maker.message(
+            ctx,
+            description=f"```{json_util.dumps(punishments_config_copy, indent=4)}```",
+            title="Punishment Configuration",
+            send=True,
+        )
 
     # Search up how to generate a string if from the name of a punishment
     @config_punishments.command(
@@ -1333,6 +1331,8 @@ class Mod(Cog):
                     send=True,
                 )
 
+            print(PunishmentType.list())
+
             if args["type"].upper() not in PunishmentType.list():
                 return await embed_maker.message(
                     ctx,
@@ -1344,7 +1344,7 @@ class Mod(Cog):
         short_description = args["shortdescription"]
         self._reprimand_module.add_punishment(
             args["id"].lower(),
-            PunishmentType.from_name(args["type"]),
+            PunishmentType.from_name(args["type"].upper()),
             args["duration"],
             args["name"],
             short_description,
