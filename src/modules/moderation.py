@@ -207,6 +207,9 @@ class ReprimandDataManager:
                 "$set": {
                     "gc_awaiting_approval": reprimand.is_awaiting_approval(),
                     "poll_countdowns": poll_time,
+                    "chosen_punishment_id": reprimand.get_chosen_punishment()["key"]
+                    if reprimand.get_chosen_punishment() is not None
+                    else None,
                     "thread_ids": {
                         "discussion": reprimand.get_discussion_thread().id,
                         "polling": reprimand.get_polling_thread().id,
@@ -309,8 +312,6 @@ class GCPoll(Poll):
         """
         if "message_id" in kwargs.keys():
             self._message_id = kwargs["message_id"]
-            print(kwargs)
-            print(f"Message ID: {kwargs['message_id']}")
 
         if "countdown" in kwargs.keys():
             self._countdown = kwargs["countdown"]
@@ -387,7 +388,6 @@ class GCPoll(Poll):
                 await self._reprimand.save()
 
     async def get_message(self):
-        print(f"GCPoll message id: {self._message_id}")
         await self._reprimand.get_polling_thread().fetch_message(self._message_id)
 
     def get_message_id(self):
@@ -533,8 +533,6 @@ class PunishmentPoll(Poll):
 
         if "message_id" in kwargs.keys():
             self._message_id = kwargs["message_id"]
-            print(kwargs)
-            print(f"Message ID: {kwargs['message_id']}")
             # self._message = await self._reprimand.get_polling_thread().fetch_message(kwargs['message_id'])
 
         if "name" in kwargs.keys():
@@ -636,7 +634,6 @@ class PunishmentPoll(Poll):
             gc_approval_embed = messages_settings["gc_approval_embed"]
 
             counts = await self.get_reaction_counts()
-            print(counts)
             if max(counts.values()) >= m_settings["quorum_minimum"]:
                 max_key = max(counts.keys(), key=lambda k: counts[k])
                 self._reprimand._chosen_punishment_id = max_key
@@ -754,7 +751,7 @@ class Reprimand:
             self._gc_awaiting_approval = kwargs["gc_awaiting_approval"]
 
         if "chosen_punishment_id" in kwargs.keys():
-            self._chosen_punishment_id = "chosen_punishment_id"
+            self._chosen_punishment_id = kwargs["chosen_punishment_id"]
 
         # Checks if all voting members are added to all threads for active reprimands.
         voting_members = self._module.get_voting_members()
@@ -843,25 +840,25 @@ class Reprimand:
                 resumed_awaiting_approval = message_settings[
                     "resumed_awaiting_approval"
                 ]
-                # TODO: This
-
-            embed: discord.Embed = discord.Embed(
-                colour=config.EMBED_COLOUR,
-                description=polls_resumed_embed["description"].replace(
-                    "{poll_entries}", "\n".join(poll_entries)
-                ),
-                title=polls_resumed_embed["title"],
-            )
-
-            self._polls.append(poll)
-            await self._polling_thread.send(embed=embed)
-            await self._discussion_thread.send(
-                discussion_reprimand_resumed.replace(
-                    "{poll_thread}", self._polling_thread.mention
+                await self._polling_thread.send(resumed_awaiting_approval)
+                await self._discussion_thread.send(resumed_awaiting_approval)
+            else:
+                embed: discord.Embed = discord.Embed(
+                    colour=config.EMBED_COLOUR,
+                    description=polls_resumed_embed["description"].replace(
+                        "{poll_entries}", "\n".join(poll_entries)
+                    ),
+                    title=polls_resumed_embed["title"],
                 )
-            )
-        else:
-            await self.save()
+
+                await self._polling_thread.send(embed=embed)
+                await self._discussion_thread.send(
+                    discussion_reprimand_resumed.replace(
+                        "{poll_thread}", self._polling_thread.mention
+                    )
+                )
+            self._polls.append(poll)
+        await self.save()
 
     async def save(self):
         """
@@ -884,6 +881,7 @@ class Reprimand:
 
         for key, punishment in punishments.items():
             if key == self._chosen_punishment_id:
+                punishment["key"] = key
                 return punishment
 
         return None
@@ -1110,6 +1108,7 @@ class ReprimandManager:
                 polling_thread_id=c_reprimand["thread_ids"]["polling"],
                 gc_awaiting_approval=c_reprimand["gc_awaiting_approval"],
                 poll_countdowns=c_reprimand["poll_countdowns"],
+                chosen_punishment_id=c_reprimand["chosen_punishment_id"],
             )
             self._reprimands.append(reprimand)
 
