@@ -2,6 +2,8 @@ import copy
 import sys
 from typing import Callable, Union
 
+from bson import json_util
+
 import config
 import discord
 from discord.ext.commands.core import hooked_wrapped_callback
@@ -23,7 +25,7 @@ class Clearance:
         self.bot.add_listener(self.on_ready, "on_ready")
 
         self.bot.logger.debug(f"Downloading clearance spreadsheet")
-        print('Clerance Spreadsheet ID:')
+        print("Clerance Spreadsheet ID:")
         print(config.CLEARANCE_SPREADSHEET_ID)
 
         if self.bot.google_drive:
@@ -60,6 +62,7 @@ class Clearance:
         guild: discord.Guild = self.bot.get_guild(config.MAIN_SERVER)
         # parse roles
         # ignore the first 2 rows cause they are for users viewing/editing the spreadsheet
+
         for row in self.clearance_spreadsheet["Roles"][1:]:
             if not row:
                 break
@@ -121,6 +124,7 @@ class Clearance:
                 }
 
         # check if any commands are missing from the clearance spreadsheet
+
         for command in self.bot.command_system.commands.values():
             command_name = f"{command.full_parent_name} {command.name}".strip()
             if command.root_parent is None and command_name not in self.command_access:

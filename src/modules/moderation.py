@@ -1599,11 +1599,13 @@ class ModerationSystem:
         self.bot.add_listener(self.on_ready, "on_ready")
 
     async def on_ready(self):
+        print("ModerationSystem on_ready executed.")
         await self.parse_cgs()
+        print("CGs have been parsed")
 
     async def parse_cgs(self):
-        if os.path.exists("../cgs.json"):
-            with open("../cgs.json", "r") as cg_json_file:
+        if os.path.exists("cgs.json"):
+            with open("cgs.json", "r") as cg_json_file:
                 self.parsed_cgs = json.load(cg_json_file)
         else:
             aiohttp_session = getattr(self.bot.http, "_HTTPClient__session")
