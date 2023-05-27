@@ -12,8 +12,7 @@ import pytz
 from bot import TLDR
 from bson import ObjectId
 from discord.ext.commands import Cog, Context, command
-from emoji.unicode_codes.en import (EMOJI_ALIAS_UNICODE_ENGLISH,
-                                    EMOJI_UNICODE_ENGLISH)
+from emoji.unicode_codes.en import EMOJI_ALIAS_UNICODE_ENGLISH, EMOJI_UNICODE_ENGLISH
 from googletrans import Translator
 from iso639 import languages
 from modules import commands, database, embed_maker, format_time
@@ -104,26 +103,23 @@ class Utility(Cog):
         help="command to get any community guideline",
         usage="cg [cg]",
         examples=["cg 1", "cg 1.5.1"],
+        module_dependency=["moderation"],
         cls=commands.Command,
     )
     async def cg(self, ctx: Context, guideline: str = None):
-        cg_link = "https://tldrnews.co.uk/discord-community-guidelines/"
-        if guideline is None:
-            return await embed_maker.message(
-                ctx,
-                description=f"You can find the full list of the community guidelines here: [{cg_link}]({cg_link})",
-                send=True,
-            )
+        parsed_cgs = self.bot.moderation.get_parsed_cgs()
+        selected_cgs = {}
+        for key in parsed_cgs.keys():
+            if guideline.startswith(key):
+                selected_cgs[key] = parsed_cgs[key]
 
-        cg_text = await self.get_cg(guideline.split("."))
+        desc = ""
 
-        if not cg_text:
-            return await embed_maker.error(
-                ctx, f"{guideline} is not a valid community guideline."
-            )
+        for key, value in selected_cgs.items():
+            desc = desc + f"`{key}` {value}"
 
         return await embed_maker.message(
-            ctx, description=cg_text, author={"name": "Community Guidelines"}, send=True
+            ctx, description=desc, author={"name": "Community Guidelines"}, send=True
         )
 
     @command(

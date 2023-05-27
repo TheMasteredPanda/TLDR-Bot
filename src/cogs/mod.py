@@ -982,47 +982,6 @@ class Mod(Cog):
         )
         return embed
 
-    def cg_to_string(
-        self, tags: bs4.element.Tag, asked_for: list[str], parent: str = ""
-    ):
-        spacer = f'|{"-" * 4}'
-        string = ""
-        parent_count = len(parent.split(".")) if parent else 0
-        asked_for_cg_number = (
-            asked_for[parent_count] if len(asked_for) > parent_count else None
-        )
-
-        for i, cg in enumerate(filter(lambda cg: type(cg) == bs4.element.Tag, tags)):
-            contents = cg.contents
-
-            cg_number = str(i + 1)
-            if asked_for_cg_number is None or asked_for_cg_number == cg_number:
-                new_parent = f'{parent + ("." if parent else "")}{cg_number}'
-                if len(contents) > 1:
-                    sub_cg = self.cg_to_string(contents[1], asked_for, new_parent)
-                    string += f"{spacer * parent_count}`{new_parent}.`: {contents[0]}"
-                    string += f"{sub_cg}"
-                else:
-                    string += (
-                        f"{spacer * parent_count}`{new_parent}.`: {cg.contents[0]}\n"
-                    )
-
-        return string
-
-    async def get_cg(self, asked_for: list[str]):
-        # This session needs to be gotten in this weird way cause it's a double underscore variable
-        aiohttp_session = getattr(self.bot.http, "_HTTPClient__session")
-        async with aiohttp_session.get(
-            "https://tldrnews.co.uk/discord-community-guidelines/"
-        ) as resp:
-            content = await resp.text()
-
-            soup = bs4.BeautifulSoup(content, "html.parser")
-            entry = soup.find("div", {"class": "entry-content"})
-            cg_list = [*entry.children][15]
-
-            return self.cg_to_string(cg_list, asked_for)
-
     @group(
         help="Moderation reprimand command. Used to establish a qorum before exacting punishment.",
         usage="reprimand (username) (cg id(s) violated) (link(s) to offending messages)",
