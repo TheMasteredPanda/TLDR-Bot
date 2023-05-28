@@ -240,7 +240,8 @@ class Mod(Cog):
 
         # send user message that they have been warned
         text = f"**{ctx.guild.name}** - You have been warned.:warning:\n**Reason**: {reason}"
-        await member.send(text)
+        if member.can_send():
+            await member.send(text)
 
         # confirm that user has been warned
         thirty_days_ago = time.time() - (30 * 24 * 60)
