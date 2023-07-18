@@ -9,11 +9,11 @@ class InviteLogger:
         self.bot = bot
         self.invites: dict[int, dict[str, discord.Invite]] = {}
 
-        self.bot.add_listener(self._on_member_join, 'on_member_join')
-        self.bot.add_listener(self._on_invite_create, 'on_invite_create')
-        self.bot.add_listener(self._on_ready, 'on_ready')
+        self.bot.add_listener(self._on_member_join, "on_member_join")
+        self.bot.add_listener(self._on_invite_create, "on_invite_create")
+        self.bot.add_listener(self._on_ready, "on_ready")
 
-        self.bot.logger.info('InviteLogger module has been initiated')
+        self.bot.logger.info("InviteLogger module has been initiated")
 
     async def _on_ready(self):
         await self.initialize_invites()
@@ -32,9 +32,9 @@ class InviteLogger:
         embed = discord.Embed(
             description=f"<@{member.id}> **joined** [**{invite.code}**]\nInvited By: <@{invite.inviter.id}> (**{invite.uses}** uses)",
             colour=config.EMBED_COLOUR,
-            timestamp=datetime.now()
+            timestamp=datetime.now(),
         )
-        embed.set_footer(text=str(member), icon_url=member.avatar_url)
+        embed.set_footer(text=str(member), icon_url=member.avatar.url)
 
         leveling_guild = self.bot.leveling_system.get_guild(member.guild.id)
 
@@ -53,7 +53,9 @@ class InviteLogger:
                 await self.invite_log_message(member, new_invite)
                 break
         else:
-            invite_used = set(i.id for i in self.invites[member.guild.id].values()) - set([i.id for i in guild_invites])
+            invite_used = set(
+                i.id for i in self.invites[member.guild.id].values()
+            ) - set([i.id for i in guild_invites])
             if invite_used:
                 invite_used = self.invites[member.guild.id][invite_used.pop()]
                 await self.invite_log_message(member, invite_used)
