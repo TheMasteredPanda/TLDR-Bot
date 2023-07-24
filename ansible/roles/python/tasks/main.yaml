@@ -2,10 +2,6 @@
   apt:
     name: software-properties-common
 
-#- name: add deadsnakes ppa
-#  apt_repository:
-#    repo: ppa:deadsnakes/ppa
-
 - name: install python3.9 and distutils
   apt:
     name:
