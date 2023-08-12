@@ -1,4 +1,5 @@
 import discord
+from discord.embeds import EmptyEmbed
 import config
 
 from datetime import datetime
@@ -34,7 +35,10 @@ class InviteLogger:
             colour=config.EMBED_COLOUR,
             timestamp=datetime.now(),
         )
-        embed.set_footer(text=str(member), icon_url=member.avatar.url)
+        embed.set_footer(
+            text=str(member),
+            icon_url=member.avatar.url if member.avatar is not None else EmptyEmbed,
+        )
 
         leveling_guild = self.bot.leveling_system.get_guild(member.guild.id)
 

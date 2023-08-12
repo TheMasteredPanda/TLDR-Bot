@@ -495,9 +495,9 @@ async def get_guild_member(
 
         members = list(
             filter(
-                lambda m: re.findall(fr"({safe_source.lower()})", str(m).lower())
+                lambda m: re.findall(rf"({safe_source.lower()})", str(m).lower())
                 or re.findall(  # regex match name and discriminator
-                    fr"({safe_source.lower()})", m.display_name.lower()
+                    rf"({safe_source.lower()})", m.display_name.lower()
                 ),  # regex match nickname
                 guild.members,
             )
@@ -616,9 +616,9 @@ async def get_member(
 
         members = list(
             filter(
-                lambda m: re.findall(fr"({safe_source.lower()})", str(m).lower())
+                lambda m: re.findall(rf"({safe_source.lower()})", str(m).lower())
                 or re.findall(  # regex match name and discriminator
-                    fr"({safe_source.lower()})", m.display_name.lower()
+                    rf"({safe_source.lower()})", m.display_name.lower()
                 ),  # regex match nickname
                 ctx.guild.members,
             )
@@ -663,7 +663,7 @@ async def get_member(
         ctx,
         description=description,
         author={"name": "Members"},
-        footer={"text": str(ctx.author), "icon_url": ctx.author.avatar_url},
+        footer={"text": str(ctx.author), "icon_url": ctx.author.url},
         send=True,
     )
 

@@ -106,7 +106,7 @@ class Utility(Cog):
         module_dependency=["moderation"],
         cls=commands.Command,
     )
-    async def cg(self, ctx: Context, guideline: str = None):
+    async def cg(self, ctx: Context, guideline: str = ""):
         parsed_cgs = self.bot.moderation.get_parsed_cgs()
         selected_cgs = {}
         for key in parsed_cgs.keys():
@@ -115,7 +115,9 @@ class Utility(Cog):
 
         desc = ""
 
-        for key, value in selected_cgs.items():
+        for key, value in (
+            selected_cgs.items() if guideline is not "" else parsed_cgs.items()
+        ):
             desc = desc + f"`{key}` {value}"
 
         return await embed_maker.message(
