@@ -67,7 +67,7 @@ class Connection:
                         }
                     ]
                 },
-                "honours_channels" : List[:class:`int`],
+                "honours_channels" : List[:class:`str`],
                 "automember" : bool
             }
 
